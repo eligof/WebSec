@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Host header injection testing guide: password reset poisoning, web cache poisoning via host header, and SSRF exploitation.">
+    <meta property="og:title" content="Host Header Injection – Web App Pentesting Guide">
+    <meta property="og:description" content="Host header injection testing guide: password reset poisoning, web cache poisoning via host header, and SSRF exploitation.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Host Header Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Host Header Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 8.1 · Day 5</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span><span>Host Header Injection</span></h1>
+      <p>Host Header Injection occurs when an attacker manipulates the HTTP Host header to trick the server into performing unintended actions  · such as sending a password reset email with a link pointing to the attacker's server, poisoning the web cache, or bypassing access controls based on hostname validation.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Hotel Switchboard</div>
+        <p>You call a hotel and tell the switchboard operator your name. The operator doesn't verify who you are  · they simply note your name and use it for all subsequent interactions. "You claim to be VIP Guest, so I'll transfer you to the executive floor." Meanwhile, you're actually calling from outside the hotel. If you lie about your name ("I'm VIP Guest"), the operator treats you like a VIP. Similarly, the web server trusts the Host header without validating it, allowing you to impersonate a trusted hostname.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+      <div class="workflow-days">
+        <div class="day-pill probe"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>Check Features</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Cache/Bypass</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">🎯 Day 1-3  · Identify Host-Dependent Features</div>
+        <p>During reconnaissance and application walkthrough, identify features that might use the Host header: password reset flows, email verification, webhook registration, redirects, or any feature that generates absolute URLs. Make a note. On Day 3, when testing CSRF and file-related features, also test Host header manipulation on these endpoints.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4-5  · Host Header Poisoning</div>
+        <p>On Day 4 during your deep dive, for each host-dependent feature, test Host header injection. Send the same request with a modified Host header (your domain or malicious value) and observe if the response or email changes. Check if the feature uses the Host header in password reset emails, cache keys, or access control checks. This is often overlooked but can be critical.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>The Host header is part of HTTP request metadata and tells the server which hostname the request is destined for. Servers use this for several purposes:</p>
+      <ol class="steps">
+        <li><strong>Virtual hosting:</strong> Multiple domains on one server; Host tells the server which domain's content to serve.</li>
+        <li><strong>URL generation:</strong> When the server needs to create an absolute URL (for email links, redirects), it constructs it using the Host header.</li>
+        <li><strong>Access control:</strong> Some servers check if Host is an internal domain to grant special privileges.</li>
+        <li><strong>Cache keying:</strong> Caching layers (CDNs, proxies) may include Host in the cache key  · or forget to.</li>
+      </ol>
+      <p><strong>The vulnerability:</strong> If the server blindly trusts the Host header without validation, an attacker can inject an arbitrary hostname. If that hostname is then used to generate URLs (especially in password reset emails), the attacker controls where the victim is directed.</p>
+      <p><strong>Example attack flow:</strong></p>
+      <pre><code>1. Attacker sends: POST /forgot-password HTTP/1.1
+               Host: attacker.com
+               email=victim@gmail.com
+
+2. Server trusts the Host header and generates a reset link:
+   https://attacker.com/reset?token=abc123xyz
+
+3. Email sent to victim contains the attacker's domain link
+
+4. Victim clicks the link, thinking it's legitimate
+
+5. Attacker's server logs the token and uses it to reset the victim's password</code></pre>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Host header injection is most dangerous in these features:</p>
+      <ul>
+        <li><strong>Password reset:</strong> Verify emails with Host-based links are the #1 attack vector.</li>
+        <li><strong>Email verification:</strong> Similar to password reset  · links sent via email often use the Host header.</li>
+        <li><strong>Account recovery:</strong> Any flow that emails the user a link.</li>
+        <li><strong>Webhooks & callbacks:</strong> Features that register a webhook URL may construct it from the Host header.</li>
+        <li><strong>Redirects:</strong> Open redirects combined with Host header injection can bypass filters.</li>
+        <li><strong>Virtual hosting with load balancers:</strong> Multi-tenant applications using Host-based routing are often vulnerable.</li>
+        <li><strong>Cache poisoning vectors:</strong> If caching layer doesn't properly include Host in the cache key.</li>
+      </ul>
+      <p><strong>Red flag:</strong> Any application that allows multiple domains or subdomains and routes based on Host is a candidate for Host header testing.</p>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Find password reset or email verification flow.</strong> Navigate to the password reset page (usually /forgot-password). In Burp Proxy, submit the form and intercept the POST request.
+          <pre><code>POST /api/forgot-password HTTP/1.1
+Host: target.com
+...
+email=victim@example.com</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Modify the Host header to your attacker domain.</strong> Send the request to Repeater and change the Host header.
+          <pre><code>POST /api/forgot-password HTTP/1.1
+Host: attacker.com
+...
+email=victim@example.com</code></pre>
+          Send the request and check the response.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Test alternative Host header formats.</strong> Try these variations:
+          <pre><code>Host: target.com.attacker.com  (subdomain confusion)
+Host: target.com:8080  (port confusion)
+Host: target.com@attacker.com  (@ confusion)
+X-Forwarded-Host: attacker.com  (proxy header override)
+X-Host: attacker.com
+X-Forwarded-Server: attacker.com</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Use a Burp Collaborator payload.</strong> To confirm Host header injection in email flows without needing to access the victim's email, use a Burp Collaborator domain:
+          <pre><code>Host: YOUR.burpcollaborator.net
+POST /api/forgot-password
+email=your-test-email@example.com</code></pre>
+          Check the Collaborator tab for DNS/HTTP interactions.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test duplicate Host headers.</strong> Some servers process the first Host header, some the second. Send two:
+          <pre><code>Host: target.com
+Host: attacker.com
+POST /api/forgot-password
+email=victim@example.com</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Check cache headers for poisoning.</strong> If the response includes caching headers (Cache-Control, Expires), the response might be cached. Remove your Cache-Control headers and resend to potentially poison the cache for other users.
+          <pre><code>GET /api/user-profile HTTP/1.1
+Host: attacker.com
+Cache-Control: no-cache  (remove this)</code></pre>
+        </div>
+      </div>
+
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic Host Header Injection</h3>
+      <pre><code>Host: attacker.com
+X-Forwarded-Host: attacker.com
+X-Host: attacker.com
+X-Forwarded-Server: attacker.com
+X-HTTP-Host-Override: attacker.com</code></pre>
+
+      <h3>Subdomain Confusion</h3>
+      <p>Exploit URL parsing confusion by injecting a valid domain as a subdomain:</p>
+      <pre><code>Host: target.com.attacker.com
+Host: attacker.com.target.com</code></pre>
+
+      <h3>Port Confusion</h3>
+      <p>Try different port numbers to trigger different parsing behavior:</p>
+      <pre><code>Host: target.com:8080
+Host: target.com:@attacker.com
+Host: target.com:attacker.com</code></pre>
+
+      <h3>Credential Injection via Host Header</h3>
+      <p>Some parsers allow userinfo in the Host header:</p>
+      <pre><code>Host: user:pass@attacker.com
+Host: attacker.com@target.com</code></pre>
+
+      <h3>Null Byte Injection</h3>
+      <p>Older frameworks may truncate at null bytes:</p>
+      <pre><code>Host: target.com%00attacker.com
+Host: target.com%0aHost: attacker.com</code></pre>
+
+      <h3>Duplicate & Conflicting Headers</h3>
+      <pre><code>Host: target.com
+Host: attacker.com
+
+X-Forwarded-Host: attacker.com
+Host: target.com
+
+Host: target.com
+X-Forwarded-Host: attacker.com</code></pre>
+
+      <h3>Burp Collaborator Payload</h3>
+      <pre><code>Host: YOUR.burpcollaborator.net
+X-Forwarded-Host: YOUR.burpcollaborator.net</code></pre>
+
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          Progress: <span class="progress-mini">0/10</span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check1">
+          <label for="check1">Identify password reset and email verification flows</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check2">
+          <label for="check2">Test basic Host header override (Host: attacker.com)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check3">
+          <label for="check3">Test X-Forwarded-Host and related proxy headers</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check4">
+          <label for="check4">Test subdomain confusion (target.com.attacker.com)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check5">
+          <label for="check5">Test port confusion (target.com:8080, target.com:@attacker.com)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check6">
+          <label for="check6">Test duplicate Host headers to see which is prioritized</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check7">
+          <label for="check7">Use Burp Collaborator to confirm Host header injection in emails</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check8">
+          <label for="check8">Check for cache poisoning (verify cache headers and injection persistence)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check9">
+          <label for="check9">Test for SSRF via Host header (internal service access)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check10">
+          <label for="check10">Test access control bypass (e.g., admin features keyed on internal hostname)</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Duplicate Host Headers</h3>
+      <p>Send two <code>Host</code> headers: <code>Host: legitimate.com\r\nHost: attacker.com</code>. Some WAFs check only the first; some backends use the last.</p>
+      <pre><code>Host: legitimate.com
+Host: attacker.com</code></pre>
+
+      <h3>Header Value Whitespace</h3>
+      <p><code>Host: legitimate.com attacker.com</code> (space-delimited). Some parsers treat everything after a space as a port or ignore it; others parse the full string differently from the WAF.</p>
+      <pre><code>Host: legitimate.com attacker.com</code></pre>
+
+      <h3>X-Forwarded-Host and Override Headers</h3>
+      <p>If direct Host injection is blocked, try proxy override headers. WAFs often don't inspect all override headers:</p>
+      <pre><code>X-Forwarded-Host: attacker.com
+X-Host: attacker.com
+X-Forwarded-Server: attacker.com
+X-HTTP-Host-Override: attacker.com</code></pre>
+
+      <h3>Absolute URI in Request Line</h3>
+      <p>Use an absolute URI in the request line: <code>GET http://attacker.com/path HTTP/1.1</code> with <code>Host: legitimate.com</code>. Some proxies use the URI host; some WAFs only check the Host header.</p>
+      <pre><code>GET http://attacker.com/path HTTP/1.1
+Host: legitimate.com</code></pre>
+
+      <h3>Port Injection</h3>
+      <p><code>Host: legitimate.com:8080@attacker.com</code>  · some URL parsers treat the <code>@</code> as a credentials separator and use <code>attacker.com</code> as the host.</p>
+      <pre><code>Host: legitimate.com:8080@attacker.com</code></pre>
+
+      <h3>Case Variation</h3>
+      <p><code>HOST: attacker.com</code> or <code>hOsT: attacker.com</code>  · HTTP headers are case-insensitive; some WAFs only match exact case.</p>
+      <pre><code>HOST: attacker.com
+hOsT: attacker.com</code></pre>
+
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Password Reset Poisoning</h3>
+      <p><strong>Impact: Critical.</strong> Inject attacker.com in the Host header during password reset. The reset email will contain a link to attacker.com. The victim clicks the link, and the attacker's server captures the reset token. The attacker can then reset the victim's password.</p>
+      <pre><code>Victim receives email: https://attacker.com/reset?token=xyz123
+Attacker intercepts token and uses it to reset victim's password</code></pre>
+
+      <h3>Cache Poisoning via Host Header</h3>
+      <p><strong>Impact: High.</strong> If responses are cached, injecting a malicious Host header can poison the cache. All subsequent users (including legitimate ones) receive the poisoned response.</p>
+      <ul>
+        <li>Inject XSS payload via Host header → cached response served to all users.</li>
+        <li>Inject redirect to phishing site → all users redirected.</li>
+        <li>Inject malicious JavaScript → stored XSS affecting all users.</li>
+      </ul>
+
+      <h3>SSRF via Host Header</h3>
+      <p><strong>Impact: High.</strong> In some routing architectures, the Host header controls which backend server processes the request. By changing the Host header to localhost or an internal IP, you might bypass firewall rules and access internal services.</p>
+
+      <h3>Access Control Bypass</h3>
+      <p><strong>Impact: Medium-High.</strong> If the application checks if the Host is an internal domain to grant privileges, spoofing the Host header bypasses this check.</p>
+      <pre><code>Original: Host: admin.internal.com  → Access granted
+Attack: Host: admin.internal.com (from external IP)  → Access granted!</code></pre>
+
+      <h3>Web Cache Deception</h3>
+      <p><strong>Impact: Medium.</strong> Similar to cache poisoning, but with opposite intent: force caching of private pages that shouldn't be cached, then access them without authentication.</p>
+
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Validate Host Header Against Whitelist</h3>
+      <p>Only allow a hardcoded list of approved hostnames:</p>
+      <pre><code>const ALLOWED_HOSTS = [
+  'example.com',
+  'www.example.com',
+  'api.example.com'
+];
+
+if (!ALLOWED_HOSTS.includes(req.headers.host)) {
+  return res.status(400).send('Invalid Host');
+}</code></pre>
+
+      <h3>2. Use a Configured Base URL, Not Host Header</h3>
+      <p>For generating absolute URLs (especially in emails), use a configuration variable instead of the Host header:</p>
+      <pre><code>// Bad: uses Host header
+const resetLink = `https://${req.headers.host}/reset?token=${token}`;
+
+// Good: uses configured base URL
+const BASE_URL = process.env.APP_BASE_URL || 'https://example.com';
+const resetLink = `${BASE_URL}/reset?token=${token}`;</code></pre>
+
+      <h3>3. Strip Untrusted Forwarded Headers at Load Balancer</h3>
+      <p>If you have a reverse proxy or load balancer in front of your application, configure it to strip suspicious headers like X-Forwarded-Host before passing the request to the backend:</p>
+      <pre><code># Nginx example
+location / {
+  proxy_pass http://backend;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Host "";  # Strip untrusted header
+}</code></pre>
+
+      <h3>4. Use Absolute URLs in Email Templates</h3>
+      <p>Don't rely on request-based values in email links; hardcode the domain:</p>
+      <pre><code>// Bad
+emailBody = `Click here: https://${req.headers.host}/reset?token=${token}`;
+
+// Good
+emailBody = `Click here: https://app.example.com/reset?token=${token}`;</code></pre>
+
+      <h3>5. Validate Host Header for Cache Keys</h3>
+      <p>If implementing custom caching, ensure Host is part of the cache key and that only whitelisted hosts are cached:</p>
+      <pre><code>const cacheKey = `${req.method}:${req.headers.host}:${req.url}`;
+// Ensure host is validated before caching</code></pre>
+
+      <h3>6. Monitor Host Header Anomalies</h3>
+      <p>Log and alert when Host headers don't match expected values:</p>
+      <ul>
+        <li>Host header differs from SNI (TLS Server Name Indication).</li>
+        <li>Host header doesn't match any whitelisted domain.</li>
+        <li>X-Forwarded-Host differs from Host.</li>
+      </ul>
+
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice Host Header Injection on PortSwigger's free labs. These cover password reset poisoning, cache poisoning, and access control bypass:</p>
+      <ul>
+        <li>Host header attack (basic password reset poisoning)</li>
+        <li>Host header attack (cache poisoning via Host header)</li>
+        <li>Host header attack (SSRF via absolute URL override)</li>
+        <li>Host header attack (access control bypass via internal domain)</li>
+        <li>Host header attack (routing-based SSRF)</li>
+        <li>Host header attack (with X-Forwarded-Host)</li>
+        <li>Host header attack (with web cache deception)</li>
+      </ul>
+      <p>Visit <code>portswigger.net/web-security/host-header-attacks</code> to access the labs.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Only Testing Basic Host Header Override</div>
+        <p><strong>Mistake:</strong> Testers try <code>Host: attacker.com</code> once and move on. <strong>Fix:</strong> Test multiple variations: subdomain confusion, port confusion, X-Forwarded-Host, duplicate headers. The vulnerability might only be triggered by a specific format.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Testing Password Reset Flows</div>
+        <p><strong>Mistake:</strong> Skipping password reset entirely because it's "not sexy." <strong>Fix:</strong> Password reset poisoning is the most common and impactful Host header attack. Always test it first.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Forgetting to Check Cache Headers</div>
+        <p><strong>Mistake:</strong> Testing Host header injection but not checking if the response is cached. <strong>Fix:</strong> Look for Cache-Control, Expires, Age, X-Cache, CF-Cache-Status headers. If caching is present, the vulnerability is much more severe.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Using Burp Collaborator for Email Flows</div>
+        <p><strong>Mistake:</strong> Trying to manually check if the injected Host appears in emails. <strong>Fix:</strong> Use Burp Collaborator  · it's automatic and reliable. Set Host to a Collaborator domain and check the Collaborator tab for interactions.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Missing Access Control Checks</div>
+        <p><strong>Mistake:</strong> Only testing email/cache vectors and missing access control. <strong>Fix:</strong> Always test if admin or internal features check the Host header to grant privileges. Spoof the internal hostname to bypass access controls.</p>
+      </div>
+
+    </section>
+
+    <section id="see-also">
+      <h2>See Also</h2>
+      <div class="see-also-grid">
+        <a href="cache-poisoning.html" class="see-also-card">
+          <h3>☠️ Cache Poisoning</h3>
+          <p>Host header injection often chains with cache poisoning to affect multiple users.</p>
+        </a>
+        <a href="cors.html" class="see-also-card">
+          <h3>🔐 CORS Misconfiguration</h3>
+          <p>Host header attacks can bypass CORS by controlling the origin header.</p>
+        </a>
+        <a href="ssrf.html" class="see-also-card">
+          <h3>🌐 SSRF</h3>
+          <p>Host header injection can lead to SSRF in routing-based architectures.</p>
+        </a>
+        <a href="csrf.html" class="see-also-card">
+          <h3>⚔️ CSRF</h3>
+          <p>Host header poisoning chains with CSRF to achieve account takeover.</p>
+        </a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'host-header-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

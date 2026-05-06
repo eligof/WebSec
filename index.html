@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Comprehensive web application pentesting guide covering 23 vulnerability classes. Methodology, payloads, Burp Suite workflows, and PortSwigger labs.">
+  <meta property="og:title" content="Web App Pentesting Guide – All Vulnerabilities">
+  <meta property="og:description" content="Comprehensive web application pentesting guide covering 23 vulnerability classes. Methodology, payloads, Burp Suite workflows, and PortSwigger labs.">
+  <meta property="og:type" content="article">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vulns/style.css">
+  <title>Web App Pentesting Playbook</title>
+</head>
+<body>
+
+<!-- ICON SPRITE — referenced via <use href="#icon-name"/> -->
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></symbol>
+    <symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="icon-flag" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></symbol>
+
+    <!-- Vuln icons -->
+    <symbol id="icon-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+    <symbol id="icon-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24"><polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></symbol>
+    <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
+    <symbol id="icon-door" viewBox="0 0 24 24"><path d="M14 21V5a1 1 0 0 0-1.5-.85l-6 3.5A1 1 0 0 0 6 8.5V21"/><path d="M3 21h18"/><circle cx="11" cy="13" r=".75" fill="currentColor"/></symbol>
+    <symbol id="icon-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14" stroke-dasharray="2 2"/></symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="icon-folder-tree" viewBox="0 0 24 24"><rect x="13" y="3" width="8" height="6" rx="1"/><rect x="13" y="15" width="8" height="6" rx="1"/><path d="M5 3v15a2 2 0 0 0 2 2h6"/><path d="M5 8h8"/></symbol>
+    <symbol id="icon-biohazard" viewBox="0 0 24 24"><circle cx="12" cy="11.9" r="2"/><path d="M6.7 3.4a5 5 0 0 0 2 6.7"/><path d="M21.3 13.7a5 5 0 0 0-6.7-2"/><path d="M9.5 21a5 5 0 0 0 0-6.7"/><path d="M14.5 21a5 5 0 0 1 0-6.7"/></symbol>
+    <symbol id="icon-timer" viewBox="0 0 24 24"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></symbol>
+    <symbol id="icon-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></symbol>
+    <symbol id="icon-radio" viewBox="0 0 24 24"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.86 7.77"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.7 7.36"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/></symbol>
+    <symbol id="icon-file-code" viewBox="0 0 24 24"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="m10 13-2 2 2 2"/><path d="m14 13 2 2-2 2"/></symbol>
+    <symbol id="icon-plug" viewBox="0 0 24 24"><path d="M9 2v6"/><path d="M15 2v6"/><path d="M12 17v5"/><path d="M5 8h14v3a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4z"/></symbol>
+    <symbol id="icon-tag" viewBox="0 0 24 24"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+    <symbol id="icon-skull" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><path d="M9 17h6"/><path d="M21 11a9 9 0 1 0-18 0c0 4 2 6 4 7v3a1 1 0 0 0 1 1h2v-3h4v3h2a1 1 0 0 0 1-1v-3c2-1 4-3 4-7z"/></symbol>
+    <symbol id="icon-ship" viewBox="0 0 24 24"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/></symbol>
+    <symbol id="icon-mouse" viewBox="0 0 24 24"><path d="m9 9 5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></symbol>
+    <symbol id="icon-file-x" viewBox="0 0 24 24"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="m9.5 13.5 5 5"/><path d="m14.5 13.5-5 5"/></symbol>
+    <symbol id="icon-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.96a1 1 0 0 1 1.8.65 8 8 0 0 1-7 9.7"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></symbol>
+  </defs>
+</svg>
+
+<!-- ── NAV (uses shared topnav from style.css) ── -->
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="index.html" class="nav-link active">Home</a>
+    <a href="#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="hero-wrap">
+  <h1 class="hero-title">Web App <span>Pentesting</span> Playbook</h1>
+  <p class="hero-sub">A workflow-first reference guide. Follow the 5-day methodology to structure your engagement, then deep-dive into each vulnerability class.</p>
+  <div class="hero-badges">
+    <span class="badge badge-violet"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg>23 Vulnerability Deep-Dives</span>
+    <span class="badge badge-magenta">BSCP Coverage</span>
+    <span class="badge badge-amber">Interactive Checklists</span>
+  </div>
+  <div class="search-wrap">
+    <label for="search" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Search vulnerabilities</label>
+    <input class="search-input" type="text" id="search" placeholder="Search vulnerabilities… (e.g. sqli, xss, jwt)" autocomplete="off" aria-label="Search vulnerabilities">
+  </div>
+  <div class="stats-strip">
+    <div class="stat-item"><span class="stat-num">23</span><span class="stat-label">Vulnerabilities</span></div>
+    <div class="stat-item"><span class="stat-num">100+</span><span class="stat-label">PortSwigger Labs</span></div>
+    <div class="stat-item"><span class="stat-num">WAF</span><span class="stat-label">Bypass Techniques</span></div>
+  </div>
+</div>
+
+<div class="content-wrap">
+
+  <div class="progress-section">
+    <h3>Overall Checklist Progress</h3>
+    <div class="overall-bar-wrap"><div class="overall-bar" id="overall-bar" style="width:0%"></div></div>
+    <p class="progress-label">Completed <span id="overall-count">0</span> checklist items across all pages</p>
+  </div>
+
+  <!-- 5-DAY OVERVIEW TABLE — single source of truth, links into sections below -->
+  <table class="overview-table">
+    <thead>
+      <tr><th>Day</th><th>Focus</th><th>Go Deep?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="day-label"><a href="#day1">Day 1</a></td>
+        <td><strong>Recon + Binary Sweep</strong></td>
+        <td>No  · document only</td>
+      </tr>
+      <tr>
+        <td class="day-label"><a href="#day2">Day 2</a></td>
+        <td><strong>Auth deep-dive, IDOR, input validation probes</strong></td>
+        <td>Partial</td>
+      </tr>
+      <tr>
+        <td class="day-label"><a href="#day3">Day 3</a></td>
+        <td><strong>File handling, CSRF, CORS, business logic</strong></td>
+        <td>Partial</td>
+      </tr>
+      <tr>
+        <td class="day-label"><a href="#day4">Day 4</a></td>
+        <td><strong>Server-side deep: SQLi, CMDi, SSRF, SSTI, XXE, Deserialization, Race Conditions</strong></td>
+        <td>Yes  · full</td>
+      </tr>
+      <tr>
+        <td class="day-label"><a href="#day5">Day 5</a></td>
+        <td><strong>Client-side deep: XSS, Prototype Pollution, OAuth, GraphQL, WebSocket, JWT</strong></td>
+        <td>Yes  · full</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="iron-rule">
+    <strong>Iron Rule:</strong> By end of Day 1, you must have walked the entire application at least once. Breadth before depth  · never spend a full day on a single login page.
+  </div>
+
+  <!-- DAY 1 -->
+  <section id="day1" class="day-section" style="--day-color: var(--accent2)">
+    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg> Day 1</div>
+    <h2>Recon + Binary Sweep</h2>
+    <div class="section-content">
+      <p><strong>What happens:</strong> Passive recon, active recon, walk the entire app at least once, run a binary sweep for low-hanging fruit.</p>
+      <p><strong>Key tools &amp; commands:</strong></p>
+      <ul>
+        <li><code>subfinder, amass, waybackurls</code> for subdomain enumeration</li>
+        <li><code>httpx</code> for live host discovery</li>
+        <li><code>testssl.sh</code> for TLS/SSL analysis</li>
+        <li><code>feroxbuster, ffuf</code> for fuzzing (recursive, depth 3)</li>
+        <li>Check <code>/robots.txt, /sitemap.xml, /.git/config</code></li>
+      </ul>
+      <p><strong>Goal:</strong> Map the entire attack surface. By end of Day 1, you've clicked every link, submitted every form, and documented all parameters.</p>
+    </div>
+  </section>
+
+  <!-- DAY 2 -->
+  <section id="day2" class="day-section" style="--day-color: var(--warn)">
+    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg> Day 2</div>
+    <h2>Auth &amp; Authorization + Input Probes</h2>
+    <div class="section-content">
+      <p><strong>What happens:</strong> Run one probe per parameter  · if it fires, note it and move on. Don't go deep yet. Focus on authentication mechanisms, authorization boundaries, and basic input validation signals.</p>
+      <div class="probes-box">
+        <div class="probe"><span class="probe-code">&#39;</span>  · SQLi signal?</div>
+        <div class="probe"><span class="probe-code">&lt;script&gt;alert(1)&lt;/script&gt;</span>  · XSS reflection?</div>
+        <div class="probe"><span class="probe-code">; whoami</span>  · CMDi signal?</div>
+        <div class="probe"><span class="probe-code">../../../etc/passwd</span>  · Path traversal?</div>
+        <div class="probe"><span class="probe-code">{{7*7}}</span>  · SSTI signal (result = 49)?</div>
+      </div>
+      <p><strong>Deep-dive into:</strong></p>
+      <div class="vuln-pills">
+        <a class="vuln-pill" href="vulns/idor.html"><svg class="icon" aria-hidden="true"><use href="#icon-door"/></svg>IDOR / Access Control<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/jwt.html"><svg class="icon" aria-hidden="true"><use href="#icon-ticket"/></svg>JWT Attacks<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/csrf.html"><svg class="icon" aria-hidden="true"><use href="#icon-repeat"/></svg>CSRF<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/oauth.html"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg>OAuth<span class="pill-sev sev-critical">Critical</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 3 -->
+  <section id="day3" class="day-section" style="--day-color: var(--purple)">
+    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg> Day 3</div>
+    <h2>File Handling + Client-Side Checks</h2>
+    <div class="section-content">
+      <p><strong>What happens:</strong> File upload endpoints, path traversal paths, CORS policy review, WebSocket connections. Also begin mapping business logic (coupon reuse, negative prices, rate limits).</p>
+      <p><strong>Deep-dive into:</strong></p>
+      <div class="vuln-pills">
+        <a class="vuln-pill" href="vulns/file-upload.html"><svg class="icon" aria-hidden="true"><use href="#icon-upload"/></svg>File Upload<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/path-traversal.html"><svg class="icon" aria-hidden="true"><use href="#icon-folder-tree"/></svg>Path Traversal<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/cors.html"><svg class="icon" aria-hidden="true"><use href="#icon-globe"/></svg>CORS<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/websocket.html"><svg class="icon" aria-hidden="true"><use href="#icon-plug"/></svg>WebSocket<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/clickjacking.html"><svg class="icon" aria-hidden="true"><use href="#icon-mouse"/></svg>Clickjacking<span class="pill-sev sev-medium">Medium</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 4 -->
+  <section id="day4" class="day-section" style="--day-color: var(--danger)">
+    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg> Day 4</div>
+    <h2>Server-Side Deep Dive</h2>
+    <div class="section-content">
+      <p><strong>What happens:</strong> Return to leads from Days 2–3. Now go full depth on server-side vulnerabilities. Exploit in detail, chain findings, build POCs.</p>
+      <p><strong>Deep-dive into:</strong></p>
+      <div class="vuln-pills">
+        <a class="vuln-pill" href="vulns/sqli.html"><svg class="icon" aria-hidden="true"><use href="#icon-database"/></svg>SQL Injection<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/cmdi.html"><svg class="icon" aria-hidden="true"><use href="#icon-terminal"/></svg>OS Command Injection<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/ssrf.html"><svg class="icon" aria-hidden="true"><use href="#icon-radio"/></svg>SSRF<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/ssti.html"><svg class="icon" aria-hidden="true"><use href="#icon-file-code"/></svg>SSTI<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/xxe.html"><svg class="icon" aria-hidden="true"><use href="#icon-file-x"/></svg>XXE<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/deserialization.html"><svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg>Deserialization<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/race-conditions.html"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg>Race Conditions<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/nosqli.html"><svg class="icon" aria-hidden="true"><use href="#icon-leaf"/></svg>NoSQL Injection<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/request-smuggling.html"><svg class="icon" aria-hidden="true"><use href="#icon-ship"/></svg>Request Smuggling<span class="pill-sev sev-critical">Critical</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 5 -->
+  <section id="day5" class="day-section" style="--day-color: var(--accent)">
+    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg> Day 5</div>
+    <h2>Client-Side Deep + Close Gaps</h2>
+    <div class="section-content">
+      <p><strong>What happens:</strong> Chain vulnerabilities. XSS → session steal → IDOR. SSRF → AWS metadata → S3 takeover. Value = combined impact. Finish any outstanding leads. Verify all bugs are reproducible.</p>
+      <p><strong>Deep-dive into:</strong></p>
+      <div class="vuln-pills">
+        <a class="vuln-pill" href="vulns/xss.html"><svg class="icon" aria-hidden="true"><use href="#icon-zap"/></svg>XSS<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/prototype-pollution.html"><svg class="icon" aria-hidden="true"><use href="#icon-biohazard"/></svg>Prototype Pollution<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/graphql.html"><svg class="icon" aria-hidden="true"><use href="#icon-share"/></svg>GraphQL<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/host-header.html"><svg class="icon" aria-hidden="true"><use href="#icon-tag"/></svg>Host Header<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/cache-poisoning.html"><svg class="icon" aria-hidden="true"><use href="#icon-skull"/></svg>Cache Poisoning<span class="pill-sev sev-high">High</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- REFERENCE LIBRARY -->
+  <h2 id="vulns" style="font-size:1.3rem;margin-bottom:1rem;margin-top:3rem;scroll-margin-top:64px;">All 23 Vulnerability Deep-Dives</h2>
+  <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem;">Complete reference library sorted alphabetically. Click any card to read the full guide with payloads, techniques, and Burp Suite workflows.</p>
+
+  <div class="category">
+    <div class="vuln-grid">
+
+      <a class="vuln-card" href="vulns/cmdi.html" data-search="command injection os shell rce remote code execution" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-terminal"/></svg></div>
+          <div>
+            <div class="card-name">Command Injection</div>
+            <div class="card-abbr">CMDi / OS Injection</div>
+          </div>
+        </div>
+        <div class="card-desc">Inject OS commands into application calls to the system shell, achieving RCE.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/cors.html" data-search="cors cross origin resource sharing misconfiguration acao credentials" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-globe"/></svg></div>
+          <div>
+            <div class="card-name">CORS Misconfiguration</div>
+            <div class="card-abbr">CORS</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit relaxed cross-origin policies to steal authenticated data from other origins.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/csrf.html" data-search="csrf cross site request forgery state change form" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-repeat"/></svg></div>
+          <div>
+            <div class="card-name">Cross-Site Request Forgery</div>
+            <div class="card-abbr">CSRF</div>
+          </div>
+        </div>
+        <div class="card-desc">Trick authenticated users into unknowingly submitting state-changing requests.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/deserialization.html" data-search="deserialization java php python pickle gadget chain rce ysoserial" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg></div>
+          <div>
+            <div class="card-name">Insecure Deserialization</div>
+            <div class="card-abbr">Deserialization</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit deserialization of attacker-controlled data to manipulate objects and achieve RCE.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/file-upload.html" data-search="file upload webshell php rce bypass extension" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-upload"/></svg></div>
+          <div>
+            <div class="card-name">File Upload Vulnerabilities</div>
+            <div class="card-abbr">File Upload</div>
+          </div>
+        </div>
+        <div class="card-desc">Upload malicious files (webshells) by bypassing extension, MIME type, and content checks.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/graphql.html" data-search="graphql introspection batching idor injection schema enumeration" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-share"/></svg></div>
+          <div>
+            <div class="card-name">GraphQL Vulnerabilities</div>
+            <div class="card-abbr">GraphQL</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit GraphQL APIs via introspection, batching attacks, IDOR in queries, and injection.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/idor.html" data-search="idor insecure direct object reference access control privilege escalation" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-door"/></svg></div>
+          <div>
+            <div class="card-name">Insecure Direct Object Reference</div>
+            <div class="card-abbr">IDOR</div>
+          </div>
+        </div>
+        <div class="card-desc">Access or modify other users' objects by manipulating direct references like IDs or filenames.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/jwt.html" data-search="jwt json web token algorithm confusion none weak secret" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-ticket"/></svg></div>
+          <div>
+            <div class="card-name">JWT Attacks</div>
+            <div class="card-abbr">JWT</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit weak JWT implementations  · algorithm confusion, none attack, brute-force secrets.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/oauth.html" data-search="oauth openid connect authorization code state csrf redirect uri" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg></div>
+          <div>
+            <div class="card-name">OAuth 2.0 Vulnerabilities</div>
+            <div class="card-abbr">OAuth / OIDC</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit OAuth flow weaknesses  · CSRF via state, redirect_uri bypass, scope escalation, account hijacking.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/path-traversal.html" data-search="path traversal directory traversal dot dot slash lfi file read" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-folder-tree"/></svg></div>
+          <div>
+            <div class="card-name">Path Traversal</div>
+            <div class="card-abbr">Directory Traversal / LFI</div>
+          </div>
+        </div>
+        <div class="card-desc">Navigate outside intended directories using ../ sequences to read arbitrary server files.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/prototype-pollution.html" data-search="prototype pollution javascript proto object property injection" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-biohazard"/></svg></div>
+          <div>
+            <div class="card-name">Prototype Pollution</div>
+            <div class="card-abbr">PP</div>
+          </div>
+        </div>
+        <div class="card-desc">Poison JavaScript's Object.prototype to inject properties into all objects application-wide.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/race-conditions.html" data-search="race condition toctou parallel requests limit bypass turbo intruder http2" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg></div>
+          <div>
+            <div class="card-name">Race Conditions</div>
+            <div class="card-abbr">Race Condition / TOCTOU</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit concurrent request handling to bypass rate limits, reuse tokens, or corrupt state.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/sqli.html" data-search="sql injection sqli database union blind error" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-database"/></svg></div>
+          <div>
+            <div class="card-name">SQL Injection</div>
+            <div class="card-abbr">SQLi</div>
+          </div>
+        </div>
+        <div class="card-desc">Manipulate SQL queries via user input to extract, modify, or delete database data.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/ssrf.html" data-search="ssrf server side request forgery internal network metadata cloud" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-radio"/></svg></div>
+          <div>
+            <div class="card-name">Server-Side Request Forgery</div>
+            <div class="card-abbr">SSRF</div>
+          </div>
+        </div>
+        <div class="card-desc">Make the server issue requests on your behalf to internal services or cloud metadata endpoints.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/ssti.html" data-search="ssti template injection jinja2 twig freemarker rce server side" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-file-code"/></svg></div>
+          <div>
+            <div class="card-name">Server-Side Template Injection</div>
+            <div class="card-abbr">SSTI</div>
+          </div>
+        </div>
+        <div class="card-desc">Inject template syntax into server-rendered templates to execute arbitrary code.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/websocket.html" data-search="websocket cswsh cross site hijacking xss injection ws wss" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-plug"/></svg></div>
+          <div>
+            <div class="card-name">WebSocket Vulnerabilities</div>
+            <div class="card-abbr">WebSocket / CSWSH</div>
+          </div>
+        </div>
+        <div class="card-desc">Hijack WebSocket connections, inject malicious messages, or exploit missing origin validation.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/host-header.html" data-search="host header injection password reset poisoning x-forwarded-host" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-tag"/></svg></div>
+          <div>
+            <div class="card-name">Host Header Injection</div>
+            <div class="card-abbr">Host Header</div>
+          </div>
+        </div>
+        <div class="card-desc">Inject a malicious Host header to poison password reset links, cache responses, or bypass access controls.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/cache-poisoning.html" data-search="cache poisoning unkeyed header cdn x-cache param miner vary" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-skull"/></svg></div>
+          <div>
+            <div class="card-name">Web Cache Poisoning</div>
+            <div class="card-abbr">Cache Poisoning</div>
+          </div>
+        </div>
+        <div class="card-desc">Poison cached responses by injecting malicious values through unkeyed headers  · affects all subsequent users.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/request-smuggling.html" data-search="request smuggling http cl te transfer encoding content length desync" style="--card-accent:#e879f9">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-ship"/></svg></div>
+          <div>
+            <div class="card-name">HTTP Request Smuggling</div>
+            <div class="card-abbr">Smuggling / Desync</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit front-end/back-end disagreement on HTTP body parsing to smuggle requests past security controls.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/xss.html" data-search="xss cross site scripting reflected stored dom javascript" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-zap"/></svg></div>
+          <div>
+            <div class="card-name">Cross-Site Scripting</div>
+            <div class="card-abbr">XSS</div>
+          </div>
+        </div>
+        <div class="card-desc">Inject malicious scripts into pages viewed by other users  · reflected, stored, or DOM-based.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/clickjacking.html" data-search="clickjacking iframe opacity x-frame-options csp ui redressing" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-mouse"/></svg></div>
+          <div>
+            <div class="card-name">Clickjacking</div>
+            <div class="card-abbr">UI Redressing</div>
+          </div>
+        </div>
+        <div class="card-desc">Trick users into clicking hidden elements by overlaying a transparent iframe over a decoy UI.</div>
+        <div class="card-footer"><span class="sev sev-medium">Medium</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/xxe.html" data-search="xxe xml external entity injection file read ssrf" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-file-x"/></svg></div>
+          <div>
+            <div class="card-name">XML External Entity</div>
+            <div class="card-abbr">XXE</div>
+          </div>
+        </div>
+        <div class="card-desc">Exploit XML parsers to read internal files, probe internal services, or execute SSRF.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/nosqli.html" data-search="nosql injection mongodb ne gt regex where operator json authentication bypass" style="--card-accent:#a78bfa">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-leaf"/></svg></div>
+          <div>
+            <div class="card-name">NoSQL Injection</div>
+            <div class="card-abbr">NoSQLi</div>
+          </div>
+        </div>
+        <div class="card-desc">Inject MongoDB operators ($ne, $regex, $where) to bypass authentication or extract data from NoSQL databases.</div>
+        <div class="card-footer"><span class="sev sev-high">High</span></div>
+      </a>
+
+    </div>
+  </div>
+
+</div><!-- /content-wrap -->
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="vulns/sqli.html">SQL Injection</a>
+        <a href="vulns/xss.html">XSS</a>
+        <a href="vulns/ssrf.html">SSRF</a>
+        <a href="vulns/jwt.html">JWT Attacks</a>
+        <a href="#vulns" class="more">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="index.html">All Vulnerabilities</a>
+        <a href="thanks.html">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ── Search ──
+const searchInput = document.getElementById('search');
+const cards = document.querySelectorAll('.vuln-card, .vuln-pill');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  cards.forEach(card => {
+    const text = (card.dataset.search || '') + ' ' + card.textContent.toLowerCase();
+    card.classList.toggle('hidden', q && !text.includes(q));
+  });
+});
+
+// ── Overall checklist progress from localStorage ──
+function calcOverallProgress() {
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key === 'theme') continue;
+    if (localStorage.getItem(key) === 'true') total++;
+  }
+  const bar = document.getElementById('overall-bar');
+  const count = document.getElementById('overall-count');
+  if (count) count.textContent = total;
+  const pct = Math.min(100, Math.round(total / 198 * 100));
+  if (bar) bar.style.width = pct + '%';
+}
+calcOverallProgress();
+
+// ── Theme toggle ──
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+})();
+</script>
+
+</body>
+</html>

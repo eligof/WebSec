@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="JWT vulnerability testing guide: algorithm confusion, none algorithm bypass, weak secret cracking, and key injection attacks.">
+    <meta property="og:title" content="JWT Vulnerabilities – Web App Pentesting Guide">
+    <meta property="og:description" content="JWT vulnerability testing guide: algorithm confusion, none algorithm bypass, weak secret cracking, and key injection attacks.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>JWT Attacks  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">JWT Attacks</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#jwt-structure">🧩 JWT Structure</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">🔍 Where to Look</a>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A02 · CVSS 9.1 · Day 2</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14" stroke-dasharray="2 2"/></svg></span><span>JWT Attacks</span></h1>
+      <p>JSON Web Tokens (JWT) are widely used for authentication and session management. However, weak implementation practices ·such as accepting the "none" algorithm, failing to verify signatures, or using weak secrets ·allow attackers to forge authentication tokens, escalate privileges, or bypass security controls entirely.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Unforgeable Wristband</div>
+        <p>Imagine a concert venue that issues wristbands to prove you paid for entry. A wristband says "VIP access, valid until midnight, issued by Venue ABC."</p>
+        <p>A good wristband is tamper-proof: it's signed with the venue's private stamp that only the venue can create. When the bouncer checks your wristband, they verify the stamp is genuine using the venue's public verification key.</p>
+        <p>But a poorly designed system might:</p>
+        <ul>
+          <li><strong>Forget to check the stamp at all</strong>  · the bouncer just reads the text, assumes it's real, and lets you in</li>
+          <li><strong>Accept wristbands you stamped yourself</strong>  · the bouncer uses the public verification key to verify your signature, which works because anyone can encrypt with the public key</li>
+          <li><strong>Accept wristbands with "no signature"</strong>  · some wristbands claim they're unsigned; the bouncer trusts these anyway</li>
+        </ul>
+        <p>That's JWT vulnerabilities: the token looks legitimate and has a signature, but the server either doesn't verify it, accepts weak signatures, or trusts signatures created with information the attacker has access to.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill deep"><span class="day-num">Day 2</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill probe"><span class="day-num">Day 4</span>Alg Confusion</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 2  · JWT Initial Analysis</div>
+        <p>On Day 2, identify how the application handles authentication. If you see a JWT (in Authorization header, a cookie, or localStorage  · check DevTools → Application), decode it at jwt.io and inspect the header and payload. Note the algorithm (HS256, RS256), check for interesting claims (role, isAdmin, sub). Install the Burp <strong>JWT Editor</strong> extension before starting.</p>
+        <pre><code># Quick checks:
+# 1. Is alg: none accepted?
+# 2. Is the secret weak? (try: hashcat -a 0 -m 16500 jwt.txt wordlist.txt)
+# 3. Can you modify claims (isAdmin: true) and is the signature checked?</code></pre>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 4  · Algorithm Confusion Attack</div>
+        <p>If the app uses RS256 (asymmetric), try the RS256→HS256 algorithm confusion attack. Obtain the server's public key (often at <code>/.well-known/jwks.json</code> or in an error response). Use Burp JWT Editor to sign a modified token with HS256 using the public key as the HMAC secret. If the server verifies with its public key treating it as an HMAC secret → privilege escalation.</p>
+        <pre><code># Steps:
+# 1. Get public key from /.well-known/jwks.json
+# 2. In JWT Editor: New RSA Key → paste public key
+# 3. Change alg to HS256, modify payload (role: admin)
+# 4. Sign with the RSA key (JWT Editor will use it as HMAC secret)
+# 5. Send  · if accepted → algorithm confusion confirmed</code></pre>
+        <p><strong>Chain it:</strong> JWT forgery → impersonate admin → IDOR as admin → read all user data. Or: JWT with modified sub claim → access other users' accounts.</p>
+      </div>
+    </section>
+
+    <section id="jwt-structure">
+      <h2>Understanding JWT Structure</h2>
+      <p>A JWT consists of three base64url-encoded parts separated by dots: <code>header.payload.signature</code></p>
+
+      <h3>Header</h3>
+      <pre><code>{
+  "alg": "HS256",
+  "typ": "JWT"
+}</code></pre>
+      <p>The header specifies the algorithm used to sign the token (<code>HS256</code>, <code>RS256</code>, <code>none</code>, etc.) and the token type.</p>
+
+      <h3>Payload (Claims)</h3>
+      <pre><code>{
+  "sub": "user123",
+  "username": "alice",
+  "role": "user",
+  "email": "alice@example.com",
+  "iat": 1704067200,
+  "exp": 1704070800
+}</code></pre>
+      <p>The payload contains claims (data about the user). Standard claims include:</p>
+      <ul>
+        <li><code>sub</code>  · Subject (user ID)</li>
+        <li><code>iat</code>  · Issued At (timestamp when token was created)</li>
+        <li><code>exp</code>  · Expiration (timestamp when token expires)</li>
+        <li>Custom claims like <code>role</code>, <code>username</code>, <code>permissions</code></li>
+      </ul>
+
+      <h3>Signature</h3>
+      <p>The signature is computed by hashing the header and payload with a secret key:</p>
+      <pre><code>HMACSHA256(
+  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+  secret
+)</code></pre>
+
+      <h3>Complete Example</h3>
+      <pre><code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6InVzZXIiLCJleHAiOjE3MDQwNzA4MDB9.X3x4KZ9pQ2mR8vN1fL2kA9...</code></pre>
+      <p>You can decode the header and payload by base64url-decoding them (they're just JSON). The signature is what proves authenticity ·only someone with the secret key can create a valid signature.</p>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How JWT Attacks Work</h2>
+      <p>Most JWT vulnerabilities stem from incorrect signature verification. Here are the main attack types:</p>
+
+      <h3>1. Algorithm Confusion (RS256 → HS256)</h3>
+      <p>The server expects a token signed with RS256 (asymmetric, using a private key). But you change the algorithm to HS256 (symmetric, using a shared secret) and sign the token with the server's public key.</p>
+      <p>Why this works: The server has the public key but uses it to verify HS256 tokens. Since HS256 is symmetric, you can compute a valid signature using the public key as the HMAC secret.</p>
+
+      <h3>2. "None" Algorithm (alg: none)</h3>
+      <p>Change the algorithm header to <code>"alg": "none"</code> and remove the signature entirely. Some servers blindly accept tokens with no signature.</p>
+
+      <h3>3. Weak Secret Brute-Force</h3>
+      <p>The server uses HS256 with a weak secret (common words, short strings). Brute-force the secret using hashcat or jwt_tool.</p>
+
+      <h3>4. JWT Header Injection (kid, jku, x5u)</h3>
+      <p>The JWT header can include parameters like <code>kid</code> (key ID), <code>jku</code> (JWK Set URL), or <code>x5u</code> (certificate URL). Inject URLs pointing to your attacker-controlled server to provide your own public key.</p>
+
+      <h3>5. Privilege Escalation via Payload Modification</h3>
+      <p>Even if you can't forge a valid signature, if the server doesn't verify the signature properly, you can modify the payload claims (change <code>"role": "user"</code> to <code>"role": "admin"</code>).</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look for JWTs</h2>
+      <ul>
+        <li><strong>Authorization header:</strong> <code>Authorization: Bearer eyJ...</code></li>
+        <li><strong>Cookies:</strong> Common names: <code>jwt</code>, <code>session</code>, <code>token</code>, <code>auth</code>, <code>id_token</code></li>
+        <li><strong>Custom headers:</strong> <code>X-Token</code>, <code>X-Auth-Token</code>, <code>X-JWT</code></li>
+        <li><strong>Request body:</strong> Some APIs accept JWTs in POST parameters or JSON body</li>
+        <li><strong>Client-side storage:</strong> Check browser DevTools → Application tab → Local Storage, Session Storage, Cookies</li>
+        <li><strong>Response headers:</strong> Some endpoints return JWTs in responses for use in subsequent requests</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Install JWT Editor Extension:</strong> Go to Extender → BApp Store → search for "JWT Editor" → Install. This makes JWT modification much easier.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Find the JWT:</strong> Browse the application and locate requests containing JWTs. Check Authorization headers, cookies, and request bodies. Right-click any request with a JWT and send to Repeater.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Decode the JWT:</strong> In the JWT Editor extension (look for the "JSON Web Token" tab at the bottom), you can decode and edit the header and payload. Modify the payload to change claims (e.g., change <code>"role": "user"</code> to <code>"role": "admin"</code>).
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Test "alg: none":</strong> Change the algorithm header to <code>"alg": "none"</code> in the JWT Editor. Remove the signature (leave it empty). Send the request and see if it's accepted.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test RS256 → HS256 confusion:</strong> Change <code>"alg": "RS256"</code> to <code>"alg": "HS256"</code>. In the JWT Editor, set the secret to the server's public key (copy from the JWKS endpoint or extract from a valid token signature). Re-sign the token and send.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Brute-force weak secrets:</strong> Export the JWT and use jwt_tool or hashcat to brute-force the secret:
+          <pre><code>hashcat -a 0 -m 16500 jwt.txt wordlist.txt</code></pre>
+          If a secret is found, use it to re-sign your modified tokens.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Test header injection (jku/x5u):</strong> If the JWT has a <code>jku</code> (JWK Set URL) or <code>x5u</code> (certificate URL) header, try changing it to point to your attacker-controlled server. Generate your own RSA key pair, host a JWKS JSON file, and use your private key to sign tokens.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">8</div>
+        <div>
+          <strong>Test claim modification:</strong> Change claims like <code>role</code>, <code>permissions</code>, <code>sub</code>, <code>email</code>, etc. If the server doesn't validate the signature, these changes will be accepted.
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Exploitation Techniques</h2>
+
+      <h3>Algorithm Confusion: RS256 to HS256</h3>
+      <p><strong>Original token (valid RS256 token):</strong></p>
+      <pre><code>eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6InVzZXIifQ.SIGNATURE</code></pre>
+      <p><strong>Modified token (HS256 with public key as secret):</strong></p>
+      <pre><code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6ImFkbWluIn0.NEWSIGNATURE</code></pre>
+      <p>Extract the server's public key from the JWKS endpoint (<code>/.well-known/jwks.json</code>) or from an existing valid token. Use it as the HMAC secret to sign your modified token.</p>
+
+      <h3>"None" Algorithm Attack</h3>
+      <p><strong>Modified token:</strong></p>
+      <pre><code>eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6ImFkbWluIn0.</code></pre>
+      <p>The signature portion (after the second dot) is empty. The server must not validate signatures for tokens with <code>alg: none</code>.</p>
+
+      <h3>Weak Secret Brute-Force (Using jwt_tool)</h3>
+      <pre><code># Clone jwt_tool
+git clone https://github.com/ticarpi/jwt_tool.git
+cd jwt_tool
+
+# Use the web UI or CLI to crack weak secrets
+python3 jwt_tool.py -M crack -t eyJ... -w /usr/share/wordlists/rockyou.txt</code></pre>
+
+      <h3>Claim Modification Without Signature Verification</h3>
+      <p><strong>Original payload:</strong></p>
+      <pre><code>{"sub": "user123", "role": "user", "email": "alice@example.com"}</code></pre>
+      <p><strong>Modified payload:</strong></p>
+      <pre><code>{"sub": "user123", "role": "admin", "email": "alice@example.com"}</code></pre>
+      <p>If the signature is not properly validated, the server will accept this modified token and grant admin privileges.</p>
+
+      <h3>JWK Header Injection</h3>
+      <p>Embed your own public key in the JWT header:</p>
+      <pre><code>{
+  "alg": "RS256",
+  "typ": "JWT",
+  "jwk": {
+    "kty": "RSA",
+    "use": "sig",
+    "n": "YOUR_PUBLIC_KEY_MODULUS",
+    "e": "AQAB"
+  }
+}</code></pre>
+      <p>Sign the payload with your private key. The server uses the key embedded in the header to verify the signature, which you just signed with your private key.</p>
+
+      <h3>Key ID (kid) Parameter Injection</h3>
+      <p>If the JWT has a <code>kid</code> parameter, try injecting path traversal or SQL injection:</p>
+      <pre><code>{
+  "alg": "HS256",
+  "typ": "JWT",
+  "kid": "../../../dev/null"
+}</code></pre>
+      <p>Some servers load the key based on the <code>kid</code> value from a file path. Path traversal might load a predictable key (like /dev/null, which is empty, effectively weakening the signature).</p>
+
+      <h3>Expiration (exp) Claim Manipulation</h3>
+      <p>Modify the expiration timestamp to extend token validity:</p>
+      <pre><code>{"sub": "user123", "exp": 9999999999}</code></pre>
+      <p>If the signature is not verified, the token won't expire.</p>
+
+      <h3>Using hashcat for Secret Brute-Force</h3>
+      <pre><code>hashcat -a 0 -m 16500 jwt.txt wordlist.txt -o cracked.txt</code></pre>
+      <p>Mode 16500 is for HMAC-SHA256. Once cracked, use the secret to re-sign modified tokens.</p>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <span>Progress: <span class="progress-mini">0/12</span></span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Locate all JWTs (Authorization header, cookies, local storage)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Decode JWT header and payload (use JWT.io or Burp JWT Editor)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try changing algorithm to "none" and remove signature</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>If RS256: try RS256 → HS256 confusion with public key as secret</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test brute-forcing weak secret using hashcat or jwt_tool</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Modify payload claims (role, permissions, sub, email) and test without re-signing</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try JWK header injection (embed your own public key)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Check for kid parameter; test path traversal and SQL injection</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Check jku and x5u headers; try pointing to attacker-controlled URLs</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Modify expiration (exp) claim to extend validity</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test if server validates iat (issued at) timestamp</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Document all successful JWT forgery vectors with PoC</span>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+      <p>JWT attacks often bypass traditional WAF rules because the attack happens within the token itself, not the HTTP headers.</p>
+
+      <h3>Token in Different Locations</h3>
+      <p>If Authorization header is filtered, try injecting JWTs as:</p>
+      <ul>
+        <li>Cookie: <code>jwt=eyJ...</code></li>
+        <li>Custom header: <code>X-JWT: eyJ...</code></li>
+        <li>Request body parameter: <code>{"token": "eyJ..."}</code></li>
+        <li>URL parameter: <code>?token=eyJ...</code></li>
+      </ul>
+
+      <h3>Algorithm Variation</h3>
+      <p>Try different signature algorithms that might be accepted:</p>
+      <ul>
+        <li><code>"alg": "HS512"</code> instead of HS256</li>
+        <li><code>"alg": "none"</code> (already mentioned, but worth retrying if first attempt failed)</li>
+        <li><code>"alg": "HMAC"</code> or other variations</li>
+      </ul>
+
+      <h3>Case Variation and Whitespace</h3>
+      <p>Some systems normalize algorithm names. Try:</p>
+      <ul>
+        <li><code>"alg": "hs256"</code> (lowercase)</li>
+        <li><code>"alg": "HS256 "</code> (trailing space)</li>
+      </ul>
+
+      <h3>Base64 Encoding Variation</h3>
+      <p>Some decoders accept both standard and URL-safe base64. Try different variants, though JWT should use URL-safe encoding.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+      <h3>Privilege Escalation</h3>
+      <p>Modify claims to gain admin or elevated privileges. Change <code>"role": "user"</code> to <code>"role": "admin"</code> and bypass authentication checks.</p>
+
+      <h3>Session Hijacking and Impersonation</h3>
+      <p>Forge a JWT with any user ID (change <code>"sub": "user123"</code> to <code>"sub": "admin123"</code>). Access other users' accounts or perform actions as them.</p>
+
+      <h3>Bypassing Authentication</h3>
+      <p>If signature verification is not implemented, create arbitrary tokens from scratch. No existing token needed ·just construct a JWT with claims for any user and any role.</p>
+
+      <h3>Extending Token Validity</h3>
+      <p>Modify expiration claims to keep tokens valid indefinitely. Combine with privilege escalation for persistent unauthorized access.</p>
+
+      <h3>Accessing Protected Resources</h3>
+      <p>Use forged JWTs to access APIs, download files, modify data, or perform other actions requiring authentication.</p>
+
+      <h3>Chained Attacks</h3>
+      <p>JWT attacks often lead to other vulnerabilities. For example, escalate to admin, then use admin functionality to upload malicious files or access sensitive data.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+      <h3>Always Verify the Signature</h3>
+      <p><strong>Node.js (jsonwebtoken):</strong></p>
+      <pre><code>const jwt = require('jsonwebtoken');
+try {
+  const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+  // Token is valid
+} catch (err) {
+  // Token is invalid or signature verification failed
+  res.status(401).send('Unauthorized');
+}</code></pre>
+
+      <h3>Whitelist Allowed Algorithms</h3>
+      <p>Always specify which algorithms you accept. Never accept "none":</p>
+      <pre><code>jwt.verify(token, secret, { algorithms: ['HS256'] });</code></pre>
+
+      <h3>Use Strong Secrets (for HS256)</h3>
+      <p>If using HMAC-based signing, use a cryptographically secure random secret with at least 256 bits of entropy:</p>
+      <pre><code>const secret = crypto.randomBytes(32).toString('hex'); // 256-bit secret</code></pre>
+
+      <h3>Prefer RS256 (Asymmetric Signing) Over HS256</h3>
+      <p>Use RSA key pairs where the server has a private key for signing and a public key for verification. This prevents the RS256 → HS256 confusion attack.</p>
+
+      <h3>Pin the Algorithm Server-Side</h3>
+      <p>Don't trust the algorithm specified in the JWT header. Hard-code the expected algorithm on the server:</p>
+      <pre><code>// Server always expects HS256, ignores header
+jwt.verify(token, secret, { algorithms: ['HS256'] });</code></pre>
+
+      <h3>Validate Expiration Strictly</h3>
+      <p>Check that the <code>exp</code> claim is in the past and reject expired tokens. Most JWT libraries do this automatically if verification is enabled.</p>
+
+      <h3>Set Short Expiration Times</h3>
+      <p>Use short-lived tokens (5-15 minutes) and implement token refresh mechanisms. Even if a token is compromised, its window of validity is minimal.</p>
+
+      <h3>Validate the <code>kid</code> Parameter</h3>
+      <p>If using key IDs, validate that the <code>kid</code> is in a whitelist of valid key IDs. Don't allow arbitrary file paths or URLs.</p>
+
+      <h3>Disable External URL Resolution in JWK Headers</h3>
+      <p>If your application loads JWK Sets from URLs specified in the JWT header (<code>jku</code>), restrict which URLs are allowed. Better yet, disable this feature entirely and hard-code key sources.</p>
+
+      <h3>Use a Secure JWT Library</h3>
+      <p>Use well-maintained libraries like jsonwebtoken (Node.js), PyJWT (Python), or similar. Avoid rolling your own JWT implementation.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice JWT attacks with these PortSwigger Web Security Academy labs:</p>
+      <ul>
+        <li>JWT authentication bypass via flawed signature verification</li>
+        <li>JWT authentication bypass via algorithm confusion</li>
+        <li>JWT authentication bypass via algorithm confusion with jku parameter injection</li>
+        <li>JWT authentication bypass via jwk header injection</li>
+        <li>JWT authentication bypass via jku parameter pollution</li>
+        <li>JWT authentication bypass via kid parameter injection</li>
+        <li>JWT key confusion</li>
+        <li>Forging a valid JWT from scratch</li>
+      </ul>
+      <p>All 8 PortSwigger JWT labs are essential for mastering JWT exploitation. Start with "flawed signature verification" and progress through algorithm confusion attacks.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+      <div class="callout warn">
+        <div class="callout-title">Don't Fall Into These Traps</div>
+        <ul>
+          <li><strong>Not installing the JWT Editor extension:</strong> Burp's JWT Editor makes decoding and modifying tokens trivial. Without it, you're manually base64url-encoding and decoding, which is error-prone and slow.</li>
+          <li><strong>Only trying "alg: none":</strong> This attack works on some apps but not all. Always also test RS256 → HS256 confusion, which is more common.</li>
+          <li><strong>Forgetting to test claim modification without re-signing:</strong> Some servers accept modified claims even without a valid signature. Always try changing claims and sending the modified token as-is.</li>
+          <li><strong>Not checking all token locations:</strong> JWTs appear in cookies, headers, body parameters, and local storage. Check DevTools Application tab for tokens in local storage.</li>
+          <li><strong>Assuming the secret is strong:</strong> Many developers use weak secrets ("password123", app name, etc.). Always attempt brute-force with hashcat before giving up.</li>
+          <li><strong>Ignoring header parameters like jku and x5u:</strong> These can be exploited to point to attacker-controlled key servers. Test them every time.</li>
+          <li><strong>Not trying different algorithms:</strong> If HS256 fails, try HS512, RS256, etc. Some servers accept multiple algorithms.</li>
+          <li><strong>Giving up if the first JWT attack fails:</strong> JWT vulnerabilities come in many flavors. Try each attack systematically: none, RS256→HS256, weak secret, claim modification, header injection.</li>
+        </ul>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>JWT vulnerabilities are often the key that unlocks other vulnerabilities  · they control who you are in the system.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="oauth.html">
+        <span class="sa-icon">🔗</span>
+        <span class="sa-name">OAuth</span>
+        <span class="sa-why">OAuth access tokens are often JWTs. OAuth flow bugs often result in JWT manipulation opportunities.</span>
+      </a>
+      <a class="see-also-card" href="idor.html">
+        <span class="sa-icon">🚪</span>
+        <span class="sa-name">IDOR</span>
+        <span class="sa-why">Forge a JWT with a different user's sub/id → instant cross-account access. JWT is the master key for IDOR.</span>
+      </a>
+      <a class="see-also-card" href="sqli.html">
+        <span class="sa-icon">🗄️</span>
+        <span class="sa-name">SQL Injection</span>
+        <span class="sa-why">If the app stores JWT secrets in a DB, SQLi can extract the secret → forge unlimited valid tokens.</span>
+      </a>
+      <a class="see-also-card" href="path-traversal.html">
+        <span class="sa-icon">📁</span>
+        <span class="sa-name">Path Traversal</span>
+        <span class="sa-why">The kid (key ID) header parameter in JWT sometimes references a file path → path traversal to use /dev/null as the key.</span>
+      </a>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'jwt-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') {
+    cb.checked = true;
+    cb.closest('.checklist-item').classList.add('done');
+  }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length / all.length * 100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

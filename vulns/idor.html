@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Insecure Direct Object Reference (IDOR) testing guide: enumeration, access control bypass, and exploitation with Burp Suite Intruder.">
+    <meta property="og:title" content="IDOR – Web App Pentesting Guide">
+    <meta property="og:description" content="Insecure Direct Object Reference (IDOR) testing guide: enumeration, access control bypass, and exploitation with Burp Suite Intruder.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>IDOR  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">IDOR</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Suite Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass Techniques</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Beginner Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A01 · CVSS 8.1 · Day 2</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 21V5a1 1 0 0 0-1.5-.85l-6 3.5A1 1 0 0 0 6 8.5V21"/><path d="M3 21h18"/><circle cx="11" cy="13" r=".75" fill="currentColor"/></svg></span><span>IDOR (Insecure Direct Object Reference)</span></h1>
+      <p>Access other users' data by manipulating object references (IDs) when the application doesn't verify ownership.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">High</span>
+        <span class="badge badge-bscp">BSCP Exam Topic</span>
+        <span class="badge badge-difficulty">Difficulty: Beginner</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>🎯 Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Hospital Locker Room</div>
+        <p>A hospital assigns each patient a locker numbered 1001, 1002, 1003, etc. You're patient 1001 with locker 1001. The staff member who manages the locker room doesn't carefully check who's asking  · they just look at the locker number. If you ask, "Open locker 1042" they say "Sure!" and open it without verifying you're patient 1042. Now you can read another patient's private medical records, prescription details, and insurance information.</p>
+        <p>IDOR works the same way: the app looks up objects by ID (locker number) but forgets to verify that YOU (the logged-in user) are authorized to access that object. You control the ID, so you can view or modify anything.</p>
+      </div>
+    </section>
+
+    <h2 id="methodology">📅 When in the 5-Day Workflow</h2>
+
+    <div class="workflow-days">
+      <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      <div class="day-pill deep"><span class="day-num">Day 2</span>Deep Dive</div>
+      <div class="day-pill probe"><span class="day-num">Day 3</span>Continue</div>
+      <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+      <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+    </div>
+
+    <div class="callout method-deep">
+      <div class="callout-title">🎯 Day 2  · IDOR / Authorization Testing</div>
+      <p>IDOR is a Day 2 priority. Create two accounts (User A and User B). As User A, use every feature: view orders, messages, invoices, profile, API data. Every time you see a reference to a resource (numeric ID, UUID, filename)  · copy that request to Burp Repeater and try it with User B's session (or without any session). If you see User A's data returned using User B's session → IDOR.</p>
+      <p>Use Burp's <strong>Match and Replace</strong> (Settings → Proxy → Match and Replace): replace User A's session cookie with User B's cookie automatically on all requests. This way, browsing as User A while Match and Replace is active tests every request for IDOR simultaneously.</p>
+      <pre><code># Horizontal: access another user's resource
+GET /api/users/1337/orders → use as user with ID 1338
+
+# Vertical: access admin-only endpoints
+GET /admin/users → as regular user
+POST /api/users/1337/make-admin → as regular user</code></pre>
+      <p><strong>Don't forget:</strong> Test POST/PUT/DELETE bodies too  · not just URL parameters. Check JSON bodies for user_id, account_id, owner_id fields you can swap.</p>
+    </div>
+
+    <section id="how-it-works">
+      <h2>⚙️ How It Works</h2>
+      <h3>The Core Problem</h3>
+      <p>Applications use IDs to reference objects: users, documents, orders, invoices, etc. A typical URL looks like:</p>
+      <pre><code>GET /api/users/1337
+GET /documents/5
+GET /invoices/INV-2024-001
+GET /profile.php?user_id=42</code></pre>
+
+      <p>The server receives the ID and retrieves the object. But it forgets to ask: <strong>"Does this user own this object?"</strong> Instead, it only checks: <strong>"Does this object exist?"</strong></p>
+
+      <h3>Example: Vulnerable Code</h3>
+      <pre><code>// VULNERABLE: No authorization check
+@app.route('/api/invoices/&lt;invoice_id&gt;', methods=['GET'])
+def get_invoice(invoice_id):
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice:
+        return "Not found", 404
+    return invoice.to_json()  # ← Returns data without checking ownership!</code></pre>
+
+      <h3>Exploitation Flow</h3>
+      <ol>
+        <li>You log in as user A (account ID 100)</li>
+        <li>You visit your invoice page: <code>GET /api/invoices/5000</code> (your invoice)</li>
+        <li>The app returns your invoice because you're logged in  · and the ID happens to be 5000</li>
+        <li>You try: <code>GET /api/invoices/5001</code>  · a different user's invoice</li>
+        <li>The app returns it without checking if you own it</li>
+        <li>You've accessed another user's data  · IDOR confirmed</li>
+      </ol>
+
+      <h3>Horizontal vs. Vertical IDOR</h3>
+      <ul>
+        <li><strong>Horizontal IDOR:</strong> Access data of other users at the same privilege level (User A views User B's invoice)</li>
+        <li><strong>Vertical IDOR:</strong> Access data of higher-privilege users (Regular user views admin's data)  · often combined with privilege escalation</li>
+      </ul>
+    </section>
+
+    <section id="where-to-look">
+      <h2>🔍 Where to Look</h2>
+
+      <h3>ID Types</h3>
+      <ul>
+        <li><strong>Numeric IDs:</strong> 1, 2, 3... (easiest to enumerate)</li>
+        <li><strong>UUIDs:</strong> 550e8400-e29b-41d4-a716-446655440000 (harder to guess, but still vulnerable if not validated)</li>
+        <li><strong>Usernames:</strong> /users/alice, /users/bob (directly reference other users)</li>
+        <li><strong>Email addresses:</strong> /profile?email=victim@example.com</li>
+        <li><strong>Filenames:</strong> /download?file=invoice_001.pdf → /download?file=invoice_002.pdf</li>
+        <li><strong>Indirect references:</strong> /account?ref=12345 (reference ID doesn't match user ID)</li>
+      </ul>
+
+      <h3>Vulnerable Endpoints</h3>
+      <p>Look for these patterns:</p>
+      <ul>
+        <li><code>GET /api/users/1337</code>  · view user profile</li>
+        <li><code>GET /documents/5</code>  · download document</li>
+        <li><code>GET /invoices/INV-2024-001</code>  · view invoice</li>
+        <li><code>POST /account/delete/1337</code>  · delete account</li>
+        <li><code>PUT /profile/1337</code>  · update profile</li>
+        <li><code>GET /api/orders?user_id=42</code>  · list user orders</li>
+        <li><code>GET /admin/users/1337</code>  · admin view of user (accessible without privilege check)</li>
+      </ul>
+
+      <h3>Finding IDOR Vulnerabilities</h3>
+      <ol>
+        <li>Log in as your test account (e.g., account ID 100)</li>
+        <li>Visit a page that shows your data: /api/users/100, /invoices/5000, etc.</li>
+        <li>Note the ID in the request</li>
+        <li>Try incrementing or modifying the ID: /api/users/101, /invoices/5001, etc.</li>
+        <li>If you can view or modify another user's data, IDOR is confirmed</li>
+      </ol>
+
+      <h3>Also Check:</h3>
+      <ul>
+        <li><strong>POST/PUT request bodies:</strong> <code>{ "user_id": 1337, "data": "..." }</code>  · try changing user_id</li>
+        <li><strong>API endpoints that filter by user:</strong> <code>/api/orders?user_id=42</code>  · change user_id parameter</li>
+        <li><strong>Indirect object references:</strong> <code>/download?doc_ref=abc123</code>  · try other ref values</li>
+        <li><strong>URL path traversal in IDs:</strong> <code>/users/../admin</code> (combined vulnerability)</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>🎯 Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Log in and find your object ID</strong>
+          <p>Log into the application as your test account. Navigate to a page that shows your data (your profile, invoice, order, document). Intercept the request in Burp Proxy and note the object ID.</p>
+          <p>Example: <code>GET /api/invoices/5000</code> (5000 is your invoice ID)</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Send to Repeater</strong>
+          <p>Right-click the request → "Send to Repeater". You'll now modify and resend the request multiple times.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Enumerate IDs</strong>
+          <p>Modify the ID and send requests. Try:</p>
+          <ul>
+            <li>Increment: 5001, 5002, 5003, 5004...</li>
+            <li>Decrement: 4999, 4998, 4997...</li>
+            <li>Round numbers: 1, 10, 100, 1000...</li>
+            <li>Sequential: 1, 2, 3, 4, 5...</li>
+          </ul>
+          <p>If you receive valid responses (200 OK, actual data), you've found IDOR.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Use Intruder for Mass Enumeration</strong>
+          <p>Right-click → "Send to Intruder". Set the ID as the payload position:</p>
+          <pre><code>GET /api/invoices/§5000§</code></pre>
+          <p>Configure Intruder with a number range (1-10000), start the attack, and watch for successful responses (200 status, large response size). This scales enumeration.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Try POST/PUT Requests</strong>
+          <p>Don't just test GET. Try modifying other users' data:</p>
+          <pre><code>PUT /api/users/1337
+{ "email": "hacker@example.com", "password": "hacked123" }</code></pre>
+          <p>If the server accepts this without verifying you own user 1337, vertical/horizontal escalation is possible.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Check Parameter Pollution</strong>
+          <p>Try modifying IDs in multiple places within the same request:</p>
+          <pre><code>PUT /api/users/100?user_id=1337
+{ "user_id": 1337, "email": "attacker@example.com" }</code></pre>
+          <p>Sometimes the app checks one parameter and modifies another.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>🎣 Payloads & Techniques</h2>
+
+      <h3>1. Simple ID Enumeration (GET)</h3>
+      <pre><code>GET /api/invoices/5001
+GET /api/invoices/5002
+GET /api/invoices/5003
+
+# Try sequential or special IDs
+GET /api/invoices/1
+GET /api/invoices/100
+GET /api/invoices/admin
+GET /api/invoices/0</code></pre>
+
+      <h3>2. Username-Based IDOR</h3>
+      <pre><code>GET /users/alice
+GET /users/bob
+GET /users/admin
+
+# Try common usernames
+GET /users/root
+GET /users/administrator</code></pre>
+
+      <h3>3. Email-Based IDOR</h3>
+      <pre><code>GET /api/profile?email=victim@example.com
+GET /api/profile?email=admin@example.com</code></pre>
+
+      <h3>4. POST Body ID Manipulation</h3>
+      <pre><code>POST /api/transfer
+{ "from_account": 100, "to_account": 1337, "amount": 9999 }
+
+# Original request had from_account=100 (your account)
+# Attacker modifies to_account to themselves</code></pre>
+
+      <h3>5. Mass Assignment / Parameter Pollution</h3>
+      <pre><code>PUT /api/users/100
+{ "user_id": 1337, "role": "admin", "email": "attacker@example.com" }
+
+# App checks user_id in URL (100 = you)
+# But applies changes to the user_id in body (1337 = victim)</code></pre>
+
+      <h3>6. Indirect Object Reference Manipulation</h3>
+      <pre><code>GET /documents?doc_ref=abc123def456
+GET /documents?doc_ref=xyz789uvw012
+
+# Attacker enumates reference values</code></pre>
+
+      <h3>7. Combining IDOR with Path Traversal</h3>
+      <pre><code>GET /api/users/1337/files/../../../admin
+GET /api/users/1337%2f..%2f..%2fadmin</code></pre>
+
+      <h3>8. API Endpoint IDOR on Admin Functions</h3>
+      <pre><code>GET /api/admin/users/1337
+PUT /api/admin/users/1337/promote
+
+# If no privilege check, you can modify any user's admin status</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>✅ Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/12</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Identify all endpoints that reference objects by ID (numeric, UUID, username, email, filename)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Log in as test user A and find your object ID (e.g., your invoice, profile, document)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try incrementing ID by 1; can you access another user's data?</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try other sequential IDs (1, 2, 3, 10, 100, 1000) to find valid objects</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test POST/PUT requests to modify other users' objects (change email, password, data)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check POST body parameters for user/ID references; try modifying them</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test indirect object references (doc_ref, reference codes, GUIDs)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Try accessing admin-only endpoints with regular user ID or privilege escalation via ID manipulation</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Check for parameter pollution (same ID in URL and body; which takes precedence?)</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Use Burp Intruder to enumerate large ID ranges and identify valid objects</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Test with different HTTP methods (GET, POST, PUT, DELETE) on same endpoint</label>
+        </label>
+
+        <label class="checklist-item">
+          <input type="checkbox">
+          <label>Verify that responses confirm you accessed the correct user's data (check email, username, amount, etc.)</label>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>🚀 WAF Bypass Techniques</h2>
+
+      <h3>1. Case Variation</h3>
+      <pre><code>GET /api/invoices/5001
+GET /api/INVOICES/5001
+GET /api/Invoices/5001</code></pre>
+
+      <h3>2. Double URL Encoding</h3>
+      <pre><code>GET /api/users/1337
+GET /api/users/%31337  (% encoded 1)</code></pre>
+
+      <h3>3. Adding Null Byte or Trailing Characters</h3>
+      <pre><code>GET /api/users/1337
+GET /api/users/1337%00
+GET /api/users/1337/
+GET /api/users/1337.json</code></pre>
+
+      <h3>4. HTTP Method Override</h3>
+      <pre><code>POST /api/users/1337  (original, blocked)
+PUT /api/users/1337   (using PUT instead)
+PATCH /api/users/1337
+
+# Or use header override
+X-HTTP-Method-Override: PUT</code></pre>
+
+      <h3>5. Bypassing ID Type Checks</h3>
+      <p>If the app expects numeric IDs, try:</p>
+      <pre><code>GET /api/users/1337          (works)
+GET /api/users/1337.0        (bypass int check)
+GET /api/users/1337e0        (scientific notation)
+GET /api/users/+1337         (with prefix)</code></pre>
+
+      <h3>6. Unicode/Normalization Tricks</h3>
+      <pre><code>GET /api/users/1337
+GET /api/users/1337 (with non-breaking space)
+GET /api/users/1337 (with zero-width space)</code></pre>
+
+      <h3>7. Path Parameter Encoding</h3>
+      <pre><code>GET /api/users/1337
+GET /api/users;admin=true/1337
+GET /api/users/1337;x=y</code></pre>
+    </section>
+
+    <section id="exploitation">
+      <h2>💥 Exploitation & Impact</h2>
+
+      <h3>What Can Attackers Do?</h3>
+      <ul>
+        <li><strong>Data Exfiltration:</strong> Read invoices, medical records, financial data, personal information</li>
+        <li><strong>Account Takeover:</strong> Change email, password, phone number  · lock victim out</li>
+        <li><strong>Privilege Escalation:</strong> Promote yourself to admin, modify user roles</li>
+        <li><strong>Data Modification:</strong> Alter invoices, orders, payment details</li>
+        <li><strong>Data Deletion:</strong> Delete user accounts, financial records, critical documents</li>
+        <li><strong>Identity Theft:</strong> Change profile information, impersonate other users</li>
+        <li><strong>Payment Fraud:</strong> Modify billing address, payment methods, complete fraudulent transactions</li>
+      </ul>
+
+      <h3>Real-World Examples</h3>
+      <p><strong>Example 1: Invoice Enumeration</strong>  · Attacker enumerates all invoices in a SaaS platform by incrementing invoice IDs, accessing competitors' pricing, discount structures, and payment details.</p>
+      <p><strong>Example 2: Account Takeover</strong>  · Attacker modifies another user's email via IDOR (<code>PUT /api/users/1337 { "email": "attacker@example.com" }</code>), then uses password reset to take over the account.</p>
+      <p><strong>Example 3: Data Leakage</strong>  · A fitness app's API (<code>GET /api/users/1/health-data</code>) returns step count, heart rate, calorie data for any user ID without authorization checks.</p>
+
+      <h3>Impact Severity</h3>
+      <p>IDOR is almost always rated <strong>High</strong> to <strong>Critical</strong> because it grants direct access to sensitive data or account control. The OWASP Top 10 rates broken access control (of which IDOR is a subset) as #1.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>🛡️ Remediation</h2>
+
+      <h3>1. Always Validate Ownership Server-Side</h3>
+      <p><strong>Vulnerable code:</strong></p>
+      <pre><code>@app.route('/api/invoices/&lt;invoice_id&gt;', methods=['GET'])
+def get_invoice(invoice_id):
+    invoice = Invoice.query.get(invoice_id)
+    return invoice.to_json()</code></pre>
+
+      <p><strong>Secure code:</strong></p>
+      <pre><code>@app.route('/api/invoices/&lt;invoice_id&gt;', methods=['GET'])
+@login_required
+def get_invoice(invoice_id):
+    invoice = Invoice.query.get(invoice_id)
+
+    # Check ownership
+    if invoice.user_id != current_user.id:
+        return "Forbidden", 403
+
+    return invoice.to_json()</code></pre>
+
+      <h3>2. Use Non-Sequential, Unpredictable IDs</h3>
+      <p>UUIDs make enumeration harder (but don't rely on this alone):</p>
+      <pre><code>import uuid
+
+class Invoice(db.Model):
+    id = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)</code></pre>
+
+      <h3>3. Implement Proper Authorization Middleware</h3>
+      <pre><code>def authorize_resource(resource_type):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            resource_id = kwargs.get('resource_id')
+            resource = get_resource(resource_type, resource_id)
+
+            if not resource or resource.user_id != current_user.id:
+                abort(403)
+
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+@app.route('/api/invoices/&lt;invoice_id&gt;')
+@authorize_resource('invoice')
+def get_invoice(invoice_id):
+    # Now we know resource is owned by current_user
+    invoice = Invoice.query.get(invoice_id)
+    return invoice.to_json()</code></pre>
+
+      <h3>4. Reference Objects by User Context, Not Direct ID</h3>
+      <p><strong>Instead of:</strong></p>
+      <pre><code>GET /api/invoices/5000?user_id=100</code></pre>
+      <p><strong>Use:</strong></p>
+      <pre><code>GET /api/users/me/invoices/5000
+
+# Backend gets current_user from session/token, so users can't access other users' data</code></pre>
+
+      <h3>5. Use Database-Level Constraints</h3>
+      <pre><code>class Invoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    __table_args__ = (db.UniqueConstraint('user_id', 'id', name='user_invoice_unique'),)
+
+# Now (user_id, invoice_id) is the primary key
+# Queries require both: queries that don't specify user_id fail</code></pre>
+
+      <h3>6. Audit and Log Access</h3>
+      <pre><code>@app.before_request
+def log_access():
+    user_id = current_user.id if current_user else 'anonymous'
+    resource_id = request.args.get('resource_id') or request.view_args.get('resource_id')
+    logging.info(f"User {user_id} accessed resource {resource_id}")
+
+# Monitor for suspicious patterns: one user accessing many others' resources</code></pre>
+
+      <h3>7. Test Authorization in Unit Tests</h3>
+      <pre><code>def test_idor_protection():
+    user_a = create_user('alice')
+    user_b = create_user('bob')
+
+    invoice = create_invoice(user_a, amount=100)
+
+    # Bob shouldn't be able to access Alice's invoice
+    response = client.get(f'/api/invoices/{invoice.id}', headers={'Authorization': f'Bearer {user_b.token}'})
+    assert response.status_code == 403</code></pre>
+    </section>
+
+    <section id="labs">
+      <h2>📚 PortSwigger Labs</h2>
+      <p>Practice IDOR exploitation on PortSwigger's free access control labs:</p>
+      <ul>
+        <li><strong>Unprotected admin functionality:</strong> Access /admin without elevation</li>
+        <li><strong>Unprotected admin functionality with unpredictable URL:</strong> Find admin panel via enumeration</li>
+        <li><strong>User ID controlled by request parameter:</strong> Change user_id in URL and access others' data</li>
+        <li><strong>User ID controlled by request parameter with data leakage in error messages:</strong> Extract info from error responses</li>
+        <li><strong>User ID controlled by request parameter with password disclosure:</strong> Access password reset fields of other users</li>
+        <li><strong>Insecure direct object references:</strong> Access another user's account settings by changing ID</li>
+        <li><strong>URL-based access control can be circumvented:</strong> Use multiple requests or method overrides</li>
+        <li><strong>Multi-step process with no access control on one step:</strong> One intermediate step lacks authorization check</li>
+        <li><strong>Referer-based access control:</strong> Exploit weak referer validation</li>
+        <li><strong>Access control can be bypassed using the low-level API:</strong> Direct API calls bypass UI restrictions</li>
+        <li><strong>JWT-based access control can be circumvented:</strong> Forge or modify JWT tokens to change user_id claims</li>
+        <li><strong>Broken access control via method override:</strong> Use POST instead of GET to bypass filters</li>
+        <li><strong>User role controlled by request parameter:</strong> Set role=admin in request body</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>⚠️ Common Beginner Mistakes</h2>
+
+      <h3>1. Only Testing GET Requests</h3>
+      <p><strong>Wrong:</strong> "I tried changing the ID in the GET request, but couldn't access other users' data, so there's no IDOR."</p>
+      <p><strong>Reality:</strong> Always test POST, PUT, DELETE, and PATCH as well. Many apps allow read-only access to other users but restrict write access  · except the developer forgot to check authorization on the write endpoint.</p>
+
+      <h3>2. Not Testing POST Body Parameters</h3>
+      <p><strong>Wrong:</strong> Testing IDs in the URL but not checking if the same ID appears in the request body.</p>
+      <p><strong>Reality:</strong> IDOR often exists in POST bodies where the app receives <code>{ "user_id": 1337, "data": "..." }</code>. Modify user_id and see if the app updates the wrong user.</p>
+
+      <h3>3. Assuming UUIDs Are Safe</h3>
+      <p><strong>Wrong:</strong> "The app uses UUIDs (not sequential IDs), so it can't be vulnerable to IDOR."</p>
+      <p><strong>Reality:</strong> UUIDs only make guessing harder, not impossible. If you can find a UUID (via API response, error message, source code), you can still exploit IDOR. Always verify authorization regardless of ID format.</p>
+
+      <h3>4. Not Checking Indirect References</h3>
+      <p><strong>Wrong:</strong> Testing direct IDs but ignoring reference codes or encoded values.</p>
+      <p><strong>Reality:</strong> Some apps hide IDs behind codes like <code>doc_ref=abc123xyz789</code>. Enumerate these references or look for patterns (sequential, base64-encoded, etc.).</p>
+
+      <h3>5. Testing IDOR in the Same Session</h3>
+      <p><strong>Wrong:</strong> Opening two tabs in the same browser with different user IDs and confirming they're different users.</p>
+      <p><strong>Reality:</strong> The real test is: "Can I, while logged in as User A, access User B's data by changing the ID?" Use different user accounts (create test accounts), not different tabs.</p>
+
+      <h3>6. Missing Privilege Escalation IDOR</h3>
+      <p><strong>Wrong:</strong> Testing user-to-user IDOR but not testing access to admin-only endpoints as a regular user.</p>
+      <p><strong>Reality:</strong> Try <code>GET /api/admin/users/1337</code>, <code>PUT /api/admin/settings</code>, etc., as a non-admin user. Authorization checks are often missing on these endpoints.</p>
+
+      <h3>7. Not Enumerating Enough IDs</h3>
+      <p><strong>Wrong:</strong> Trying IDs 101, 102, 103, and concluding "no other users exist" when only 2-3 valid IDs are found.</p>
+      <p><strong>Reality:</strong> Users might have sparse IDs (1, 50, 500, 5000). Use Burp Intruder to test a larger range (1-100000) and filter by response size or status code to find valid objects.</p>
+
+      <h3>8. Overlooking Error Messages That Leak Information</h3>
+      <p><strong>Wrong:</strong> Dismissing a 404 error when accessing an ID.</p>
+      <p><strong>Reality:</strong> Some apps return "User 1337 not found" or "Invoice 9999 belongs to a different account," which confirms valid IDs and hints at authorization logic. Enumerate based on error messages.</p>
+    </section>
+
+    <!-- ═══ SEE ALSO ═══ -->
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>IDOR gets much more dangerous when combined with authentication bypass vulnerabilities.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="jwt.html">
+        <span class="sa-icon">🎫</span>
+        <span class="sa-name">JWT Attacks</span>
+        <span class="sa-why">Forge a JWT with a different user ID → instant IDOR. Or forge isAdmin:true → vertical privilege escalation.</span>
+      </a>
+      <a class="see-also-card" href="oauth.html">
+        <span class="sa-icon">🔗</span>
+        <span class="sa-name">OAuth</span>
+        <span class="sa-why">OAuth account linking bugs can let you access another user's account  · combined IDOR + auth bypass.</span>
+      </a>
+      <a class="see-also-card" href="sqli.html">
+        <span class="sa-icon">🗄️</span>
+        <span class="sa-name">SQL Injection</span>
+        <span class="sa-why">SQLi in a user lookup query can bypass ownership checks  · the ultimate IDOR bypass.</span>
+      </a>
+      <a class="see-also-card" href="race-conditions.html">
+        <span class="sa-icon">⏱️</span>
+        <span class="sa-name">Race Conditions</span>
+        <span class="sa-why">Race on a resource-creation endpoint can expose another user's resource ID before it's private.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Copy buttons
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+// Active sidebar nav on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Checklist persistence
+const STORAGE_KEY = 'idor-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

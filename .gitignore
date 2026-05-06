@@ -1,0 +1,25 @@
+# ─── Dev tooling ──────────────────────────────────────────
+# Claude Code / Claude Agent SDK working directory
+.claude/
+
+# ─── Drafts & source notes (not for public site) ──────────
+# Internal Hebrew planning drafts
+מדריך עבודה מקיף לבדיקות חדירות ליישומי Web — Playbook לאלי.md
+ספר המשחק (Playbook) המקיף לבדיקות חדירה ביישומי Web — מאפס ועד BSCP.md
+
+# Compass / research artifacts
+compass_artifact_*.md
+
+# ─── OS / editor cruft ────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# ─── Logs / temp ──────────────────────────────────────────
+*.log
+*.tmp
+node_modules/

