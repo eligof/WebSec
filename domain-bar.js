@@ -14,7 +14,14 @@
   'use strict';
 
   const STORAGE_KEY = 'shared.target';
-  const TARGET_PATTERN = /(https?:\/\/)example\.com(?=[\/:?#"'\s<]|$)/g;
+  // Match `example.com` in any context EXCEPT:
+  //   - emails (lookbehind `@`):       attacker@example.com
+  //   - subdomain suffix (lookbehind `.`):  mail.example.com
+  //   - chained subdomain (lookahead `.`):  example.com.attacker.com
+  //   - word boundary cases:           myexample.com, example.commerce, pre-example.com
+  // This catches both URL-context (https://example.com/...) AND CLI-context
+  // (subfinder -d example.com, waybackurls example.com, site:example.com).
+  const TARGET_PATTERN = /(?<![@.\w-])example\.com(?![.\w-])/g;
   const SNIPPET_SELECTOR = 'pre, code, .snippet';
   const originals = new WeakMap();
   let inputEl = null, statusEl = null;
@@ -46,7 +53,7 @@
     const original = originals.get(textNode);
     if (original === undefined) return;
     textNode.nodeValue = target
-      ? original.replace(TARGET_PATTERN, '$1' + target)
+      ? original.replace(TARGET_PATTERN, target)
       : original;
   }
 
@@ -75,8 +82,13 @@
     });
   }
 
+  function normalizeTarget(raw) {
+    // Strip protocol prefix and trailing slashes if user pastes a full URL.
+    return String(raw || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  }
+
   function onInput() {
-    const v = inputEl.value.trim();
+    const v = normalizeTarget(inputEl.value);
     if (v) {
       try { localStorage.setItem(STORAGE_KEY, v); }
       catch (e) { console.warn('[domain-bar] save failed', e); }
@@ -84,6 +96,13 @@
       localStorage.removeItem(STORAGE_KEY);
     }
     applyAll(v);
+  }
+
+  function onBlur() {
+    // On blur, snap the displayed value to the normalized form.
+    if (!inputEl) return;
+    const v = normalizeTarget(inputEl.value);
+    if (v !== inputEl.value) inputEl.value = v;
   }
 
   function onReset() {
@@ -127,6 +146,7 @@
     if (inputEl && resetBtn) {
       inputEl.value = getTarget();
       inputEl.addEventListener('input', onInput);
+      inputEl.addEventListener('blur', onBlur);
       resetBtn.addEventListener('click', onReset);
     }
     window.addEventListener('storage', onStorage);

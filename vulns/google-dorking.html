@@ -257,7 +257,11 @@
     }
   })();
 
-  // Dork run-button click handlers
+  // Dork run-button click handlers.
+  // The visible <code> text in each dork is substituted by domain-bar.js
+  // (its TARGET_PATTERN matches bare example.com in CLI/operator contexts).
+  // For the launched URL we read data-query (the original, pre-substitution
+  // dork) so we don't depend on what's currently in the DOM.
   document.querySelectorAll('.dork-run-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var target = localStorage.getItem('shared.target') || '';
@@ -268,32 +272,6 @@
       window.open(url, '_blank', 'noopener,noreferrer');
     });
   });
-
-  // Permissive substitution for VISIBLE dork text on this page.
-  // The site-wide domain-bar.js only substitutes https?://example.com (URL contexts);
-  // dorks use bare `site:example.com`, `cache:example.com`, etc. which the global
-  // pattern intentionally skips. We re-substitute permissively here so the snippets
-  // visibly reflect the user's target as they set / change it.
-  (function(){
-    var originals = new Map();  // <code> element → original textContent
-    document.querySelectorAll('.dork-row code').forEach(function(c){
-      originals.set(c, c.textContent);
-    });
-    function applyDorks() {
-      var target = localStorage.getItem('shared.target') || '';
-      originals.forEach(function(orig, el){
-        el.textContent = target ? orig.replace(/example\.com/g, target) : orig;
-      });
-    }
-    var input = document.getElementById('db-target');
-    var reset = document.getElementById('db-reset');
-    if (input) input.addEventListener('input', applyDorks);
-    if (reset) reset.addEventListener('click', function(){ setTimeout(applyDorks, 0); });
-    window.addEventListener('storage', function(e){
-      if (e.key === 'shared.target') applyDorks();
-    });
-    applyDorks();
-  })();
 </script>
 
 </body>
