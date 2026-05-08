@@ -209,6 +209,15 @@
 
   /* ── Markdown report assembly ── */
   function generateMarkdown() {
+    function mdCell(s) {
+      return String(s ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+    }
+    function mdFence(body) {
+      const longest = (String(body).match(/`+/g) || []).reduce((m, s) => Math.max(m, s.length), 0);
+      const f = '`'.repeat(Math.max(3, longest + 1));
+      return `${f}\n${body}\n${f}`;
+    }
+
     const eng = getEngagement();
     const findings = getFindings().slice().sort((a, b) => {
       const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
@@ -222,7 +231,7 @@
       lines.push(`**Engagement window:** ${eng.startDate || '?'} → ${eng.endDate || '?'}`);
     }
     if (eng.testers) lines.push(`**Testers:** ${eng.testers}`);
-    if (eng.scope)   lines.push(`**Scope:**\n\`\`\`\n${eng.scope}\n\`\`\``);
+    if (eng.scope)   lines.push(`**Scope:**\n${mdFence(eng.scope)}`);
     lines.push('');
 
     lines.push('## Executive Summary');
@@ -238,7 +247,7 @@
       lines.push('| # | Severity | CVSS | Title | Status |');
       lines.push('|---|---|---|---|---|');
       findings.forEach((f, i) => {
-        lines.push(`| ${i + 1} | ${f.severity || '?'} | ${(f.cvssScore ?? '').toString()} | ${(f.title || '').replace(/\|/g, '\\|')} | ${f.status || 'open'} |`);
+        lines.push(`| ${i + 1} | ${mdCell(f.severity || '?')} | ${mdCell(f.cvssScore ?? '')} | ${mdCell(f.title || '')} | ${mdCell(f.status || 'open')} |`);
       });
     }
     lines.push('');
@@ -252,8 +261,8 @@
       lines.push('');
       if (f.description) { lines.push('**Description**'); lines.push(''); lines.push(f.description); lines.push(''); }
       if (f.impact)      { lines.push('**Impact**');      lines.push(''); lines.push(f.impact); lines.push(''); }
-      if (f.repro)       { lines.push('**Reproduction**'); lines.push(''); lines.push('```\n' + f.repro + '\n```'); lines.push(''); }
-      if (f.evidence)    { lines.push('**Evidence**');     lines.push(''); lines.push('```\n' + f.evidence + '\n```'); lines.push(''); }
+      if (f.repro)       { lines.push('**Reproduction**'); lines.push(''); lines.push(mdFence(f.repro)); lines.push(''); }
+      if (f.evidence)    { lines.push('**Evidence**');     lines.push(''); lines.push(mdFence(f.evidence)); lines.push(''); }
       if (f.remediation) { lines.push('**Remediation**');  lines.push(''); lines.push(f.remediation); lines.push(''); }
       if (f.references)  { lines.push('**References**');   lines.push(''); lines.push(f.references); lines.push(''); }
     });
@@ -263,7 +272,7 @@
     extractDayLeads().forEach(({ source, text }) => {
       lines.push(`### ${source}`);
       lines.push('');
-      lines.push('```\n' + text + '\n```');
+      lines.push(mdFence(text));
       lines.push('');
     });
 
