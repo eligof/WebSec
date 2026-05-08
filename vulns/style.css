@@ -969,3 +969,129 @@ pre.snippet .snippet-label {
 @media (max-width: 700px) {
   .home-footer .footer-grid { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 }
+
+/* ═══════════════════════════════════════════
+   REPORT LAYER (/report/*.html)
+═══════════════════════════════════════════ */
+
+/* Severity pills (used in findings list, draft, finding card) */
+.severity-pill {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.2em 0.7em; border-radius: 4px;
+  font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+.severity-pill.severity-critical { background: var(--sev-critical-bg); color: var(--sev-critical-fg); border-color: color-mix(in srgb, var(--sev-critical-fg) 35%, transparent); }
+.severity-pill.severity-high     { background: var(--sev-high-bg);     color: var(--sev-high-fg);     border-color: color-mix(in srgb, var(--sev-high-fg) 35%, transparent); }
+.severity-pill.severity-medium   { background: var(--sev-medium-bg);   color: var(--sev-medium-fg);   border-color: color-mix(in srgb, var(--sev-medium-fg) 35%, transparent); }
+.severity-pill.severity-low      { background: var(--surface2);        color: var(--text-muted);      border-color: var(--border); }
+.severity-pill.severity-info     { background: var(--surface);         color: var(--text-muted);      border-color: var(--border); }
+
+/* Finding card (in list views) */
+.finding-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--card-accent, var(--accent));
+  border-radius: 8px; padding: 1rem 1.2rem;
+  margin-bottom: 0.8rem;
+  display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem;
+}
+.finding-card .finding-card-title { font-weight: 700; color: var(--text); }
+.finding-card .finding-card-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+.finding-card .finding-card-actions { display: flex; gap: 0.4rem; align-self: flex-start; }
+.finding-card .finding-card-actions button,
+.finding-card .finding-card-actions a {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted);
+  border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem;
+  cursor: pointer; text-decoration: none;
+}
+.finding-card .finding-card-actions button:hover,
+.finding-card .finding-card-actions a:hover { color: var(--text); border-color: var(--accent); }
+.finding-card .finding-card-actions button.danger { color: var(--danger); }
+
+/* CVSS calculator widget */
+.cvss-widget {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 1rem; margin-bottom: 1rem;
+}
+.cvss-widget .cvss-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem 1rem; margin-bottom: 0.8rem;
+}
+.cvss-widget label {
+  display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;
+}
+.cvss-widget select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 4px; padding: 0.4rem 0.5rem;
+  font-family: var(--font); font-size: 0.85rem;
+}
+.cvss-widget .cvss-score {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.6rem 0.9rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.cvss-widget .cvss-score-number { font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+.cvss-widget .cvss-vector { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted); flex: 1; word-break: break-all; }
+
+/* Report draft layout */
+.report-draft { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem 2rem; }
+.report-draft h2 { font-size: 1.2rem; margin: 1.5rem 0 0.6rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.report-draft h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.report-draft h3 { font-size: 1rem; margin: 1rem 0 0.4rem; color: var(--text); }
+.report-draft .findings-table {
+  width: 100%; border-collapse: collapse; margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+.report-draft .findings-table th,
+.report-draft .findings-table td {
+  padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border);
+  text-align: left; vertical-align: top;
+}
+.report-draft .findings-table th { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.report-draft .findings-table tr:last-child td { border-bottom: 0; }
+
+/* Action toolbar (Add / Export / Print) */
+.report-toolbar {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem;
+}
+.report-toolbar button,
+.report-toolbar a.btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; text-decoration: none; font-family: var(--font);
+  display: inline-flex; align-items: center; gap: 0.4rem;
+}
+.report-toolbar button:hover,
+.report-toolbar a.btn:hover { border-color: var(--accent); }
+.report-toolbar .primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.report-toolbar .primary:hover { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+
+/* Empty state */
+.empty-state {
+  padding: 3rem 2rem; text-align: center;
+  border: 2px dashed var(--border); border-radius: 8px;
+  color: var(--text-muted);
+}
+.empty-state .empty-state-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; }
+
+/* Print stylesheet — for window.print() PDF export */
+@media print {
+  body { background: #fff !important; color: #000 !important; font-family: 'Inter', sans-serif; }
+  .topnav, .home-footer, .day-page-hero, .report-toolbar,
+  nav.day-nav-buttons, .day-actions, .finding-card-actions,
+  button { display: none !important; }
+  .report-draft { border: 0 !important; padding: 0 !important; background: #fff !important; }
+  .report-draft h2 { border-color: #000 !important; }
+  .severity-pill { border: 1px solid #000 !important; }
+  pre, code { font-family: 'JetBrains Mono', monospace; color: #000 !important; }
+  pre { border: 1px solid #999; padding: 0.5rem; page-break-inside: avoid; }
+  .findings-table { font-size: 11px; page-break-inside: avoid; }
+  .finding-card { page-break-inside: avoid; border: 1px solid #999 !important; background: #fff !important; }
+  a { color: #000 !important; text-decoration: underline; }
+  /* Show URLs after each external link */
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; }
+}
