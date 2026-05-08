@@ -141,7 +141,8 @@
     .sig-block strong { color: var(--accent2); }
     .sig-block a { color: var(--accent2); text-decoration: none; }
     .sig-block a:hover { text-decoration: underline; }
-  </style>
+  </style>  <script src="domain-bar.js" defer></script>
+
 </head>
 <body>
 
@@ -183,6 +184,14 @@
     <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
   </div>
 </nav>
+<div class="domain-bar" role="region" aria-label="Target domain bar">
+  <span class="domain-bar-label">🎯 Target</span>
+  <input type="text" id="db-target" placeholder="target.example.com"
+         maxlength="253" autocomplete="off" inputmode="url"
+         aria-label="Target domain">
+  <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>
+  <span class="domain-bar-status inactive" id="db-status" aria-live="polite">○ Inactive</span>
+</div>
 
 <!-- HERO -->
 <section class="hero-thanks">

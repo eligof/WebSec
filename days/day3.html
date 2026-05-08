@@ -9,7 +9,8 @@
   <meta name="description" content="Day 3 Worksheet — File Handling &amp; Client-Side. Interactive checklist for the third day of a 5-day web pentest engagement.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../vulns/style.css">
-  <title>Day 3 Worksheet · File Handling + Client-Side · Web Pentest Playbook</title>
+  <title>Day 3 Worksheet · File Handling + Client-Side · Web Pentest Playbook</title>  <script src="../domain-bar.js" defer></script>
+
 </head>
 <body data-day="day3" data-day-num="3" style="--day-color: var(--purple)">
 
@@ -41,6 +42,14 @@
     <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
   </div>
 </nav>
+<div class="domain-bar" role="region" aria-label="Target domain bar">
+  <span class="domain-bar-label">🎯 Target</span>
+  <input type="text" id="db-target" placeholder="target.example.com"
+         maxlength="253" autocomplete="off" inputmode="url"
+         aria-label="Target domain">
+  <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>
+  <span class="domain-bar-status inactive" id="db-status" aria-live="polite">○ Inactive</span>
+</div>
 
 <div class="content-wrap" style="padding-top:2rem">
 
