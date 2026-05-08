@@ -628,6 +628,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .pill-sev.sev-critical { background: var(--sev-critical-bg); color: var(--sev-critical-fg); }
 .pill-sev.sev-high     { background: var(--sev-high-bg);     color: var(--sev-high-fg); }
 .pill-sev.sev-medium   { background: var(--sev-medium-bg);   color: var(--sev-medium-fg); }
+.pill-sev.sev-info     { background: var(--surface);          color: var(--text-muted); }
 
 /* ── REFERENCE LIBRARY GRID ── */
 .category { margin-bottom: 2.5rem; }
@@ -673,6 +674,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .sev-critical { background: var(--sev-critical-bg); color: var(--sev-critical-fg); }
 .sev-high     { background: var(--sev-high-bg);     color: var(--sev-high-fg); }
 .sev-medium   { background: var(--sev-medium-bg);   color: var(--sev-medium-fg); }
+.sev-info     { background: var(--surface);          color: var(--text-muted); }
 .tag-bscp {
   background: var(--badge-violet-bg); color: var(--badge-violet-fg);
   font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
