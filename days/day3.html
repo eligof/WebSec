@@ -10,6 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 3 Worksheet · File Handling + Client-Side · Web Pentest Playbook</title>  <script src="../domain-bar.js" defer></script>
+  <script src="../engagement.js" defer></script>
 
 </head>
 <body data-day="day3" data-day-num="3" style="--day-color: var(--purple)">
@@ -54,7 +55,7 @@
 <div class="content-wrap" style="padding-top:2rem">
 
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 3 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
+    <div class="day-num">Worksheet · Day <span class="day-of-total">3 of 5</span> · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg></span>
       File Handling + Client-Side Checks
@@ -348,6 +349,43 @@ asyncio.run(main())</code></pre>
       });
     }
   })();
+</script>
+
+<script>
+  // Adapt hero "Day N of M" + warn if out-of-scope + show "today" badge.
+  // Wrapped in DOMContentLoaded because engagement.js is `defer` in <head>;
+  // deferred scripts run after parse but BEFORE DOMContentLoaded, so this
+  // listener is the first place where `Engagement` is guaranteed defined.
+  document.addEventListener('DOMContentLoaded', function(){
+    if (typeof Engagement !== 'object') return;
+    var n = Engagement.getDayCount();
+    var num = parseInt(document.body.getAttribute('data-day-num'), 10);
+    if (!Number.isFinite(num)) return;
+    // Update "Day N of M"
+    var slot = document.querySelector('.day-of-total');
+    if (slot) slot.textContent = num + ' of ' + n;
+    // Out-of-scope warning if num > n
+    if (num > n) {
+      var hero = document.querySelector('.day-page-hero');
+      if (hero) {
+        var warn = document.createElement('div');
+        warn.style.cssText = 'margin-top:0.85rem;padding:0.7rem 1rem;background:color-mix(in srgb, var(--warn) 12%, transparent);border:1px solid color-mix(in srgb, var(--warn) 40%, transparent);border-radius:6px;color:var(--text);font-size:0.85rem;';
+        warn.innerHTML = '⚠ Your engagement is configured for <strong>' + n + ' day' + (n>1?'s':'') + '</strong>. This worksheet is for Day ' + num + ' — outside your current plan. <a href="../setup.html" style="color:var(--accent);">Reconfigure →</a>';
+        hero.appendChild(warn);
+      }
+    }
+    // "← today" badge
+    var today = Engagement.getDayIndexToday();
+    if (today === num) {
+      var hero2 = document.querySelector('.day-page-hero');
+      if (hero2) {
+        var badge = document.createElement('div');
+        badge.style.cssText = 'margin-top:0.85rem;padding:0.55rem 0.9rem;background:color-mix(in srgb, var(--accent) 10%, transparent);border-left:3px solid var(--accent);border-radius:4px;color:var(--text);font-size:0.85rem;';
+        badge.innerHTML = '📍 You are here today (Day ' + num + ' of your engagement).';
+        hero2.appendChild(badge);
+      }
+    }
+  });
 </script>
 
 </body>
