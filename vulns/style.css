@@ -137,8 +137,25 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 #sidebar .toc-title { padding: 0 1rem 0.5rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
 #sidebar a { display: block; padding: 0.28rem 1rem 0.28rem 1.2rem; font-size: 0.82rem; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; transition: all 0.15s; }
 #sidebar a:hover, #sidebar a.active { color: var(--text); border-left-color: var(--accent); background: rgba(124,58,237,0.1); }
-#main { margin-left: var(--sidebar-w); flex: 1; min-width: 0; max-width: 860px; padding: 2rem 3rem; }
-@media (max-width: 768px) { #sidebar { display: none; } #main { margin-left: 0; padding: 1.5rem; } }
+
+/* ── Fluid + centered main content (for vuln pages with sidebar) ── */
+:root { --content-w: clamp(700px, 70vw, 1200px); }
+#main {
+  max-width: var(--content-w);
+  margin-left: max(var(--sidebar-w), calc(var(--sidebar-w) + (100vw - var(--sidebar-w) - var(--content-w)) / 2));
+  margin-right: 0;
+  min-width: 0;
+  padding: 2rem 3rem;
+}
+/* Inline <code> stays on one line so things like "Authorization: Bearer eyJ…" don't break */
+:not(pre) > code { white-space: nowrap; }
+@media (max-width: 768px) {
+  :root { --content-w: 100%; }
+  #sidebar { display: none; }
+  #main { margin-left: 0; padding: 1.5rem; }
+  /* On mobile let inline code wrap normally so it doesn't overflow */
+  :not(pre) > code { white-space: normal; word-break: break-word; }
+}
 
 /* ── HERO ── */
 .hero { background: linear-gradient(135deg, var(--surface), var(--hero-gradient-end)); border: 1px solid var(--border); border-radius: 12px; padding: 1.8rem 2rem; margin-bottom: 2rem; }
@@ -361,7 +378,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
   background: var(--bg); border-top: 1px solid var(--border);
   margin-top: 4rem; padding: 2.5rem 0 0;
 }
-.footer-inner { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+.footer-inner { max-width: var(--content-w); margin: 0 auto; padding: 0 2rem; }
 .footer-grid {
   display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr;
   gap: 2rem; margin-bottom: 2rem;
@@ -407,7 +424,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 ═══════════════════════════════════════════ */
 
 /* ── HERO ── */
-.hero-wrap { max-width: 960px; margin: 0 auto; padding: 3.5rem 2rem 2rem; position: relative; }
+.hero-wrap { max-width: var(--content-w); margin: 0 auto; padding: 3.5rem 2rem 2rem; position: relative; }
 .hero-title { font-size: 2.4rem; font-weight: 800; margin-bottom: 0.6rem; line-height: 1.15; }
 .hero-wrap .hero-title::before {
   content: ''; display: block; width: 60px; height: 4px;
@@ -461,7 +478,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-top: 0.3rem; }
 
 /* ── CONTENT WRAPPER ── */
-.content-wrap { max-width: 960px; margin: 0 auto; padding: 0 2rem 4rem; }
+.content-wrap { max-width: var(--content-w); margin: 0 auto; padding: 0 2rem 4rem; }
 
 /* ── 5-DAY OVERVIEW TABLE ── */
 .overview-table {
@@ -598,7 +615,7 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
   background: var(--bg); border-top: 1px solid var(--border);
   margin-top: 4rem; padding: 2.5rem 0 0; font-family: var(--font);
 }
-.home-footer .footer-inner { max-width: 960px; margin: 0 auto; padding: 0 2rem; }
+.home-footer .footer-inner { max-width: var(--content-w); margin: 0 auto; padding: 0 2rem; }
 .home-footer .footer-grid {
   display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr;
   gap: 2rem; margin-bottom: 2rem;
