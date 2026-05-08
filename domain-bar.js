@@ -15,13 +15,15 @@
 
   const STORAGE_KEY = 'shared.target';
   // Match `example.com` in any context EXCEPT:
-  //   - emails (lookbehind `@`):       attacker@example.com
-  //   - subdomain suffix (lookbehind `.`):  mail.example.com
-  //   - chained subdomain (lookahead `.`):  example.com.attacker.com
-  //   - word boundary cases:           myexample.com, example.commerce, pre-example.com
-  // This catches both URL-context (https://example.com/...) AND CLI-context
-  // (subfinder -d example.com, waybackurls example.com, site:example.com).
-  const TARGET_PATTERN = /(?<![@.\w-])example\.com(?![.\w-])/g;
+  //   - emails (lookbehind `@`):           attacker@example.com
+  //   - chained subdomain (lookahead `.`): https://example.com.attacker.com
+  //   - word-boundary cases:               myexample.com, example.commerce, pre-example.com
+  // Substitutes prefixed forms like `FUZZ.example.com`, `mail.example.com`,
+  // `*.example.com` — the user's target replaces the apex-and-tld, prefix kept.
+  // Also catches URL contexts (https://example.com/...), CLI contexts
+  // (subfinder -d example.com, waybackurls example.com), and search operators
+  // (site:example.com, cache:example.com).
+  const TARGET_PATTERN = /(?<![@\w-])example\.com(?![.\w-])/g;
   const SNIPPET_SELECTOR = 'pre, code, .snippet';
   const originals = new WeakMap();
   let inputEl = null, statusEl = null;
