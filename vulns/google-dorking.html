@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="../domain-bar.js" defer></script>
+  <title>Google Dorking & OSINT Recon · Web Pentest Playbook</title>
+</head>
+<body>
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../days/day1.html" class="nav-link">Worksheets</a>
+    <a href="../report/index.html" class="nav-link">Report</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="domain-bar" role="region" aria-label="Target domain bar">
+  <span class="domain-bar-label">🎯 Target</span>
+  <input type="text" id="db-target" placeholder="target.example.com"
+         maxlength="253" autocomplete="off" inputmode="url"
+         aria-label="Target domain">
+  <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>
+  <span class="domain-bar-status inactive" id="db-status" aria-live="polite">○ Inactive</span>
+</div>
+
+<div class="content-wrap" style="padding-top:2rem">
+  <div class="day-page-hero" style="--day-color: var(--accent)">
+    <div class="day-num">Recon · OSINT</div>
+    <h1>🔎 Google Dorking & OSINT Recon</h1>
+    <p>Search-engine queries that surface forgotten files, login portals, error messages, leaked credentials, and old cached pages — the cheapest first step of any engagement. Set your <strong>target</strong> in the bar above and every dork below auto-fills with it.</p>
+  </div>
+
+  <section class="worksheet-section" style="border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 6%, transparent);">
+    <h2 style="color: var(--warn);">⚠ Stay legal</h2>
+    <p>Aggressive recon against systems you don't own (or aren't explicitly authorized to test) is illegal in most jurisdictions. <strong>Only run these against targets in your engagement scope.</strong> Pure observation of indexed public results is generally fine; clicking through into discovered admin panels, downloading exposed databases, or pivoting to chained exploits without authorization is not.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">1</span>Operator primer</h2>
+    <p class="ws-intro">Combine these operators with parentheses, <code>OR</code>, and the leading minus <code>-</code> for exclusions.</p>
+    <ul>
+      <li><code>site:</code> — restrict to a domain (<code>site:example.com</code>) or subdomain pattern (<code>site:*.example.com</code>).</li>
+      <li><code>inurl:</code> — match a substring in the URL path. Useful for admin panels, login pages, sensitive endpoints.</li>
+      <li><code>intitle:</code> — match in the HTML <code>&lt;title&gt;</code>. Catches "Index of /", "Login", "phpMyAdmin".</li>
+      <li><code>intext:</code> — match in page body text. Use for error messages, leaked tokens, credential strings.</li>
+      <li><code>filetype:</code> / <code>ext:</code> — restrict to a file extension (<code>.env</code>, <code>.sql</code>, <code>.bak</code>, <code>.log</code>).</li>
+      <li><code>cache:</code> — view Google's cached snapshot of a URL (<code>cache:example.com/login</code>). Survives takedowns briefly.</li>
+      <li><code>-term</code> / <code>-site:foo.com</code> — exclude. Combine to filter out marketing pages.</li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">2</span>🔓 Sensitive files & backups</h2>
+    <p class="ws-intro">Forgotten env files, raw SQL dumps, backups, and config files left in webroot.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Public .env files (DB creds, API keys, JWT secrets)</span><code>site:example.com filetype:env</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com filetype:env" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">SQL dumps left in webroot</span><code>site:example.com filetype:sql</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com filetype:sql" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">App / web-server log files (often contain tokens, IPs, query strings)</span><code>site:example.com filetype:log</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com filetype:log" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Public WordPress config (DB password)</span><code>site:example.com inurl:wp-config.php</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:wp-config.php" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Editor / VCS backup files</span><code>site:example.com (ext:bak | ext:old | ext:swp | ext:backup)</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com (ext:bak | ext:old | ext:swp | ext:backup)" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">3</span>🚪 Login & admin surfaces</h2>
+    <p class="ws-intro">Public-facing admin consoles and login forms to fingerprint and prioritize.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Generic admin panels</span><code>site:example.com inurl:admin</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:admin" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Login pages by URL</span><code>site:example.com inurl:login</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:login" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Login pages by title</span><code>site:example.com intitle:"login"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intitle:"login"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">WordPress login</span><code>site:example.com inurl:wp-login</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:wp-login" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">phpMyAdmin (often default creds in old installs)</span><code>site:example.com inurl:phpmyadmin</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:phpmyadmin" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">4</span>💥 Error & config disclosure</h2>
+    <p class="ws-intro">Indexed error pages and stack traces — instant leads on tech stack and injection points.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">SQL syntax errors (instant SQLi candidate)</span><code>site:example.com intext:"sql syntax near"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intext:"sql syntax near"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">PHP include warnings (LFI candidate)</span><code>site:example.com intext:"warning: include"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intext:"warning: include"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">PHP fatal errors</span><code>site:example.com intext:"fatal error"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intext:"fatal error"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">phpinfo() pages (full env disclosure)</span><code>site:example.com intitle:"phpinfo()"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intitle:"phpinfo()"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Spring Boot Whitelabel error</span><code>site:example.com intext:"Whitelabel Error Page"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intext:"Whitelabel Error Page"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">5</span>🌐 Subdomain & directory discovery</h2>
+    <p class="ws-intro">Pivot from the apex domain to forgotten subdomains and open directories.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Subdomain enumeration via Google index</span><code>site:*.example.com</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:*.example.com" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Subdomains excluding www (where the interesting stuff lives)</span><code>site:example.com -www</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com -www" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Open directory listings</span><code>site:example.com intitle:"index of"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:example.com intitle:"index of"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Visible robots.txt entries (path leaks)</span><code>site:example.com inurl:robots.txt</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com inurl:robots.txt" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">6</span>🔑 Code & cloud disclosure</h2>
+    <p class="ws-intro">Often the most damaging finds — credentials and configs leaked to public repos / paste sites / cloud buckets.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Code leaks on GitHub mentioning the target</span><code>site:github.com "example.com"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:github.com "example.com"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">GitLab leaks with credentials</span><code>site:gitlab.com "example.com" "password"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:gitlab.com "example.com" "password"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Public S3 buckets referencing the target</span><code>site:s3.amazonaws.com "example.com"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:s3.amazonaws.com "example.com"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Trello boards leaked credentials</span><code>site:trello.com "example.com"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:trello.com "example.com"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Pastebin leaks</span><code>site:pastebin.com "example.com"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:pastebin.com "example.com"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">7</span>📜 Old / cached content</h2>
+    <p class="ws-intro">Survive takedowns and find old endpoints / forgotten subdomains.</p>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Google's cached snapshot</span><code>cache:example.com/login</code></pre>
+      <button class="dork-run-btn" type="button" data-query="cache:example.com/login" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Wayback Machine archived pages</span><code>site:web.archive.org "example.com"</code></pre>
+      <button class="dork-run-btn" type="button" data-query='site:web.archive.org "example.com"' disabled>🔍 Run on Google (set target first)</button>
+    </div>
+    <div class="dork-row">
+      <pre class="snippet"><span class="snippet-label">Indexed PDFs (often forgotten internal docs)</span><code>site:example.com filetype:pdf</code></pre>
+      <button class="dork-run-btn" type="button" data-query="site:example.com filetype:pdf" disabled>🔍 Run on Google (set target first)</button>
+    </div>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">8</span>🛡 Defending against dorks</h2>
+    <p class="ws-intro">If you're on the blue side, here's how to keep your target out of these results.</p>
+    <ul>
+      <li><strong>Don't rely on robots.txt for security.</strong> It's a hint to crawlers, not an access control. Anything sensitive must require authentication.</li>
+      <li><strong>Audit public S3 buckets and GitHub orgs.</strong> Use tools like <code>truffleHog</code>, <code>gitleaks</code>, and AWS Config rules to catch leaks before crawlers do.</li>
+      <li><strong>Never commit credentials to source control.</strong> Use environment variables, secret managers (AWS SM, HashiCorp Vault), and pre-commit hooks (<code>git-secrets</code>) to enforce.</li>
+      <li><strong>Monitor your domain in Google.</strong> A weekly <code>site:yourdomain.com</code> review (or Google Alerts on sensitive substrings) catches surprises early.</li>
+      <li><strong>Use the Search Console "Removals" tool</strong> for rapid takedown of accidentally-indexed sensitive pages — it removes from results within hours, but is no substitute for fixing the root cause.</li>
+      <li><strong>Disable directory listings</strong> at the web-server level (<code>Options -Indexes</code> in Apache, <code>autoindex off;</code> in nginx).</li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">9</span>📚 Cross-references</h2>
+    <ul>
+      <li>Day 1 worksheet — <a href="../days/day1.html">recon scoping & target enumeration</a>.</li>
+      <li><a href="../web-pentest-playbook.html">Web pentest playbook</a> — full engagement workflow.</li>
+      <li><a href="host-header.html">Host Header Injection</a> — often surfaces from `intitle:"index of"` finds.</li>
+      <li><a href="idor.html">IDOR</a> — admin panels found via dorks are common IDOR sources.</li>
+      <li>Google Hacking Database (GHDB) — <a href="https://www.exploit-db.com/google-hacking-database" target="_blank" rel="noopener noreferrer">exploit-db.com/google-hacking-database</a> — community-maintained dork list.</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  // Theme toggle
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+
+  // Dork run-button click handlers
+  document.querySelectorAll('.dork-run-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = localStorage.getItem('shared.target') || '';
+      if (!target) return; // disabled-styled by domain-bar.js when no target
+      var dork = btn.getAttribute('data-query') || '';
+      var substituted = dork.replace(/example\.com/g, target);
+      var url = 'https://www.google.com/search?q=' + encodeURIComponent(substituted);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  });
+</script>
+
+</body>
+</html>
