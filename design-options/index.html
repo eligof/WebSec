@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Direction Previews — Web Pentest Playbook</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: #0c0b14; color: #e2e0f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.55; padding: 2rem; }
+  h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.4rem; }
+  .lede { color: #9d99c0; max-width: 720px; margin-bottom: 2rem; font-size: 0.95rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1.4rem; max-width: 1500px; margin: 0 auto; }
+
+  .design { border: 1px solid #2d2550; border-radius: 14px; overflow: hidden; background: #13111f; }
+  .design-meta { padding: 1rem 1.25rem; border-bottom: 1px solid #2d2550; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+  .design-name { font-size: 1.05rem; font-weight: 700; }
+  .design-tag { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #9d99c0; margin-top: 0.2rem; }
+  .swatches { display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+  .swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); }
+
+  .pick-btn { background: #7c3aed; color: #fff; border: 0; padding: 0.45rem 0.9rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+  .pick-btn:hover { background: #6d28d9; }
+
+  /* Mini mockup base */
+  .mini { padding: 1.25rem; }
+  .mini .nav { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.75rem; }
+  .mini .nav .logo { width: 22px; height: 22px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; }
+  .mini .nav .links { display: flex; gap: 0.6rem; margin-left: auto; opacity: 0.85; }
+  .mini .nav .links span { font-size: 0.7rem; }
+  .mini h2 { font-size: 1.25rem; font-weight: 800; line-height: 1.15; margin-bottom: 0.35rem; }
+  .mini .sub { font-size: 0.75rem; opacity: 0.65; margin-bottom: 0.7rem; }
+  .mini .badges { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.7rem; }
+  .mini .badges span { font-size: 0.55rem; padding: 0.15em 0.5em; border-radius: 999px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .mini .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin-bottom: 0.7rem; }
+  .mini .stats > div { padding: 0.6rem; text-align: center; }
+  .mini .stats .num { font-size: 1.05rem; font-weight: 800; line-height: 1; }
+  .mini .stats .lbl { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.65; margin-top: 0.2rem; }
+  .mini .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mini .card { padding: 0.6rem; font-size: 0.7rem; }
+  .mini .card .ico { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; margin-bottom: 0.3rem; }
+  .mini .card .nm { font-weight: 700; font-size: 0.78rem; }
+  .mini .card .ab { font-size: 0.6rem; opacity: 0.55; margin-bottom: 0.3rem; font-family: monospace; }
+  .mini .card .ds { font-size: 0.62rem; opacity: 0.7; line-height: 1.35; }
+  .mini .card .sev { font-size: 0.5rem; padding: 0.1em 0.4em; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.4rem; display: inline-block; }
+</style>
+</head>
+<body>
+
+<h1>8 design directions — pick one</h1>
+<p class="lede">Each card below is a mini live mockup using that direction's actual colors and typography. Compare them side-by-side, then tell me which letter (A–H) you want me to apply across the whole site, or whether you want to mix two.</p>
+
+<div class="grid">
+
+  <!-- ═══════ A. Terminal Green ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">A · Terminal Green</div>
+        <div class="design-tag">Phrack BBS · Mr. Robot</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#000000"></div>
+        <div class="swatch" style="background:#0a0f08"></div>
+        <div class="swatch" style="background:#00ff41"></div>
+        <div class="swatch" style="background:#39ff7d"></div>
+        <div class="swatch" style="background:#ffb000"></div>
+        <div class="swatch" style="background:#ff3939"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#000;color:#c9d1c9;font-family:'JetBrains Mono','Courier New',monospace">
+      <div class="nav" style="border-bottom:1px solid #1a2618">
+        <div class="logo" style="background:#0a0f08;border:1px solid #00ff41;color:#00ff41;font-size:11px">$</div>
+        <span style="color:#00ff41;font-weight:700">web_pentest</span>
+        <span style="color:#39ff7d;font-size:9px">v2026</span>
+        <div class="links"><span>home</span><span style="color:#00ff41">vulns</span><span>playbook</span></div>
+      </div>
+      <h2 style="color:#c9d1c9">> web_app <span style="color:#00ff41">pentesting</span> playbook_</h2>
+      <div class="sub" style="color:#5e7a52">// 5-day methodology &amp; 23 vulns</div>
+      <div class="badges">
+        <span style="background:#0a0f08;color:#00ff41;border:1px solid #00ff41">23 VULNS</span>
+        <span style="background:#0a0f08;color:#ffb000;border:1px solid #ffb000">BSCP</span>
+      </div>
+      <div class="stats" style="border:1px solid #1a2618;background:#0a0f08">
+        <div style="border-right:1px solid #1a2618"><div class="num" style="color:#00ff41">23</div><div class="lbl">vulns</div></div>
+        <div style="border-right:1px solid #1a2618"><div class="num" style="color:#00ff41">100+</div><div class="lbl">labs</div></div>
+        <div><div class="num" style="color:#00ff41">WAF</div><div class="lbl">bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#0a0f08;border:1px solid #1a2618;border-left:2px solid #00ff41">
+          <div class="ico" style="background:#000;color:#00ff41">>_</div>
+          <div class="nm" style="color:#c9d1c9">SQL Injection</div>
+          <div class="ab">SQLi</div>
+          <div class="ds">union, blind, error</div>
+          <div class="sev" style="background:#1c0808;color:#ff3939">CRIT</div>
+        </div>
+        <div class="card" style="background:#0a0f08;border:1px solid #1a2618;border-left:2px solid #ffb000">
+          <div class="ico" style="background:#000;color:#ffb000">⚡</div>
+          <div class="nm" style="color:#c9d1c9">XSS</div>
+          <div class="ab">cross-site scripting</div>
+          <div class="ds">reflected, stored, dom</div>
+          <div class="sev" style="background:#1f1503;color:#ffb000">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ B. Tokyo Night ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">B · Tokyo Night</div>
+        <div class="design-tag">VS Code dev workspace</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#1a1b26"></div>
+        <div class="swatch" style="background:#24283b"></div>
+        <div class="swatch" style="background:#7dcfff"></div>
+        <div class="swatch" style="background:#bb9af7"></div>
+        <div class="swatch" style="background:#e0af68"></div>
+        <div class="swatch" style="background:#f7768e"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#1a1b26;color:#c0caf5">
+      <div class="nav" style="border-bottom:1px solid #292e42">
+        <div class="logo" style="background:#24283b;border:1px solid #7dcfff;color:#7dcfff;font-size:12px">🛡</div>
+        <span style="font-weight:700">Web Pentest</span>
+        <span style="color:#7dcfff;background:#24283b;font-size:9px;padding:1px 5px;border-radius:3px;font-family:monospace">v2026</span>
+        <div class="links"><span>Home</span><span style="color:#bb9af7">Vulnerabilities</span><span>Playbook</span></div>
+      </div>
+      <h2>Web App <span style="background:linear-gradient(135deg,#7dcfff,#bb9af7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Pentesting</span> Playbook</h2>
+      <div class="sub">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:rgba(125,207,255,0.1);color:#7dcfff;border:1px solid rgba(125,207,255,0.4)">23 VULNS</span>
+        <span style="background:rgba(187,154,247,0.1);color:#bb9af7;border:1px solid rgba(187,154,247,0.4)">BSCP</span>
+        <span style="background:rgba(224,175,104,0.1);color:#e0af68;border:1px solid rgba(224,175,104,0.4)">CHECKLISTS</span>
+      </div>
+      <div class="stats" style="border:1px solid #292e42;background:#24283b;border-radius:8px;overflow:hidden">
+        <div style="border-right:1px solid #292e42"><div class="num" style="color:#7dcfff">23</div><div class="lbl">Vulns</div></div>
+        <div style="border-right:1px solid #292e42"><div class="num" style="color:#7dcfff">100+</div><div class="lbl">Labs</div></div>
+        <div><div class="num" style="color:#7dcfff">WAF</div><div class="lbl">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#24283b;border:1px solid #292e42;border-left:3px solid #f7768e;border-radius:6px">
+          <div class="ico" style="background:rgba(247,118,142,0.15);color:#f7768e">🗄</div>
+          <div class="nm">SQL Injection</div>
+          <div class="ab">SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:rgba(247,118,142,0.15);color:#f7768e">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#24283b;border:1px solid #292e42;border-left:3px solid #e0af68;border-radius:6px">
+          <div class="ico" style="background:rgba(224,175,104,0.15);color:#e0af68">⚡</div>
+          <div class="nm">XSS</div>
+          <div class="ab">Cross-Site Scripting</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:rgba(224,175,104,0.15);color:#e0af68">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ C. Catppuccin Mocha ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">C · Catppuccin Mocha</div>
+        <div class="design-tag">Cozy modern dev</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#1e1e2e"></div>
+        <div class="swatch" style="background:#313244"></div>
+        <div class="swatch" style="background:#cba6f7"></div>
+        <div class="swatch" style="background:#89dceb"></div>
+        <div class="swatch" style="background:#fab387"></div>
+        <div class="swatch" style="background:#f38ba8"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#1e1e2e;color:#cdd6f4">
+      <div class="nav" style="border-bottom:1px solid #45475a">
+        <div class="logo" style="background:#313244;border:1px solid #cba6f7;color:#cba6f7;font-size:12px">🛡</div>
+        <span style="font-weight:700">Web Pentest</span>
+        <span style="color:#cba6f7;background:#313244;font-size:9px;padding:1px 5px;border-radius:4px;font-family:monospace">v2026</span>
+        <div class="links"><span>Home</span><span style="color:#89dceb">Vulnerabilities</span><span>Playbook</span></div>
+      </div>
+      <h2>Web App <span style="background:linear-gradient(135deg,#cba6f7,#f38ba8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Pentesting</span> Playbook</h2>
+      <div class="sub" style="color:#a6adc8">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:rgba(203,166,247,0.15);color:#cba6f7;border:1px solid #cba6f7">23 VULNS</span>
+        <span style="background:rgba(243,139,168,0.15);color:#f38ba8;border:1px solid #f38ba8">BSCP</span>
+        <span style="background:rgba(250,179,135,0.15);color:#fab387;border:1px solid #fab387">CHECKLISTS</span>
+      </div>
+      <div class="stats" style="border:1px solid #45475a;background:#313244;border-radius:12px;overflow:hidden">
+        <div style="border-right:1px solid #45475a"><div class="num" style="color:#cba6f7">23</div><div class="lbl">Vulns</div></div>
+        <div style="border-right:1px solid #45475a"><div class="num" style="color:#cba6f7">100+</div><div class="lbl">Labs</div></div>
+        <div><div class="num" style="color:#cba6f7">WAF</div><div class="lbl">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#313244;border:1px solid #45475a;border-left:3px solid #f38ba8;border-radius:10px">
+          <div class="ico" style="background:rgba(243,139,168,0.18);color:#f38ba8">🗄</div>
+          <div class="nm">SQL Injection</div>
+          <div class="ab">SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:rgba(243,139,168,0.2);color:#f38ba8">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#313244;border:1px solid #45475a;border-left:3px solid #fab387;border-radius:10px">
+          <div class="ico" style="background:rgba(250,179,135,0.18);color:#fab387">⚡</div>
+          <div class="nm">XSS</div>
+          <div class="ab">Cross-Site Scripting</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:rgba(250,179,135,0.2);color:#fab387">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ D. Burp Suite Orange ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">D · Burp Suite Orange</div>
+        <div class="design-tag">PortSwigger pro tool</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#0d1117"></div>
+        <div class="swatch" style="background:#161b22"></div>
+        <div class="swatch" style="background:#ff6633"></div>
+        <div class="swatch" style="background:#e5704a"></div>
+        <div class="swatch" style="background:#ffb86c"></div>
+        <div class="swatch" style="background:#f85149"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#0d1117;color:#e6edf3">
+      <div class="nav" style="border-bottom:1px solid #30363d">
+        <div class="logo" style="background:#161b22;border:1px solid #ff6633;color:#ff6633;font-size:12px">🛡</div>
+        <span style="font-weight:700">Web Pentest</span>
+        <span style="color:#ff6633;background:#161b22;font-size:9px;padding:1px 5px;border-radius:3px;font-family:monospace">v2026</span>
+        <div class="links"><span>Home</span><span style="color:#ff6633">Vulnerabilities</span><span>Playbook</span></div>
+      </div>
+      <h2>Web App <span style="color:#ff6633">Pentesting</span> Playbook</h2>
+      <div class="sub" style="color:#8b949e">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:#1f0e07;color:#ff6633;border:1px solid #ff6633">23 VULNS</span>
+        <span style="background:#1f0e07;color:#ffb86c;border:1px solid #ffb86c">BSCP</span>
+        <span style="background:#21130b;color:#e5704a;border:1px solid #e5704a">CHECKLISTS</span>
+      </div>
+      <div class="stats" style="border:1px solid #30363d;background:#161b22;border-radius:6px;overflow:hidden">
+        <div style="border-right:1px solid #30363d"><div class="num" style="color:#ff6633">23</div><div class="lbl">Vulns</div></div>
+        <div style="border-right:1px solid #30363d"><div class="num" style="color:#ff6633">100+</div><div class="lbl">Labs</div></div>
+        <div><div class="num" style="color:#ff6633">WAF</div><div class="lbl">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#161b22;border:1px solid #30363d;border-left:3px solid #ff6633;border-radius:6px">
+          <div class="ico" style="background:#1f0e07;color:#ff6633">🗄</div>
+          <div class="nm">SQL Injection</div>
+          <div class="ab">SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:#2a0808;color:#f85149">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#161b22;border:1px solid #30363d;border-left:3px solid #ffb86c;border-radius:6px">
+          <div class="ico" style="background:#1f1407;color:#ffb86c">⚡</div>
+          <div class="nm">XSS</div>
+          <div class="ab">Cross-Site Scripting</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:#1f1407;color:#ffb86c">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ E. Cyberpunk Neon ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">E · Cyberpunk Neon</div>
+        <div class="design-tag">Synthwave · Blade Runner</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#0a0014"></div>
+        <div class="swatch" style="background:#16002b"></div>
+        <div class="swatch" style="background:#00d9ff"></div>
+        <div class="swatch" style="background:#ff006e"></div>
+        <div class="swatch" style="background:#ffd60a"></div>
+        <div class="swatch" style="background:#ff2e63"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#0a0014;color:#f0e6ff">
+      <div class="nav" style="border-bottom:1px solid #2d0d52">
+        <div class="logo" style="background:#16002b;border:1px solid #00d9ff;color:#00d9ff;font-size:12px;box-shadow:0 0 10px rgba(0,217,255,0.5)">⚡</div>
+        <span style="font-weight:700;letter-spacing:0.05em">WEB PENTEST</span>
+        <span style="color:#ff006e;background:#16002b;font-size:9px;padding:1px 5px;border:1px solid #ff006e;font-family:monospace">v2026</span>
+        <div class="links"><span>HOME</span><span style="color:#00d9ff;text-shadow:0 0 8px #00d9ff">VULNS</span><span>PLAYBOOK</span></div>
+      </div>
+      <h2 style="text-shadow:0 0 12px rgba(255,0,110,0.4);letter-spacing:0.02em">WEB APP <span style="color:#ff006e">PENTESTING</span> PLAYBOOK</h2>
+      <div class="sub" style="color:#8b6db5">// SYSTEM.READY · 5-DAY METHODOLOGY LOADED</div>
+      <div class="badges">
+        <span style="background:#0d0a1f;color:#00d9ff;border:1px solid #00d9ff;box-shadow:0 0 8px rgba(0,217,255,0.3)">23 VULNS</span>
+        <span style="background:#1a000d;color:#ff006e;border:1px solid #ff006e;box-shadow:0 0 8px rgba(255,0,110,0.3)">BSCP</span>
+        <span style="background:#1a1500;color:#ffd60a;border:1px solid #ffd60a;box-shadow:0 0 8px rgba(255,214,10,0.3)">CHECKLISTS</span>
+      </div>
+      <div class="stats" style="border:1px solid #2d0d52;background:#16002b;border-radius:0">
+        <div style="border-right:1px solid #2d0d52"><div class="num" style="color:#00d9ff;text-shadow:0 0 6px #00d9ff">23</div><div class="lbl">VULNS</div></div>
+        <div style="border-right:1px solid #2d0d52"><div class="num" style="color:#00d9ff;text-shadow:0 0 6px #00d9ff">100+</div><div class="lbl">LABS</div></div>
+        <div><div class="num" style="color:#00d9ff;text-shadow:0 0 6px #00d9ff">WAF</div><div class="lbl">BYPASS</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#16002b;border:1px solid #ff006e;border-left:3px solid #ff006e;border-radius:0;box-shadow:0 0 12px rgba(255,0,110,0.2)">
+          <div class="ico" style="background:#1a000d;color:#ff006e;border-radius:0">🗄</div>
+          <div class="nm">SQL_INJECTION</div>
+          <div class="ab">// SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:#1a000d;color:#ff2e63">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#16002b;border:1px solid #ffd60a;border-left:3px solid #ffd60a;border-radius:0;box-shadow:0 0 12px rgba(255,214,10,0.15)">
+          <div class="ico" style="background:#1a1500;color:#ffd60a;border-radius:0">⚡</div>
+          <div class="nm">XSS</div>
+          <div class="ab">// CROSS_SITE_SCRIPTING</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:#1a1500;color:#ffd60a">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ F. GitHub Dark ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">F · GitHub Dark</div>
+        <div class="design-tag">Quiet · familiar to devs</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#0d1117"></div>
+        <div class="swatch" style="background:#161b22"></div>
+        <div class="swatch" style="background:#58a6ff"></div>
+        <div class="swatch" style="background:#a371f7"></div>
+        <div class="swatch" style="background:#d29922"></div>
+        <div class="swatch" style="background:#f85149"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#0d1117;color:#e6edf3">
+      <div class="nav" style="border-bottom:1px solid #30363d">
+        <div class="logo" style="background:#161b22;border:1px solid #30363d;color:#58a6ff;font-size:12px">🛡</div>
+        <span style="font-weight:700">Web Pentest</span>
+        <span style="color:#7d8590;background:#161b22;font-size:9px;padding:1px 5px;border-radius:3px;font-family:monospace">v2026</span>
+        <div class="links"><span>Home</span><span style="color:#58a6ff">Vulnerabilities</span><span>Playbook</span></div>
+      </div>
+      <h2>Web App <span style="color:#58a6ff">Pentesting</span> Playbook</h2>
+      <div class="sub" style="color:#7d8590">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:#0d1f3a;color:#58a6ff;border:1px solid rgba(88,166,255,0.4)">23 vulns</span>
+        <span style="background:#1c0f3d;color:#a371f7;border:1px solid rgba(163,113,247,0.4)">BSCP</span>
+      </div>
+      <div class="stats" style="border:1px solid #30363d;background:#161b22;border-radius:6px;overflow:hidden">
+        <div style="border-right:1px solid #30363d"><div class="num" style="color:#58a6ff">23</div><div class="lbl">Vulns</div></div>
+        <div style="border-right:1px solid #30363d"><div class="num" style="color:#58a6ff">100+</div><div class="lbl">Labs</div></div>
+        <div><div class="num" style="color:#58a6ff">WAF</div><div class="lbl">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#161b22;border:1px solid #30363d;border-radius:6px">
+          <div class="ico" style="background:#0d1f3a;color:#58a6ff">🗄</div>
+          <div class="nm">SQL Injection</div>
+          <div class="ab">SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:#2a0808;color:#f85149">Critical</div>
+        </div>
+        <div class="card" style="background:#161b22;border:1px solid #30363d;border-radius:6px">
+          <div class="ico" style="background:#1f1503;color:#d29922">⚡</div>
+          <div class="nm">XSS</div>
+          <div class="ab">Cross-Site Scripting</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:#1f1503;color:#d29922">High</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ G. Solarized Dark ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">G · Solarized Dark</div>
+        <div class="design-tag">Bookish · timeless</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#002b36"></div>
+        <div class="swatch" style="background:#073642"></div>
+        <div class="swatch" style="background:#b58900"></div>
+        <div class="swatch" style="background:#2aa198"></div>
+        <div class="swatch" style="background:#cb4b16"></div>
+        <div class="swatch" style="background:#dc322f"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#002b36;color:#93a1a1">
+      <div class="nav" style="border-bottom:1px solid #073642">
+        <div class="logo" style="background:#073642;border:1px solid #b58900;color:#b58900;font-size:12px">🛡</div>
+        <span style="font-weight:700;color:#eee8d5">Web Pentest</span>
+        <span style="color:#b58900;background:#073642;font-size:9px;padding:1px 5px;border-radius:3px;font-family:monospace">v2026</span>
+        <div class="links"><span>Home</span><span style="color:#2aa198">Vulnerabilities</span><span>Playbook</span></div>
+      </div>
+      <h2 style="color:#eee8d5">Web App <span style="color:#b58900">Pentesting</span> Playbook</h2>
+      <div class="sub" style="color:#586e75">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:#073642;color:#b58900;border:1px solid #b58900">23 VULNS</span>
+        <span style="background:#073642;color:#2aa198;border:1px solid #2aa198">BSCP</span>
+      </div>
+      <div class="stats" style="border:1px solid #073642;background:#073642;border-radius:4px;overflow:hidden">
+        <div style="border-right:1px solid #002b36"><div class="num" style="color:#b58900">23</div><div class="lbl">Vulns</div></div>
+        <div style="border-right:1px solid #002b36"><div class="num" style="color:#b58900">100+</div><div class="lbl">Labs</div></div>
+        <div><div class="num" style="color:#b58900">WAF</div><div class="lbl">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#073642;border:1px solid #003745;border-left:3px solid #dc322f;border-radius:4px">
+          <div class="ico" style="background:#1c0606;color:#dc322f">🗄</div>
+          <div class="nm" style="color:#eee8d5">SQL Injection</div>
+          <div class="ab" style="color:#586e75">SQLi</div>
+          <div class="ds">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:#1c0606;color:#dc322f">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#073642;border:1px solid #003745;border-left:3px solid #cb4b16;border-radius:4px">
+          <div class="ico" style="background:#1c0d05;color:#cb4b16">⚡</div>
+          <div class="nm" style="color:#eee8d5">XSS</div>
+          <div class="ab" style="color:#586e75">Cross-Site Scripting</div>
+          <div class="ds">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:#1c0d05;color:#cb4b16">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ H. Editorial Light ═══════ -->
+  <div class="design">
+    <div class="design-meta">
+      <div>
+        <div class="design-name">H · Editorial Light</div>
+        <div class="design-tag">MDN docs · textbook</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" style="background:#fafaf9"></div>
+        <div class="swatch" style="background:#ffffff"></div>
+        <div class="swatch" style="background:#0a0a0a"></div>
+        <div class="swatch" style="background:#dc2626"></div>
+        <div class="swatch" style="background:#475569"></div>
+        <div class="swatch" style="background:#d97706"></div>
+      </div>
+    </div>
+    <div class="mini" style="background:#fafaf9;color:#0a0a0a">
+      <div class="nav" style="border-bottom:1px solid #e5e5e4">
+        <div class="logo" style="background:#fff;border:1px solid #e5e5e4;color:#dc2626;font-size:12px">🛡</div>
+        <span style="font-weight:700">Web Pentest</span>
+        <span style="color:#475569;background:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-family:monospace;border:1px solid #e5e5e4">v2026</span>
+        <div class="links" style="opacity:1"><span style="color:#475569">Home</span><span style="color:#dc2626;font-weight:600">Vulnerabilities</span><span style="color:#475569">Playbook</span></div>
+      </div>
+      <h2 style="color:#0a0a0a">Web App <span style="color:#dc2626">Pentesting</span> Playbook</h2>
+      <div class="sub" style="color:#475569">A workflow-first reference guide.</div>
+      <div class="badges">
+        <span style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca">23 VULNS</span>
+        <span style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1">BSCP</span>
+        <span style="background:#fef3c7;color:#d97706;border:1px solid #fde68a">CHECKLISTS</span>
+      </div>
+      <div class="stats" style="border:1px solid #e5e5e4;background:#fff;border-radius:6px;overflow:hidden">
+        <div style="border-right:1px solid #e5e5e4"><div class="num" style="color:#dc2626">23</div><div class="lbl" style="color:#475569">Vulns</div></div>
+        <div style="border-right:1px solid #e5e5e4"><div class="num" style="color:#dc2626">100+</div><div class="lbl" style="color:#475569">Labs</div></div>
+        <div><div class="num" style="color:#dc2626">WAF</div><div class="lbl" style="color:#475569">Bypass</div></div>
+      </div>
+      <div class="cards" style="margin-top:0.7rem">
+        <div class="card" style="background:#fff;border:1px solid #e5e5e4;border-left:3px solid #dc2626;border-radius:6px">
+          <div class="ico" style="background:#fef2f2;color:#dc2626">🗄</div>
+          <div class="nm" style="color:#0a0a0a">SQL Injection</div>
+          <div class="ab" style="color:#475569">SQLi</div>
+          <div class="ds" style="color:#475569">Manipulate queries to extract data.</div>
+          <div class="sev" style="background:#fef2f2;color:#dc2626">CRITICAL</div>
+        </div>
+        <div class="card" style="background:#fff;border:1px solid #e5e5e4;border-left:3px solid #d97706;border-radius:6px">
+          <div class="ico" style="background:#fef3c7;color:#d97706">⚡</div>
+          <div class="nm" style="color:#0a0a0a">XSS</div>
+          <div class="ab" style="color:#475569">Cross-Site Scripting</div>
+          <div class="ds" style="color:#475569">Reflected, stored, or DOM-based.</div>
+          <div class="sev" style="background:#fef3c7;color:#d97706">HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center;margin-top:2rem;color:#9d99c0;font-size:0.85rem">Tell me a letter (A–H) and I'll build the full site in that direction. You can also mix two — e.g. "B colors with E's neon glow."</p>
+
+</body>
+</html>
