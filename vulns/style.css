@@ -991,6 +991,7 @@ pre.snippet .snippet-label {
 .severity-pill.severity-medium   { background: var(--sev-medium-bg);   color: var(--sev-medium-fg);   border-color: color-mix(in srgb, var(--sev-medium-fg) 35%, transparent); }
 .severity-pill.severity-low      { background: var(--surface2);        color: var(--text-muted);      border-color: var(--border); }
 .severity-pill.severity-info     { background: var(--surface);         color: var(--text-muted);      border-color: var(--border); }
+.severity-pill.severity-none     { background: var(--surface);         color: var(--text-muted);      border-color: var(--border); }
 
 /* Finding card (in list views) */
 .report-finding-card {
