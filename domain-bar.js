@@ -73,6 +73,40 @@
     });
     updateStatus(target);
     updateRunButtons(target);
+    refreshChip(target);
+  }
+
+  // Cross-page target chip: a small `🎯 acme.com` pill mounted in the topnav
+  // so users can see at a glance whether substitution is active without
+  // scrolling back to the bar. Click focuses the bar input.
+  function mountChip() {
+    if (document.getElementById('db-chip')) return;
+    var nav = document.querySelector('nav.topnav .nav-right') || document.querySelector('nav.topnav');
+    if (!nav) return;
+    var chip = document.createElement('span');
+    chip.id = 'db-chip';
+    chip.className = 'bar-status-chip';
+    chip.title = 'Click to focus the target bar';
+    chip.style.display = 'none';
+    chip.addEventListener('click', function(){
+      if (!inputEl) return;
+      inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      inputEl.focus();
+      inputEl.select();
+    });
+    nav.insertBefore(chip, nav.firstChild);
+    return chip;
+  }
+
+  function refreshChip(target) {
+    var chip = document.getElementById('db-chip') || mountChip();
+    if (!chip) return;
+    if (target) {
+      chip.textContent = '🎯 ' + target;
+      chip.style.display = '';
+    } else {
+      chip.style.display = 'none';
+    }
   }
 
   function updateStatus(target) {

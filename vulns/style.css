@@ -1188,6 +1188,27 @@ pre.snippet .snippet-label {
 }
 .dork-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Cross-page target chip on the topnav (mounted by domain-bar.js) */
+.bar-status-chip {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  margin-right: 0.5rem;
+  white-space: nowrap;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-self: center;
+}
+.bar-status-chip:hover {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
 /* "+ Save as finding" button on the dorks page (cross-feature with reporting) */
 .dork-save-btn {
   align-self: flex-start;
