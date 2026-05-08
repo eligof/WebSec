@@ -28,6 +28,7 @@
     <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
     <symbol id="icon-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
     <symbol id="icon-flag" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></symbol>
+    <symbol id="icon-clipboard" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
     <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
 
     <!-- Vuln icons -->
@@ -139,7 +140,7 @@
 
   <!-- DAY 1 -->
   <section id="day1" class="day-section" style="--day-color: var(--accent2)">
-    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg> Day 1</div>
+    <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg> Day 1</div><a class="worksheet-link" href="days/day1.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Recon Worksheet →</a></div>
     <h2>Recon + Binary Sweep</h2>
     <div class="section-content">
       <p><strong>What happens:</strong> Passive recon, active recon, walk the entire app at least once, run a binary sweep for low-hanging fruit. Breadth before depth — document everything, exploit nothing.</p>
@@ -167,7 +168,7 @@
 
   <!-- DAY 2 -->
   <section id="day2" class="day-section" style="--day-color: var(--warn)">
-    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg> Day 2</div>
+    <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg> Day 2</div><a class="worksheet-link" href="days/day2.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Auth Worksheet →</a></div>
     <h2>Auth &amp; Authorization + Input Probes</h2>
     <div class="section-content">
       <p><strong>What happens:</strong> Run one canary per parameter — if it fires, note it and move on. Focus on authentication mechanisms, authorization boundaries, and the input-validation signals that tell you which Day-4 hunts are worth chasing.</p>
@@ -212,7 +213,7 @@
 
   <!-- DAY 3 -->
   <section id="day3" class="day-section" style="--day-color: var(--purple)">
-    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg> Day 3</div>
+    <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg> Day 3</div><a class="worksheet-link" href="days/day3.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open File / Client Worksheet →</a></div>
     <h2>File Handling + Client-Side Checks</h2>
     <div class="section-content">
       <p><strong>What happens:</strong> File-upload endpoints, path-traversal parameters, CORS policy review, WebSocket origin checks. Also begin mapping business logic — coupon reuse, race windows, negative prices, role escalation via PUT/PATCH.</p>
@@ -248,7 +249,7 @@
 
   <!-- DAY 4 -->
   <section id="day4" class="day-section" style="--day-color: var(--danger)">
-    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg> Day 4</div>
+    <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg> Day 4</div><a class="worksheet-link" href="days/day4.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Server-Side Worksheet →</a></div>
     <h2>Server-Side Deep Dive</h2>
     <div class="section-content">
       <p><strong>What happens:</strong> Return to the leads flagged on Days 2–3 and go full depth. Confirm exploitability, build clean POCs, capture impact. This is where critical findings turn into critical reports.</p>
@@ -290,7 +291,7 @@
 
   <!-- DAY 5 -->
   <section id="day5" class="day-section" style="--day-color: var(--accent)">
-    <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg> Day 5</div>
+    <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg> Day 5</div><a class="worksheet-link" href="days/day5.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Client + Close Worksheet →</a></div>
     <h2>Client-Side Deep + Close Gaps</h2>
     <div class="section-content">
       <p><strong>What happens:</strong> Chain. <em>XSS → cookie steal → IDOR. SSRF → AWS metadata → S3 takeover.</em> Combined impact &gt; sum of parts. Finish outstanding leads, verify reproducibility, prep for write-up.</p>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Day 2 Worksheet — Auth, Authorization &amp; Input Probes. Interactive checklist for the second day of a 5-day web pentest engagement.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Day 2 Worksheet · Auth + Input Probes · Web Pentest Playbook</title>
+</head>
+<body data-day="day2" style="--day-color: var(--warn)">
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../index.html#day2" class="nav-link active">Worksheets</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+
+  <div class="day-page-hero">
+    <div class="day-num">Worksheet · Day 2 of 5</div>
+    <h1>
+      <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg></span>
+      Auth, Authorization &amp; Input Probes
+    </h1>
+    <p>One canary per parameter. If it fires, note it and move on — Day 4 is for exploitation. Today is about <strong>mapping every authentication boundary, every role transition, and every input that responds suspiciously.</strong></p>
+    <div class="day-progress">
+      <div class="day-progress-bar-wrap"><div class="day-progress-bar" style="width:0%"></div></div>
+      <div class="day-progress-text"><strong>0</strong> / 0 tasks · <strong>0%</strong> complete</div>
+      <div class="day-progress-saved"></div>
+    </div>
+  </div>
+
+  <section class="worksheet-section" id="context">
+    <h2><span class="ws-section-num">1</span>Today's Context</h2>
+    <p class="ws-intro">Quick notes before you start — what carried over from Day 1?</p>
+    <div class="form-group">
+      <label for="t-from-day1">Day-1 leads to follow up here</label>
+      <textarea id="t-from-day1" data-key="text-from-day1" placeholder="- /api/users/{id} numeric IDOR candidate&#10;- JWT in Authorization header — alg HS256&#10;- /reset uses Host header"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="login">
+    <h2><span class="ws-section-num">2</span>Login Flow &amp; Registration</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-login-flow"><span class="task-label">Map the login flow: form fields, redirect chain, cookies set, response timing</span></li>
+      <li><input type="checkbox" data-key="check-login-userenum"><span class="task-label">Username enumeration via response diff (timing, error message, status code) on login + registration + reset</span></li>
+      <li><input type="checkbox" data-key="check-login-policy"><span class="task-label">Password policy: min length, complexity, common-password rejection</span></li>
+      <li><input type="checkbox" data-key="check-login-lockout"><span class="task-label">Account lockout after N failed attempts? (test with throwaway account)</span></li>
+      <li><input type="checkbox" data-key="check-login-ratelimit"><span class="task-label">Rate-limit bypass attempts: <code>X-Forwarded-For</code>, casing, slash variants, HTTP/2 multiplexing</span></li>
+      <li><input type="checkbox" data-key="check-login-mfa"><span class="task-label">If MFA: bypass via <code>response</code> tampering, missing-step, race on validation</span></li>
+      <li><input type="checkbox" data-key="check-login-remember"><span class="task-label">"Remember me" cookie: format, entropy, expiry, server-side validation</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="reset">
+    <h2><span class="ws-section-num">3</span>Password Reset Flow</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-reset-token-entropy"><span class="task-label">Token entropy — request 5+ tokens, check for predictability (sequential, time-based, weak hash)</span></li>
+      <li><input type="checkbox" data-key="check-reset-token-expiry"><span class="task-label">Token expiry — does it actually expire? Reuse after first use?</span></li>
+      <li><input type="checkbox" data-key="check-reset-host"><span class="task-label">Host-header poisoning — change <code>Host: attacker.com</code>, see if reset link uses it</span></li>
+      <li><input type="checkbox" data-key="check-reset-leak"><span class="task-label">Token leakage via <code>Referer</code> when user clicks an external link from the reset page</span></li>
+      <li><input type="checkbox" data-key="check-reset-race"><span class="task-label">Race condition: send password-reset request twice in parallel — does it accept the second token?</span></li>
+      <li><input type="checkbox" data-key="check-reset-userenum"><span class="task-label">Username enumeration via reset flow ("we sent an email" vs "user not found")</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="session">
+    <h2><span class="ws-section-num">4</span>Session Management</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-session-entropy"><span class="task-label">Session ID entropy — Burp Sequencer or 100+ samples, check for patterns</span></li>
+      <li><input type="checkbox" data-key="check-session-flags"><span class="task-label">Cookie flags: <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Lax|Strict</code></span></li>
+      <li><input type="checkbox" data-key="check-session-logout"><span class="task-label">Logout actually invalidates the token server-side (replay after logout)</span></li>
+      <li><input type="checkbox" data-key="check-session-fixation"><span class="task-label">Session fixation — pre-authentication cookie kept after login?</span></li>
+      <li><input type="checkbox" data-key="check-session-concurrent"><span class="task-label">Concurrent sessions allowed? Logout-from-all-devices feature?</span></li>
+      <li><input type="checkbox" data-key="check-session-csrf"><span class="task-label">CSRF token: present, validated server-side, regenerated per session, bound to user</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="jwt">
+    <h2><span class="ws-section-num">5</span>JWT Inspection</h2>
+    <p class="ws-intro">Decode every JWT you see. Use jwt.io or <code>jwt_tool -t &lt;url&gt; -rh "Authorization: Bearer &lt;jwt&gt;"</code>.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-jwt-decode"><span class="task-label">Decode header + payload — note algorithm, claims, expiry</span></li>
+      <li><input type="checkbox" data-key="check-jwt-alg-none"><span class="task-label">Try <code>"alg":"none"</code> with empty signature</span></li>
+      <li><input type="checkbox" data-key="check-jwt-confusion"><span class="task-label">Algorithm confusion: change RS256 → HS256, sign with public key as the secret</span></li>
+      <li><input type="checkbox" data-key="check-jwt-kid"><span class="task-label">"kid" injection: <code>"kid":"../../dev/null"</code>, SQLi in kid, path traversal</span></li>
+      <li><input type="checkbox" data-key="check-jwt-jku"><span class="task-label">"jku"/"x5u" header pointing to attacker-controlled URL</span></li>
+      <li><input type="checkbox" data-key="check-jwt-secret"><span class="task-label">Weak HMAC secret crack: <code>hashcat -m 16500 jwt.txt rockyou.txt</code></span></li>
+      <li><input type="checkbox" data-key="check-jwt-claim-tamper"><span class="task-label">Claim tampering: change <code>sub</code>, <code>role</code>, <code>tenant_id</code> — does server validate?</span></li>
+    </ul>
+    <div class="form-group" style="margin-top:1rem">
+      <label for="t-jwt-sample">Sample JWT (paste here for reference)</label>
+      <textarea id="t-jwt-sample" data-key="text-jwt-sample" class="mono" placeholder="eyJhbGciOiJIUzI1NiI..."></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="oauth">
+    <h2><span class="ws-section-num">6</span>OAuth / OIDC</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-oauth-state"><span class="task-label"><code>state</code> parameter present and validated (drop it — does login still complete?)</span></li>
+      <li><input type="checkbox" data-key="check-oauth-redirect"><span class="task-label"><code>redirect_uri</code> strict matching: try <code>?redirect_uri=evil.com</code>, <code>target.com.evil.com</code>, <code>target.com/../</code></span></li>
+      <li><input type="checkbox" data-key="check-oauth-pkce"><span class="task-label">PKCE on public clients (mobile/SPA)?</span></li>
+      <li><input type="checkbox" data-key="check-oauth-scope"><span class="task-label">Scope creep: request more scopes than the app shows on consent</span></li>
+      <li><input type="checkbox" data-key="check-oauth-iss"><span class="task-label">Issuer (<code>iss</code>) validated? Try a different IdP</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="authz">
+    <h2><span class="ws-section-num">7</span>Authorization &amp; IDOR</h2>
+    <p class="ws-intro">Build a role matrix. Test every state-changing action as every role.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-authz-matrix"><span class="task-label">Role matrix built: anon · user · second-user · admin · second-tenant</span></li>
+      <li><input type="checkbox" data-key="check-authz-numeric-ids"><span class="task-label">Numeric IDs in URLs: increment/decrement, check cross-user access</span></li>
+      <li><input type="checkbox" data-key="check-authz-uuid"><span class="task-label">UUIDs: try predictable v1 UUIDs (timestamp-based), null, empty, broken format</span></li>
+      <li><input type="checkbox" data-key="check-authz-method"><span class="task-label">HTTP method tampering: GET vs POST vs PUT vs DELETE on the same path</span></li>
+      <li><input type="checkbox" data-key="check-authz-mass-assign"><span class="task-label">Mass assignment: send extra fields (<code>"role":"admin"</code>, <code>"isVerified":true</code>) on update endpoints</span></li>
+      <li><input type="checkbox" data-key="check-authz-tenant"><span class="task-label">Cross-tenant: switch <code>tenant_id</code> in JWT/URL/cookie, see if data isolation holds</span></li>
+      <li><input type="checkbox" data-key="check-authz-headers"><span class="task-label">Header-based access bypass: <code>X-Original-URL</code>, <code>X-Rewrite-URL</code>, <code>X-Forwarded-For: 127.0.0.1</code></span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="probes">
+    <h2><span class="ws-section-num">8</span>Input Probes (the canary set)</h2>
+    <p class="ws-intro">Drop one of each into every parameter. Looking for SIGNALS, not exploitation. Tick the canary once you've sprayed it.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-probe-sqli"><span class="task-label"><code>'</code> — SQLi signal? (look for 500, error message, response diff)</span></li>
+      <li><input type="checkbox" data-key="check-probe-xss"><span class="task-label"><code>&lt;svg/onload=alert(1)&gt;</code> — XSS reflection? (raw, in attribute, inside JSON?)</span></li>
+      <li><input type="checkbox" data-key="check-probe-cmdi"><span class="task-label"><code>; sleep 5</code> · <code>$(id)</code> · backtick variants — response delay or echoed output?</span></li>
+      <li><input type="checkbox" data-key="check-probe-path"><span class="task-label"><code>../../../etc/passwd</code> — path traversal echo or 500?</span></li>
+      <li><input type="checkbox" data-key="check-probe-ssti"><span class="task-label"><code>{{7*7}}</code> · <code>${7*7}</code> · <code>&lt;%= 7*7 %&gt;</code> — does <code>49</code> appear?</span></li>
+      <li><input type="checkbox" data-key="check-probe-nosqli"><span class="task-label"><code>{"$ne": null}</code> · <code>{"$gt": ""}</code> — auth bypass on JSON login?</span></li>
+      <li><input type="checkbox" data-key="check-probe-xxe"><span class="task-label">XML body: <code>&lt;!DOCTYPE x [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;</code></span></li>
+      <li><input type="checkbox" data-key="check-probe-ssrf"><span class="task-label"><code>http://collaborator.your.host</code> in any URL parameter — DNS hit?</span></li>
+      <li><input type="checkbox" data-key="check-probe-csti"><span class="task-label"><code>{{constructor.constructor('alert(1)')()}}</code> for AngularJS / Vue contexts</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="findings">
+    <h2><span class="ws-section-num">9</span>Findings &amp; Day-4 Shortlist</h2>
+    <div class="form-group">
+      <label for="t-deepdive">Leads to deep-dive on Day 4 (server-side)</label>
+      <textarea id="t-deepdive" data-key="text-deepdive" placeholder="- /search?q=' triggers MySQL error → SQLi (string context, MySQL 8.x)&#10;- /import?file= reflects ../etc/passwd → path traversal&#10;- JWT header has alg:HS256 with weak secret 'secret'"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-day5">Leads to chain on Day 5 (client-side / chains)</label>
+      <textarea id="t-day5" data-key="text-day5" placeholder="- Stored XSS in profile bio + IDOR on /api/users/{id} → ATO chain&#10;- Reset flow Host-poisonable + token-leak via Referer"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-confirmed"> Already confirmed (no need to retest)</label>
+      <textarea id="t-confirmed" data-key="text-confirmed" placeholder="Things you've verified work; e.g. 'role:admin via mass assignment on PATCH /me'"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="eod">
+    <h2><span class="ws-section-num">✓</span>End of Day Checklist</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-eod-rolematrix"><span class="task-label">Role matrix complete (anon → user → admin → tenant)</span></li>
+      <li><input type="checkbox" data-key="check-eod-authmap"><span class="task-label">Every authenticated endpoint catalogued with required role</span></li>
+      <li><input type="checkbox" data-key="check-eod-canaries"><span class="task-label">Canary set fired on every input parameter</span></li>
+      <li><input type="checkbox" data-key="check-eod-shortlist"><span class="task-label">Day-4 shortlist + Day-5 chain leads documented</span></li>
+      <li><input type="checkbox" data-key="check-eod-iron"><span class="task-label"><strong>Iron Rule:</strong> didn't grind brute-force without confirming rate-limit bypass first</span></li>
+    </ul>
+
+    <div class="day-actions">
+      <button id="day-export" type="button">📄 Export as text</button>
+      <button id="day-reset" type="button" class="danger">↺ Reset Day 2 progress</button>
+    </div>
+  </section>
+
+  <nav class="day-nav-buttons" aria-label="Day navigation">
+    <a href="day1.html" class="prev">
+      <span class="nav-label">← Previous</span>
+      <span class="nav-title">Day 1 · Recon</span>
+    </a>
+    <a href="day3.html" class="next">
+      <span class="nav-label">Next worksheet →</span>
+      <span class="nav-title">Day 3 · File / Client-Side</span>
+    </a>
+  </nav>
+
+</div>
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Worksheets</div>
+        <a href="day1.html">Day 1 · Recon</a>
+        <a href="day2.html">Day 2 · Auth + Probes</a>
+        <a href="day3.html">Day 3 · File / Client</a>
+        <a href="day4.html">Day 4 · Server-Side</a>
+        <a href="day5.html">Day 5 · Client + Close</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="../index.html">All Vulnerabilities</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2026 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by Tomer Hadad</span>
+    </div>
+  </div>
+</footer>
+
+<script src="dayform.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

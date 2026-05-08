@@ -544,6 +544,24 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .day-section { border-left: 3px solid var(--day-color, var(--accent2)); padding: 1.5rem 0 1.5rem 1.5rem; margin-bottom: 2.5rem; scroll-margin-top: 64px; }
 .day-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.8rem; margin-bottom: 0.8rem; font-size: 0.82rem; font-weight: 700; color: var(--text); }
 .day-badge .icon { color: var(--day-color, var(--accent2)); }
+
+/* "Open worksheet" link beside the day badge */
+.day-badge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; }
+.day-badge-row .day-badge { margin-bottom: 0; }
+.worksheet-link {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.85rem; border-radius: 8px;
+  background: color-mix(in srgb, var(--day-color, var(--accent)) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--day-color, var(--accent)) 35%, transparent);
+  color: var(--day-color, var(--accent));
+  text-decoration: none; font-size: 0.78rem; font-weight: 600;
+  transition: all 0.15s; white-space: nowrap;
+}
+.worksheet-link:hover {
+  background: color-mix(in srgb, var(--day-color, var(--accent)) 22%, var(--surface));
+  border-color: var(--day-color, var(--accent));
+}
+.worksheet-link .icon { width: 13px; height: 13px; }
 .day-section h2 { font-size: 1.4rem; margin-bottom: 0.8rem; color: var(--text); }
 .day-section p { margin-bottom: 1rem; color: var(--text-muted); }
 .day-section .section-content { margin-bottom: 1.2rem; }
@@ -670,6 +688,181 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .progress-label span { color: var(--accent); font-weight: 600; }
 
 .vuln-card.hidden, .vuln-pill.hidden { display: none; }
+
+/* ═══════════════════════════════════════════
+   DAY WORKSHEETS (/days/dayN.html)
+═══════════════════════════════════════════ */
+.day-page-hero {
+  background: linear-gradient(135deg, var(--surface), var(--hero-gradient-end));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem 1.8rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--day-color, var(--accent));
+}
+.day-page-hero h1 {
+  font-size: 1.6rem; font-weight: 800; color: var(--text);
+  display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.3rem;
+}
+.day-page-hero .day-num {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--day-color, var(--accent)); margin-bottom: 0.5rem;
+}
+.day-page-hero p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem; }
+.day-page-hero .day-icon-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  background: color-mix(in srgb, var(--day-color, var(--accent)) 18%, var(--surface2));
+  color: var(--day-color, var(--accent2));
+}
+.day-page-hero .day-icon-pill .icon { width: 22px; height: 22px; }
+
+/* Live progress bar inside the hero */
+.day-progress {
+  display: flex; align-items: center; gap: 0.8rem;
+  background: var(--surface2); border-radius: 8px;
+  padding: 0.6rem 0.9rem; font-size: 0.85rem;
+}
+.day-progress-bar-wrap {
+  flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.day-progress-bar {
+  height: 100%; background: linear-gradient(90deg, var(--day-color, var(--accent)), var(--accent2));
+  border-radius: 3px; transition: width 0.3s;
+}
+.day-progress-text { white-space: nowrap; color: var(--text-muted); }
+.day-progress-text strong { color: var(--text); }
+.day-progress-saved { font-size: 0.7rem; color: var(--accent2); opacity: 0; transition: opacity 0.2s; }
+.day-progress-saved.visible { opacity: 1; }
+
+/* Worksheet sections */
+.worksheet-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 1.25rem 1.5rem; margin-bottom: 1.2rem; scroll-margin-top: 64px;
+}
+.worksheet-section h2 {
+  font-size: 1.15rem; font-weight: 700; color: var(--text);
+  margin-bottom: 0.7rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.worksheet-section h2 .ws-section-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--surface2); color: var(--day-color, var(--accent));
+  font-size: 0.78rem; font-weight: 700; flex-shrink: 0;
+}
+.worksheet-section .ws-intro {
+  color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1rem;
+}
+
+/* Form inputs (single-line + textarea) */
+.form-group { margin-bottom: 0.9rem; }
+.form-group label {
+  display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem;
+}
+.form-group input[type="text"],
+.form-group input[type="url"],
+.form-group input[type="date"],
+.form-group textarea {
+  width: 100%;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.55rem 0.75rem;
+  color: var(--text); font-family: var(--font); font-size: 0.9rem;
+  outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-group input[type="text"]:focus,
+.form-group input[type="url"]:focus,
+.form-group input[type="date"]:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.form-group textarea {
+  min-height: 80px; resize: vertical; line-height: 1.55;
+  font-family: var(--font);
+}
+.form-group textarea.mono { font-family: var(--mono); font-size: 0.85rem; }
+
+/* Task checklist */
+.task-list { list-style: none; padding: 0; margin: 0; }
+.task-list .task-group-title {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); margin: 1rem 0 0.5rem; padding: 0;
+}
+.task-list .task-group-title:first-child { margin-top: 0; }
+.task-list li {
+  display: flex; align-items: flex-start; gap: 0.65rem;
+  padding: 0.5rem 0.65rem; border-radius: 6px;
+  font-size: 0.92rem; line-height: 1.45;
+  transition: background 0.15s;
+}
+.task-list li:hover { background: var(--surface2); }
+.task-list li.done {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--day-color, var(--accent)) 6%, transparent);
+}
+.task-list li.done .task-label { text-decoration: line-through; opacity: 0.65; }
+.task-list input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  flex-shrink: 0; margin-top: 0.18rem;
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--border); border-radius: 4px;
+  background: var(--surface2); cursor: pointer;
+  position: relative; transition: all 0.15s;
+}
+.task-list input[type="checkbox"]:hover { border-color: var(--day-color, var(--accent)); }
+.task-list input[type="checkbox"]:checked {
+  background: var(--day-color, var(--accent)); border-color: var(--day-color, var(--accent));
+}
+.task-list input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 4px; top: 0px;
+  width: 5px; height: 10px; border: solid #fff;
+  border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.task-list .task-label { flex: 1; color: var(--text); }
+.task-list .task-label code {
+  background: var(--surface2); padding: 0.1em 0.4em; border-radius: 3px;
+  color: var(--accent2); font-family: var(--mono); font-size: 0.85em;
+}
+.task-list .task-hint {
+  display: block; font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;
+}
+
+/* Day navigation (prev/next) */
+.day-nav-buttons {
+  display: flex; justify-content: space-between; gap: 1rem;
+  margin-top: 1.5rem; margin-bottom: 1.5rem;
+}
+.day-nav-buttons a {
+  flex: 1; max-width: 280px;
+  display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.day-nav-buttons a:hover { border-color: var(--accent); background: var(--surface2); }
+.day-nav-buttons a .nav-label {
+  font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.day-nav-buttons a .nav-title { font-weight: 600; }
+.day-nav-buttons a.disabled {
+  opacity: 0.4; pointer-events: none; cursor: not-allowed;
+}
+.day-nav-buttons a.next { text-align: right; }
+
+/* Action buttons (reset, export) */
+.day-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
+.day-actions button {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 0.45rem 0.85rem; font-size: 0.82rem;
+  cursor: pointer; font-family: var(--font); transition: all 0.15s;
+}
+.day-actions button:hover { border-color: var(--accent); }
+.day-actions button.danger { color: var(--danger); }
+.day-actions button.danger:hover { border-color: var(--danger); }
 
 @media (max-width: 600px) {
   .hero-wrap { padding: 2rem 1.25rem 1rem; }

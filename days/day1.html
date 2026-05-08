@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Clickjacking defense: hide content until JS confirms top frame -->
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Day 1 Worksheet — Recon &amp; Binary Sweep. Interactive checklist with auto-save for the first day of a 5-day web pentest engagement.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Day 1 Worksheet · Recon + Binary Sweep · Web Pentest Playbook</title>
+</head>
+<body data-day="day1" style="--day-color: var(--accent2)">
+
+<!-- Sprite (single icon needed) -->
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  </defs>
+</svg>
+
+<!-- ── NAV ── -->
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../index.html#day1" class="nav-link active">Worksheets</a>
+    <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer" class="nav-link">Labs ↗</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+
+  <!-- HERO -->
+  <div class="day-page-hero">
+    <div class="day-num">Worksheet · Day 1 of 5</div>
+    <h1>
+      <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg></span>
+      Recon + Binary Sweep
+    </h1>
+    <p>Passive recon, active recon, walk the entire app at least once, run a binary sweep for low-hanging fruit. <strong>Breadth before depth</strong> — document everything, exploit nothing today.</p>
+    <div class="day-progress">
+      <div class="day-progress-bar-wrap"><div class="day-progress-bar" style="width:0%"></div></div>
+      <div class="day-progress-text"><strong>0</strong> / 0 tasks · <strong>0%</strong> complete</div>
+      <div class="day-progress-saved"></div>
+    </div>
+  </div>
+
+  <!-- PRE-ENGAGEMENT -->
+  <section class="worksheet-section" id="engagement">
+    <h2><span class="ws-section-num">1</span>Pre-engagement</h2>
+    <p class="ws-intro">Capture the engagement context before you start poking. Refer back here whenever something feels out of scope.</p>
+    <div class="form-group">
+      <label for="t-target">Target / scope (root URLs)</label>
+      <textarea id="t-target" data-key="text-target" placeholder="https://target.example.com&#10;https://api.example.com&#10;*.example.com"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-window">Authorized testing window</label>
+      <input type="text" id="t-window" data-key="text-window" placeholder="2026-05-08 09:00 → 2026-05-12 18:00 UTC">
+    </div>
+    <div class="form-group">
+      <label for="t-oos">Out-of-scope (do NOT test)</label>
+      <textarea id="t-oos" data-key="text-oos" placeholder="- Production payment endpoints (/api/v1/charge)&#10;- Third-party domains (e.g. Stripe, Auth0)&#10;- DDoS / brute-force"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-special">Special instructions / context</label>
+      <textarea id="t-special" data-key="text-special" placeholder="Test creds, IP allowlist required, point of contact, etc."></textarea>
+    </div>
+  </section>
+
+  <!-- PASSIVE RECON -->
+  <section class="worksheet-section" id="passive">
+    <h2><span class="ws-section-num">2</span>Passive Recon</h2>
+    <p class="ws-intro">No traffic to the target yet. Pull what's already public.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-passive-subfinder"><span class="task-label">Run <code>subfinder -d &lt;root&gt; -all -recursive</code> for subdomain enumeration</span></li>
+      <li><input type="checkbox" data-key="check-passive-amass"><span class="task-label">Run <code>amass enum -passive -d &lt;root&gt;</code> and merge with subfinder output</span></li>
+      <li><input type="checkbox" data-key="check-passive-wayback"><span class="task-label">Pull <code>waybackurls &lt;root&gt;</code> archive for old endpoints, deprecated APIs</span></li>
+      <li><input type="checkbox" data-key="check-passive-gau"><span class="task-label">Run <code>gau --threads 10 &lt;root&gt;</code> (gets URLs from AlienVault, Common Crawl, etc.)</span></li>
+      <li><input type="checkbox" data-key="check-passive-github"><span class="task-label">GitHub dorking: <code>org:&lt;target&gt;</code> + secrets keywords (<code>password</code>, <code>api_key</code>, <code>BEGIN PRIVATE KEY</code>)</span></li>
+      <li><input type="checkbox" data-key="check-passive-shodan"><span class="task-label">Shodan / Censys lookup on the target's ASN / IP range</span></li>
+      <li><input type="checkbox" data-key="check-passive-dns"><span class="task-label">DNS records: <code>dig any</code>, MX, TXT (look for SPF/DMARC, sometimes leaks infrastructure)</span></li>
+    </ul>
+    <div class="form-group" style="margin-top:1rem">
+      <label for="t-passive-notes">Passive recon notes</label>
+      <textarea id="t-passive-notes" data-key="text-passive-notes" placeholder="Discovered subdomains, archived endpoints, anything unusual"></textarea>
+    </div>
+  </section>
+
+  <!-- ACTIVE RECON -->
+  <section class="worksheet-section" id="active">
+    <h2><span class="ws-section-num">3</span>Active Recon</h2>
+    <p class="ws-intro">Now we touch the target. Identify live hosts, enumerate paths, fingerprint the stack.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-active-httpx"><span class="task-label">Probe live hosts: <code>cat subs.txt | httpx -title -tech-detect -status-code -ip</code></span></li>
+      <li><input type="checkbox" data-key="check-active-tls"><span class="task-label">TLS analysis with <code>testssl.sh</code> on every live host (cert chain, weak ciphers, expiry, HSTS)</span></li>
+      <li><input type="checkbox" data-key="check-active-ferox"><span class="task-label">Path fuzzing: <code>feroxbuster -u &lt;host&gt; -w common.txt -r -d 3 -x php,html,json,asp,aspx</code></span></li>
+      <li><input type="checkbox" data-key="check-active-ffuf-vhost"><span class="task-label">Vhost enumeration: <code>ffuf -u https://&lt;ip&gt; -H "Host: FUZZ.&lt;root&gt;" -w subdomains.txt</code></span></li>
+      <li><input type="checkbox" data-key="check-active-nmap"><span class="task-label">Targeted port scan: <code>nmap -sV -sC -p 80,443,8080,8443,8000,8888 &lt;host&gt;</code></span></li>
+      <li><input type="checkbox" data-key="check-active-headers"><span class="task-label">Inspect security headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy)</span></li>
+      <li><input type="checkbox" data-key="check-active-tech"><span class="task-label">Stack fingerprint via Wappalyzer / response headers / cookies (Server, X-Powered-By, JSESSIONID, PHPSESSID)</span></li>
+    </ul>
+  </section>
+
+  <!-- QUICK WINS -->
+  <section class="worksheet-section" id="quickwins">
+    <h2><span class="ws-section-num">4</span>Quick Wins / Binary Sweep</h2>
+    <p class="ws-intro">Five-minute checks that sometimes reveal critical findings on their own.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-qw-robots"><span class="task-label">Fetch <code>/robots.txt</code> — note disallowed paths (often interesting)</span></li>
+      <li><input type="checkbox" data-key="check-qw-sitemap"><span class="task-label">Fetch <code>/sitemap.xml</code> and <code>/sitemap_index.xml</code></span></li>
+      <li><input type="checkbox" data-key="check-qw-git"><span class="task-label">Test <code>/.git/config</code>, <code>/.git/HEAD</code> — exposed git repo? (try <code>git-dumper</code>)</span></li>
+      <li><input type="checkbox" data-key="check-qw-env"><span class="task-label">Test <code>/.env</code>, <code>/.env.local</code>, <code>/.env.production</code></span></li>
+      <li><input type="checkbox" data-key="check-qw-wellknown"><span class="task-label">Check <code>/.well-known/</code> (security.txt, openid-configuration)</span></li>
+      <li><input type="checkbox" data-key="check-qw-backup"><span class="task-label">Backup file probes: <code>.bak</code>, <code>.old</code>, <code>.swp</code>, <code>.zip</code>, <code>.tar.gz</code> on common paths</span></li>
+      <li><input type="checkbox" data-key="check-qw-admin"><span class="task-label">Common admin panels: <code>/admin</code>, <code>/wp-admin</code>, <code>/phpmyadmin</code>, <code>/manager/html</code>, <code>/console</code></span></li>
+      <li><input type="checkbox" data-key="check-qw-stacktrace"><span class="task-label">Trigger error responses (malformed input, weird URLs) — capture stack traces</span></li>
+      <li><input type="checkbox" data-key="check-qw-jsmaps"><span class="task-label">JS source maps (<code>*.js.map</code>) — often leak full server-side source</span></li>
+      <li><input type="checkbox" data-key="check-qw-cors-prelim"><span class="task-label">Quick CORS check: <code>curl -H "Origin: https://evil.com" -I &lt;api&gt;</code> on one or two endpoints</span></li>
+    </ul>
+  </section>
+
+  <!-- MANUAL WALKTHROUGH -->
+  <section class="worksheet-section" id="walkthrough">
+    <h2><span class="ws-section-num">5</span>Manual Walkthrough</h2>
+    <p class="ws-intro">Click every link, submit every form, document every parameter. Burp's HTTP history is your map.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-walk-burp"><span class="task-label">Burp running with FoxyProxy on; HTTPS cert installed; intercept OFF for the walk</span></li>
+      <li><input type="checkbox" data-key="check-walk-anon"><span class="task-label">Walk the app as an anonymous (logged-out) user — every page, every form</span></li>
+      <li><input type="checkbox" data-key="check-walk-auth"><span class="task-label">Register / log in; walk again as low-priv user</span></li>
+      <li><input type="checkbox" data-key="check-walk-multi-role"><span class="task-label">Repeat as each role available (editor, manager, admin, second tenant)</span></li>
+      <li><input type="checkbox" data-key="check-walk-forms"><span class="task-label">Submit every form (placeholder data) — note the request method, parameters, response</span></li>
+      <li><input type="checkbox" data-key="check-walk-params"><span class="task-label">Document every parameter: name, location (URL/body/header/cookie), type, expected format</span></li>
+      <li><input type="checkbox" data-key="check-walk-api"><span class="task-label">Capture all XHR / fetch endpoints — these are your API attack surface</span></li>
+      <li><input type="checkbox" data-key="check-walk-export"><span class="task-label">Save Burp project file: <code>&lt;target&gt;-day1-recon.burp</code></span></li>
+    </ul>
+  </section>
+
+  <!-- FINDINGS / NOTES -->
+  <section class="worksheet-section" id="findings">
+    <h2><span class="ws-section-num">6</span>Findings &amp; Leads</h2>
+    <p class="ws-intro">Things to revisit on Days 2–5. Be specific — URL, parameter, what triggered your interest.</p>
+    <div class="form-group">
+      <label for="t-leads">Day-2 leads (auth / IDOR / input probes)</label>
+      <textarea id="t-leads" data-key="text-leads" placeholder="- /api/users/{id}: numeric, sequential, returns full user object → IDOR candidate&#10;- /reset-password: takes Host header for the reset link → poison candidate&#10;- /search?q=: ' triggers 500 error → SQLi candidate"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-quickwins">Quick wins / binary findings</label>
+      <textarea id="t-quickwins" data-key="text-quickwins" placeholder="- Missing HSTS&#10;- /.git/config exposed&#10;- Stack trace at /search?q[]=&#10;- Default Tomcat manager at :8080/manager/html"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="t-questions">Questions for the client</label>
+      <textarea id="t-questions" data-key="text-questions" placeholder="Anything that needs clarification before you go deep"></textarea>
+    </div>
+  </section>
+
+  <!-- END OF DAY -->
+  <section class="worksheet-section" id="eod">
+    <h2><span class="ws-section-num">✓</span>End of Day Checklist</h2>
+    <p class="ws-intro">Ship-quality output before you close the laptop.</p>
+    <ul class="task-list">
+      <li><input type="checkbox" data-key="check-eod-map"><span class="task-label">Attack-surface map complete (every host / page / form / parameter documented)</span></li>
+      <li><input type="checkbox" data-key="check-eod-shortlist"><span class="task-label">"Interesting leads" shortlist captured for Days 2–5</span></li>
+      <li><input type="checkbox" data-key="check-eod-burp"><span class="task-label">Burp project file saved with descriptive name</span></li>
+      <li><input type="checkbox" data-key="check-eod-quickwins"><span class="task-label">Any binary-sweep critical findings flagged for immediate report</span></li>
+      <li><input type="checkbox" data-key="check-eod-iron"><span class="task-label"><strong>Iron Rule check:</strong> I did NOT spend a full day on a single login page</span></li>
+    </ul>
+
+    <div class="day-actions">
+      <button id="day-export" type="button">📄 Export as text</button>
+      <button id="day-reset" type="button" class="danger">↺ Reset Day 1 progress</button>
+    </div>
+  </section>
+
+  <!-- DAY NAVIGATION -->
+  <nav class="day-nav-buttons" aria-label="Day navigation">
+    <a href="../index.html" class="prev">
+      <span class="nav-label">← Back to</span>
+      <span class="nav-title">Methodology overview</span>
+    </a>
+    <a href="day2.html" class="next">
+      <span class="nav-label">Next worksheet →</span>
+      <span class="nav-title">Day 2 · Auth &amp; Input Probes</span>
+    </a>
+  </nav>
+
+</div>
+
+<footer class="home-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="../index.html" class="footer-brand-link">
+          <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+          <span class="footer-brand-text">Web Pentest Playbook</span>
+        </a>
+        <p class="footer-tagline">A workflow-first reference for web application security testing.</p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Worksheets</div>
+        <a href="day1.html">Day 1 · Recon</a>
+        <a href="day2.html">Day 2 · Auth + Probes</a>
+        <a href="day3.html">Day 3 · File / Client</a>
+        <a href="day4.html">Day 4 · Server-Side</a>
+        <a href="day5.html">Day 5 · Client + Close</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        <a href="https://portswigger.net/web-security" target="_blank" rel="noopener noreferrer">PortSwigger Academy ↗</a>
+        <a href="https://owasp.org/Top10" target="_blank" rel="noopener noreferrer">OWASP Top 10 ↗</a>
+        <a href="https://github.com/swisskyrepo/PayloadsAllTheThings" target="_blank" rel="noopener noreferrer">PayloadsAllTheThings ↗</a>
+        <a href="https://book.hacktricks.xyz" target="_blank" rel="noopener noreferrer">HackTricks ↗</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <a href="../web-pentest-playbook.html">5-Day Playbook</a>
+        <a href="../index.html">All Vulnerabilities</a>
+        <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+    <div class="footer-bottom-row">
+      <span>© 2026 Web Pentest Playbook · MIT License</span>
+      <span>Inspired by Tomer Hadad</span>
+    </div>
+  </div>
+</footer>
+
+<script src="dayform.js"></script>
+<script>
+  // Theme toggle
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>
