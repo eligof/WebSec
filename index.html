@@ -334,6 +334,7 @@
         <a class="vuln-pill" href="vulns/xss.html"><svg class="icon" aria-hidden="true"><use href="#icon-zap"/></svg>XSS<span class="pill-sev sev-high">High</span></a>
         <a class="vuln-pill" href="vulns/prototype-pollution.html"><svg class="icon" aria-hidden="true"><use href="#icon-biohazard"/></svg>Prototype Pollution<span class="pill-sev sev-high">High</span></a>
         <a class="vuln-pill" href="vulns/graphql.html"><svg class="icon" aria-hidden="true"><use href="#icon-share"/></svg>GraphQL<span class="pill-sev sev-high">High</span></a>
+        <a class="vuln-pill" href="vulns/google-dorking.html"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg>Google Dorking<span class="pill-sev sev-info">Info</span></a>
         <a class="vuln-pill" href="vulns/host-header.html"><svg class="icon" aria-hidden="true"><use href="#icon-tag"/></svg>Host Header<span class="pill-sev sev-high">High</span></a>
         <a class="vuln-pill" href="vulns/cache-poisoning.html"><svg class="icon" aria-hidden="true"><use href="#icon-skull"/></svg>Cache Poisoning<span class="pill-sev sev-high">High</span></a>
       </div>
@@ -417,6 +418,18 @@
         </div>
         <div class="card-desc">Exploit GraphQL APIs via introspection, batching attacks, IDOR in queries, and injection.</div>
         <div class="card-footer"><span class="sev sev-high">High</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/google-dorking.html" data-search="google dorking osint recon search operators site filetype inurl intitle subdomain enumeration leak credentials" style="--card-accent:#ffb86c">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg></div>
+          <div>
+            <div class="card-name">Google Dorking & OSINT</div>
+            <div class="card-abbr">Recon</div>
+          </div>
+        </div>
+        <div class="card-desc">Surface forgotten files, login portals, error pages, and leaked credentials with search-engine operators.</div>
+        <div class="card-footer"><span class="sev sev-info">Info</span></div>
       </a>
 
       <a class="vuln-card" href="vulns/idor.html" data-search="idor insecure direct object reference access control privilege escalation" style="--card-accent:#ffb86c">
