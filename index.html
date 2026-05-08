@@ -222,6 +222,7 @@
         <a class="vuln-pill" href="vulns/csrf.html"><svg class="icon" aria-hidden="true"><use href="#icon-repeat"/></svg>CSRF<span class="pill-sev sev-high">High</span></a>
         <a class="vuln-pill" href="vulns/oauth.html"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg>OAuth<span class="pill-sev sev-critical">Critical</span></a>
         <a class="vuln-pill" href="vulns/supply-chain.html"><svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg>Supply-Chain<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/cloud-native.html"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg>Cloud-Native<span class="pill-sev sev-critical">Critical</span></a>
       </div>
     </div>
   </section>
@@ -637,6 +638,18 @@
         </div>
         <div class="card-desc">Trick users into clicking hidden elements by overlaying a transparent iframe over a decoy UI.</div>
         <div class="card-footer"><span class="sev sev-medium">Medium</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/cloud-native.html" data-search="cloud aws gcp azure k8s kubernetes imds iam privilege escalation s3 docker etcd kubelet lambda serverless metadata" style="--card-accent:#f85149">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg></div>
+          <div>
+            <div class="card-name">Cloud-Native Pentesting</div>
+            <div class="card-abbr">Cloud</div>
+          </div>
+        </div>
+        <div class="card-desc">IMDS abuse, IAM privilege escalation, public buckets, Docker/K8s exposed APIs, Lambda secret leakage.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span></div>
       </a>
 
       <a class="vuln-card" href="vulns/xxe.html" data-search="xxe xml external entity injection file read ssrf" style="--card-accent:#ffb86c">
