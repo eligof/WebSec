@@ -257,12 +257,28 @@
     }
   })();
 
-  // Dork run-button click handlers.
-  // The visible <code> text in each dork is substituted by domain-bar.js
-  // (its TARGET_PATTERN matches bare example.com in CLI/operator contexts).
-  // For the launched URL we read data-query (the original, pre-substitution
-  // dork) so we don't depend on what's currently in the DOM.
+  // Source of truth: each dork-row's visible <code> is filled from the
+  // sibling button's data-query, so the rendered text and the launched
+  // query never drift. This runs BEFORE domain-bar.js's first apply pass
+  // so the substitution snapshot captures the data-query value as the
+  // true original.
+  document.querySelectorAll('.dork-row').forEach(function(row){
+    var btn = row.querySelector('.dork-run-btn');
+    var code = row.querySelector('pre.snippet code');
+    if (btn && code) {
+      code.textContent = btn.getAttribute('data-query') || code.textContent;
+    }
+  });
+
+  // Dork run-button click handlers + per-dork aria-label so screen-reader
+  // users navigating the button list hear the actual dork rather than
+  // 27 identical "Run on Google" labels. The visible <code> text is
+  // substituted by domain-bar.js (its TARGET_PATTERN matches bare
+  // example.com in CLI/operator contexts). For the launched URL we read
+  // data-query (the original, pre-substitution dork) so we don't depend
+  // on what's currently in the DOM.
   document.querySelectorAll('.dork-run-btn').forEach(function(btn){
+    btn.setAttribute('aria-label', 'Run dork: ' + btn.getAttribute('data-query') + ' on Google');
     btn.addEventListener('click', function(){
       var target = localStorage.getItem('shared.target') || '';
       if (!target) return; // disabled-styled by domain-bar.js when no target
