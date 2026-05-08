@@ -110,7 +110,7 @@
     </div>
 
     <div class="day-actions">
-      <button id="btn-save" class="report-toolbar primary" type="button" style="background:var(--accent);color:#fff;border-color:var(--accent)">💾 Save finding</button>
+      <button id="btn-save" class="primary" type="button">💾 Save finding</button>
       <button id="btn-cancel" type="button">Cancel</button>
       <button id="btn-delete" class="danger" type="button" style="margin-left:auto">↺ Delete this finding</button>
     </div>
@@ -156,7 +156,7 @@
           </div>
         </div>
         <div class="finding-card-actions">
-          <button data-edit="${f.id}">Edit</button>
+          <button type="button" data-edit="${f.id}">Edit</button>
         </div>
       </div>
     `).join('');
@@ -211,6 +211,12 @@
     current.evidence    = document.getElementById('f-evidence').value;
     current.remediation = document.getElementById('f-remediation').value;
     current.references  = document.getElementById('f-references').value;
+    if (cvssWidget) {
+      const r = Report.computeCvss(cvssWidget.getState());
+      current.cvssVector = r.vector;
+      current.cvssScore  = r.score;
+      current.severity   = r.severity;
+    }
     Report.upsertFinding(current);
     renderList();
     document.getElementById('editor').style.display = 'none';

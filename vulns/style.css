@@ -919,6 +919,10 @@ pre.snippet .snippet-label {
 .day-actions button:hover { border-color: var(--accent); }
 .day-actions button.danger { color: var(--danger); }
 .day-actions button.danger:hover { border-color: var(--danger); }
+.day-actions button.primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.day-actions button.primary:hover { background: var(--accent2); border-color: var(--accent2); color: var(--bg); }
 
 @media (max-width: 600px) {
   .hero-wrap { padding: 2rem 1.25rem 1rem; }
