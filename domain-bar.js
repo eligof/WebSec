@@ -14,16 +14,23 @@
   'use strict';
 
   const STORAGE_KEY = 'shared.target';
-  // Match `example.com` in any context EXCEPT:
+  // Match the canonical "system-under-test" placeholders the snippets use:
+  // example.com, target.com, victim.com, myapp.com, legitimate.com.
+  // Skips:
   //   - emails (lookbehind `@`):           attacker@example.com
-  //   - chained subdomain (lookahead `.`): https://example.com.attacker.com
-  //   - word-boundary cases:               myexample.com, example.commerce, pre-example.com
-  // Substitutes prefixed forms like `FUZZ.example.com`, `mail.example.com`,
-  // `*.example.com` — the user's target replaces the apex-and-tld, prefix kept.
-  // Also catches URL contexts (https://example.com/...), CLI contexts
-  // (subfinder -d example.com, waybackurls example.com), and search operators
-  // (site:example.com, cache:example.com).
-  const TARGET_PATTERN = /(?<![@\w-])example\.com(?![.\w-])/g;
+  //   - chained subdomain (lookahead `.`): https://target.com.attacker.com,
+  //                                         https://victim.com.evil.com
+  //   - word-boundary cases:               myexample.com, target.commerce,
+  //                                         pre-example.com, nottarget.com
+  // Substitutes prefixed forms like `FUZZ.example.com`, `api.target.com`,
+  // `*.victim.com`, `mail.example.com` — the user's target replaces the
+  // apex+tld, the prefix is preserved.
+  // Catches URL contexts (https://example.com/...), CLI contexts
+  // (subfinder -d target.com, waybackurls example.com), search operators
+  // (site:example.com), and bare host references (Host: FUZZ.example.com).
+  // Attacker placeholders (attacker.com, evil.com, phishing.com) are
+  // intentionally NOT in the list so attack-flow examples stay readable.
+  const TARGET_PATTERN = /(?<![@\w-])(?:example\.com|target\.com|victim\.com|myapp\.com|legitimate\.com)(?![.\w-])/g;
   const SNIPPET_SELECTOR = 'pre, code, .snippet';
   const originals = new WeakMap();
   let inputEl = null, statusEl = null;
