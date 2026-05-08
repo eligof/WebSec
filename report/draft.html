@@ -96,6 +96,13 @@
 
   // Engagement form
   const FIELDS = ['client', 'scope', 'startDate', 'endDate', 'testers', 'execSummary'];
+  const SEVERITY_SET = new Set(['critical', 'high', 'medium', 'low', 'info', 'none']);
+  function safeSev(s) { return SEVERITY_SET.has(s) ? s : 'info'; }
+  function safeScore(n) {
+    if (n === null || n === undefined || n === '') return '—';
+    const x = Number(n);
+    return Number.isFinite(x) ? x.toFixed(1) : '—';
+  }
   function loadEngagement() {
     const eng = Report.getEngagement();
     // Pull engagement.startDate from the shared worksheet key if not set yet
@@ -120,7 +127,7 @@
   function render() {
     const eng = saveEngagement();
     const findings = Report.getFindings().slice().sort((a, b) => {
-      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4, none: 5 };
       return (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
     });
     const leads = Report.extractDayLeads();
@@ -145,8 +152,8 @@
       findings.forEach((f, i) => {
         html += `<tr>
           <td>${i + 1}</td>
-          <td><span class="severity-pill severity-${f.severity || 'info'}">${f.severity || '?'}</span></td>
-          <td>${f.cvssScore ?? '—'}</td>
+          <td><span class="severity-pill severity-${safeSev(f.severity)}">${safeSev(f.severity)}</span></td>
+          <td>${safeScore(f.cvssScore)}</td>
           <td>${escapeHtml(f.title || '(untitled)')}</td>
           <td>${escapeHtml(f.status || 'open')}</td>
         </tr>`;
@@ -157,8 +164,8 @@
     html += `<h2>Findings</h2>`;
     findings.forEach((f, i) => {
       html += `<h3>${i + 1}. ${escapeHtml(f.title || '(untitled)')}</h3>`;
-      html += `<p><span class="severity-pill severity-${f.severity || 'info'}">${f.severity || '?'}</span>`;
-      html += ` · CVSS ${f.cvssScore ?? '—'} · <code>${escapeHtml(f.cvssVector || '')}</code> · status: ${escapeHtml(f.status || 'open')}</p>`;
+      html += `<p><span class="severity-pill severity-${safeSev(f.severity)}">${safeSev(f.severity)}</span>`;
+      html += ` · CVSS ${safeScore(f.cvssScore)} · <code>${escapeHtml(f.cvssVector || '')}</code> · status: ${escapeHtml(f.status || 'open')}</p>`;
       if (f.description) html += `<p><strong>Description.</strong> ${escapeHtml(f.description).replace(/\n/g, '<br>')}</p>`;
       if (f.impact)      html += `<p><strong>Impact.</strong> ${escapeHtml(f.impact).replace(/\n/g, '<br>')}</p>`;
       if (f.repro)       html += `<p><strong>Reproduction</strong></p><pre>${escapeHtml(f.repro)}</pre>`;
@@ -215,12 +222,25 @@
         if (!confirm('Importing will OVERWRITE current findings, engagement metadata, and day-worksheet state. Continue?')) return;
         if (data.engagement) Report.setEngagement(data.engagement);
         if (Array.isArray(data.findings)) Report.setFindings(data.findings);
-        if (data.worksheets) Object.entries(data.worksheets).forEach(([k, v]) => localStorage.setItem(k, v));
+        if (data.worksheets && typeof data.worksheets === 'object') {
+          Object.entries(data.worksheets).forEach(([k, v]) => {
+            if (typeof k !== 'string') return;
+            if (typeof v !== 'string') return;
+            if (!(k.startsWith('day') || k.startsWith('shared.'))) return;
+            try {
+              localStorage.setItem(k, v);
+            } catch (qe) {
+              console.warn('quota exceeded importing', k, qe);
+            }
+          });
+        }
         loadEngagement();
         render();
         alert('Imported. Worksheet pages will pick up new state on reload.');
       } catch (err) {
         alert('Failed to parse JSON: ' + err.message);
+      } finally {
+        e.target.value = '';
       }
     };
     reader.readAsText(f);
