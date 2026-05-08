@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Report Draft · Web Pentest Playbook</title>
+</head>
+<body>
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../days/day1.html" class="nav-link">Worksheets</a>
+    <a href="index.html" class="nav-link active">Report</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+  <div class="day-page-hero" style="--day-color: var(--accent2)">
+    <div class="day-num">Report · Draft</div>
+    <h1>Report draft</h1>
+    <p>Auto-assembled from your findings (entered via <a href="finding.html">Finding editor</a>) plus working notes pulled from your day worksheets. Edit the engagement metadata below; everything auto-saves. Export Markdown, or use your browser's Print → Save as PDF.</p>
+  </div>
+
+  <!-- Engagement metadata -->
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">1</span>Engagement</h2>
+    <div class="form-group"><label for="e-client">Client</label><input type="text" id="e-client"></div>
+    <div class="form-group"><label for="e-scope">Scope (one URL per line)</label><textarea id="e-scope" class="mono"></textarea></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div><label for="e-startDate">Start date</label><input type="date" id="e-startDate"></div>
+      <div><label for="e-endDate">End date</label><input type="date" id="e-endDate"></div>
+    </div>
+    <div class="form-group"><label for="e-testers">Testers</label><input type="text" id="e-testers" placeholder="Eli G. (lead), Jane S."></div>
+    <div class="form-group"><label for="e-execSummary">Executive summary</label><textarea id="e-execSummary" placeholder="2-4 paragraphs. Risk posture, top concerns, recommended roadmap, retest schedule." style="min-height:140px"></textarea></div>
+  </section>
+
+  <!-- Toolbar -->
+  <div class="report-toolbar">
+    <a href="finding.html" class="btn">+ Add a finding</a>
+    <button id="btn-export-md" class="primary">📄 Export Markdown</button>
+    <button id="btn-print">🖨 Print / Save as PDF</button>
+    <button id="btn-export-json">⬇ Export raw JSON</button>
+    <input type="file" id="import-json" accept=".json" style="display:none">
+    <button id="btn-import-json">⬆ Import JSON</button>
+  </div>
+
+  <!-- Live draft preview -->
+  <section class="report-draft" id="draft">
+    <!-- filled by render() below -->
+  </section>
+
+</div>
+
+<script src="reportform.js"></script>
+<script>
+  // Theme toggle
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+
+  // Engagement form
+  const FIELDS = ['client', 'scope', 'startDate', 'endDate', 'testers', 'execSummary'];
+  function loadEngagement() {
+    const eng = Report.getEngagement();
+    // Pull engagement.startDate from the shared worksheet key if not set yet
+    if (!eng.startDate && localStorage.getItem('shared.startDate')) {
+      eng.startDate = localStorage.getItem('shared.startDate');
+    }
+    FIELDS.forEach(k => { document.getElementById('e-' + k).value = eng[k] || ''; });
+    return eng;
+  }
+  function saveEngagement() {
+    const eng = {};
+    FIELDS.forEach(k => { eng[k] = document.getElementById('e-' + k).value; });
+    Report.setEngagement(eng);
+    if (eng.startDate) localStorage.setItem('shared.startDate', eng.startDate);
+    return eng;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function render() {
+    const eng = saveEngagement();
+    const findings = Report.getFindings().slice().sort((a, b) => {
+      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+      return (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
+    });
+    const leads = Report.extractDayLeads();
+
+    let html = '';
+
+    html += `<h2>Pentest Report — ${escapeHtml(eng.client || '[Client]')}</h2>`;
+    if (eng.startDate || eng.endDate) {
+      html += `<p><strong>Engagement window:</strong> ${escapeHtml(eng.startDate || '?')} → ${escapeHtml(eng.endDate || '?')}</p>`;
+    }
+    if (eng.testers) html += `<p><strong>Testers:</strong> ${escapeHtml(eng.testers)}</p>`;
+    if (eng.scope) html += `<p><strong>Scope:</strong></p><pre>${escapeHtml(eng.scope)}</pre>`;
+
+    html += `<h2>Executive Summary</h2>`;
+    html += `<p>${eng.execSummary ? escapeHtml(eng.execSummary).replace(/\n/g, '<br>') : '<em>(Add executive summary above.)</em>'}</p>`;
+
+    html += `<h2>Findings Overview</h2>`;
+    if (!findings.length) {
+      html += '<p><em>No findings recorded yet — open <a href="finding.html">Finding editor</a> to add the first one.</em></p>';
+    } else {
+      html += '<table class="findings-table"><thead><tr><th>#</th><th>Severity</th><th>CVSS</th><th>Title</th><th>Status</th></tr></thead><tbody>';
+      findings.forEach((f, i) => {
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td><span class="severity-pill severity-${f.severity || 'info'}">${f.severity || '?'}</span></td>
+          <td>${f.cvssScore ?? '—'}</td>
+          <td>${escapeHtml(f.title || '(untitled)')}</td>
+          <td>${escapeHtml(f.status || 'open')}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+    }
+
+    html += `<h2>Findings</h2>`;
+    findings.forEach((f, i) => {
+      html += `<h3>${i + 1}. ${escapeHtml(f.title || '(untitled)')}</h3>`;
+      html += `<p><span class="severity-pill severity-${f.severity || 'info'}">${f.severity || '?'}</span>`;
+      html += ` · CVSS ${f.cvssScore ?? '—'} · <code>${escapeHtml(f.cvssVector || '')}</code> · status: ${escapeHtml(f.status || 'open')}</p>`;
+      if (f.description) html += `<p><strong>Description.</strong> ${escapeHtml(f.description).replace(/\n/g, '<br>')}</p>`;
+      if (f.impact)      html += `<p><strong>Impact.</strong> ${escapeHtml(f.impact).replace(/\n/g, '<br>')}</p>`;
+      if (f.repro)       html += `<p><strong>Reproduction</strong></p><pre>${escapeHtml(f.repro)}</pre>`;
+      if (f.evidence)    html += `<p><strong>Evidence</strong></p><pre>${escapeHtml(f.evidence)}</pre>`;
+      if (f.remediation) html += `<p><strong>Remediation.</strong> ${escapeHtml(f.remediation).replace(/\n/g, '<br>')}</p>`;
+      if (f.references)  html += `<p><strong>References</strong></p><pre>${escapeHtml(f.references)}</pre>`;
+    });
+
+    if (leads.length) {
+      html += `<h2>Working notes (from day worksheets)</h2>`;
+      leads.forEach(({ source, text }) => {
+        html += `<h3>${escapeHtml(source)}</h3><pre>${escapeHtml(text)}</pre>`;
+      });
+    }
+
+    document.getElementById('draft').innerHTML = html;
+  }
+
+  // Auto-save on engagement edits + re-render
+  loadEngagement();
+  FIELDS.forEach(k => {
+    document.getElementById('e-' + k).addEventListener('input', render);
+  });
+
+  // Toolbar
+  document.getElementById('btn-export-md').addEventListener('click', () => Report.downloadMarkdown());
+  document.getElementById('btn-print').addEventListener('click', () => window.print());
+  document.getElementById('btn-export-json').addEventListener('click', () => {
+    const dump = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      engagement: Report.getEngagement(),
+      findings: Report.getFindings(),
+      worksheets: Object.fromEntries(
+        Object.keys(localStorage)
+          .filter(k => k.startsWith('day') || k.startsWith('shared.'))
+          .map(k => [k, localStorage.getItem(k)])
+      )
+    };
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pentest-engagement-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('btn-import-json').addEventListener('click', () => document.getElementById('import-json').click());
+  document.getElementById('import-json').addEventListener('change', (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!confirm('Importing will OVERWRITE current findings, engagement metadata, and day-worksheet state. Continue?')) return;
+        if (data.engagement) Report.setEngagement(data.engagement);
+        if (Array.isArray(data.findings)) Report.setFindings(data.findings);
+        if (data.worksheets) Object.entries(data.worksheets).forEach(([k, v]) => localStorage.setItem(k, v));
+        loadEngagement();
+        render();
+        alert('Imported. Worksheet pages will pick up new state on reload.');
+      } catch (err) {
+        alert('Failed to parse JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(f);
+  });
+
+  render();
+</script>
+
+</body>
+</html>
