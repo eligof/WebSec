@@ -11,6 +11,12 @@
   const KEY_FINDINGS  = 'report.findings';
   const KEY_ENGAGEMENT = 'report.engagement';
 
+  /* Sort order for severity-based listings (lower = more critical, displayed first).
+     Single source of truth — consumed by generateMarkdown() and draft.html render(). */
+  const SEVERITY_ORDER = Object.freeze({
+    critical: 0, high: 1, medium: 2, low: 3, info: 4, none: 5
+  });
+
   /* ── Storage helpers ── */
   function loadJSON(key, fallback) {
     try {
@@ -220,8 +226,7 @@
 
     const eng = getEngagement();
     const findings = getFindings().slice().sort((a, b) => {
-      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4, none: 5 };
-      return (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
+      return (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
     });
 
     const lines = [];
@@ -297,6 +302,7 @@
     newId,
     computeCvss, parseVector, createCvssWidget,
     extractDayLeads,
-    generateMarkdown, downloadMarkdown
+    generateMarkdown, downloadMarkdown,
+    SEVERITY_ORDER
   };
 })(window);

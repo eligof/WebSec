@@ -911,12 +911,15 @@ pre.snippet .snippet-label {
 
 /* Action buttons (reset, export) */
 .day-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
-.day-actions button {
+.day-actions button,
+.day-actions a {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 0.45rem 0.85rem; font-size: 0.82rem;
   cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;
 }
-.day-actions button:hover { border-color: var(--accent); }
+.day-actions button:hover,
+.day-actions a:hover { border-color: var(--accent); }
 .day-actions button.danger { color: var(--danger); }
 .day-actions button.danger:hover { border-color: var(--danger); }
 .day-actions button.primary {
