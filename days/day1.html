@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="../vulns/style.css">
   <title>Day 1 Worksheet · Recon + Binary Sweep · Web Pentest Playbook</title>
 </head>
-<body data-day="day1" style="--day-color: var(--accent2)">
+<body data-day="day1" data-day-num="1" style="--day-color: var(--accent2)">
 
 <!-- Sprite (single icon needed) -->
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -48,7 +48,7 @@
 
   <!-- HERO -->
   <div class="day-page-hero">
-    <div class="day-num">Worksheet · Day 1 of 5</div>
+    <div class="day-num">Worksheet · Day 1 of 5 · <span data-day-date class="day-date-display unset">— pick start date below ↓</span></div>
     <h1>
       <span class="day-icon-pill"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg></span>
       Recon + Binary Sweep
@@ -74,6 +74,11 @@
       <input type="text" id="t-window" data-key="text-window" placeholder="2026-05-08 09:00 → 2026-05-12 18:00 UTC">
     </div>
     <div class="form-group">
+      <label for="t-startdate">Engagement start date · Day 1</label>
+      <input type="date" id="t-startdate" data-key="shared.startDate">
+      <p class="form-hint">Sets the calendar date for all 5 worksheet pages. Editable from any day.</p>
+    </div>
+    <div class="form-group">
       <label for="t-oos">Out-of-scope (do NOT test)</label>
       <textarea id="t-oos" data-key="text-oos" placeholder="- Production payment endpoints (/api/v1/charge)&#10;- Third-party domains (e.g. Stripe, Auth0)&#10;- DDoS / brute-force"></textarea>
     </div>
@@ -87,6 +92,25 @@
   <section class="worksheet-section" id="passive">
     <h2><span class="ws-section-num">2</span>Passive Recon</h2>
     <p class="ws-intro">No traffic to the target yet. Pull what's already public.</p>
+    <pre class="snippet"><span class="snippet-label">Subdomain enum pipeline (passive)</span><code>subfinder -d example.com -all -recursive -silent -o /tmp/subs-sub.txt
+amass enum -passive -d example.com -silent -o /tmp/subs-amass.txt
+sort -u /tmp/subs-sub.txt /tmp/subs-amass.txt &gt; subs.txt
+echo "[+] $(wc -l &lt; subs.txt) unique subdomains"</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Wayback / archive URL trawl</span><code>waybackurls example.com | tee wayback.txt | wc -l
+echo example.com | gau --threads 10 --o gau.txt
+sort -u wayback.txt gau.txt &gt; all-urls.txt
+# Filter for interesting endpoints:
+grep -aiE "\.(env|git|sql|bak|config|pem|key)|admin|api|debug" all-urls.txt</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">GitHub dorking (manual queries)</span><code># Run these in github.com search (logged-in account = better results)
+"example.com" "password"
+"example.com" "api_key"
+"example.com" "BEGIN PRIVATE KEY"
+org:example "secret"
+# Or via gh CLI:
+gh search code "example.com password" --limit 50</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-passive-subfinder"><span class="task-label">Run <code>subfinder -d &lt;root&gt; -all -recursive</code> for subdomain enumeration</span></li>
       <li><input type="checkbox" data-key="check-passive-amass"><span class="task-label">Run <code>amass enum -passive -d &lt;root&gt;</code> and merge with subfinder output</span></li>
@@ -106,6 +130,29 @@
   <section class="worksheet-section" id="active">
     <h2><span class="ws-section-num">3</span>Active Recon</h2>
     <p class="ws-intro">Now we touch the target. Identify live hosts, enumerate paths, fingerprint the stack.</p>
+    <pre class="snippet"><span class="snippet-label">Live host probing + tech detection</span><code>cat subs.txt | httpx -title -tech-detect -status-code -ip -threads 50 \
+  -o live.txt
+# View only 200/302 responses with title:
+httpx -l subs.txt -mc 200,301,302 -title -web-server -tech-detect</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">TLS analysis (testssl.sh)</span><code>testssl.sh --quiet --color 0 --severity HIGH https://example.com \
+  | tee testssl.log
+# Bulk over the live host list:
+while read host; do testssl.sh --quiet --severity HIGH "$host"; done &lt; live.txt</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Path fuzzing (recursive, depth 3)</span><code>feroxbuster -u https://example.com \
+  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \
+  -x php,html,json,asp,aspx,bak,old \
+  -r -d 3 -t 50 -o ferox.txt</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Vhost enumeration</span><code>ffuf -u https://example.com -H "Host: FUZZ.example.com" \
+  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt \
+  -fs 1234   # filter by size of the default 404 response</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Targeted port scan</span><code>nmap -sV -sC -Pn -p 80,443,8080,8443,8000,8888,3000,5000,9000 \
+  --script "default,http-enum,http-headers,http-title" \
+  -oA nmap-quick example.com</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-active-httpx"><span class="task-label">Probe live hosts: <code>cat subs.txt | httpx -title -tech-detect -status-code -ip</code></span></li>
       <li><input type="checkbox" data-key="check-active-tls"><span class="task-label">TLS analysis with <code>testssl.sh</code> on every live host (cert chain, weak ciphers, expiry, HSTS)</span></li>
@@ -121,6 +168,32 @@
   <section class="worksheet-section" id="quickwins">
     <h2><span class="ws-section-num">4</span>Quick Wins / Binary Sweep</h2>
     <p class="ws-intro">Five-minute checks that sometimes reveal critical findings on their own.</p>
+    <pre class="snippet"><span class="snippet-label">Five-minute binary sweep (curl batch)</span><code>TARGET=https://example.com
+for path in /robots.txt /sitemap.xml /sitemap_index.xml \
+            /.git/config /.git/HEAD /.env /.env.local \
+            /.well-known/security.txt /admin /wp-admin \
+            /phpmyadmin /server-status /server-info \
+            /.DS_Store /backup.zip /backup.tar.gz; do
+  code=$(curl -sk -o /dev/null -w "%{http_code}" "$TARGET$path")
+  [ "$code" != "404" ] &amp;&amp; echo "$code  $TARGET$path"
+done</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Dump exposed .git repo</span><code># Only if /.git/config returned 200:
+git-dumper https://example.com/.git ./dumped-repo
+cd dumped-repo &amp;&amp; git log --all --oneline
+git show HEAD:config-dev.json    # or whatever interesting blobs you find</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">JS source-map enumeration</span><code># Find map files referenced in JS bundles:
+curl -s https://example.com | grep -oE 'src="[^"]+\.js"' | \
+  sed 's/src="//; s/"$//' | while read js; do
+  url="https://example.com/$js.map"
+  curl -sk -o /dev/null -w "%{http_code}  $url
+" "$url" | grep "^200"
+done</code></pre>
+
+    <pre class="snippet"><span class="snippet-label">Security headers audit</span><code>curl -skI https://example.com | grep -iE "^(server|x-|content-security|strict|referrer|cross-origin|permissions)"
+# Or use SecurityHeaders.com / mozilla observatory</code></pre>
+
     <ul class="task-list">
       <li><input type="checkbox" data-key="check-qw-robots"><span class="task-label">Fetch <code>/robots.txt</code> — note disallowed paths (often interesting)</span></li>
       <li><input type="checkbox" data-key="check-qw-sitemap"><span class="task-label">Fetch <code>/sitemap.xml</code> and <code>/sitemap_index.xml</code></span></li>
