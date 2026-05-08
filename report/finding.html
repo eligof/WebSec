@@ -248,6 +248,27 @@
   });
 
   renderList();
+
+  // Pick up a finding draft handed over from another page (e.g. the dorks
+  // page's "+ Save as finding" button). The handoff stashes a draft object
+  // at localStorage['report.findingDraft'] and navigates here with ?draft=1.
+  (function(){
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('draft') !== '1') return;
+    const raw = localStorage.getItem('report.findingDraft');
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw);
+      localStorage.removeItem('report.findingDraft');
+      // Set `current` directly; openEditor preserves a non-null current
+      // (lines 187-189) and uses it instead of synthesizing a fresh one.
+      current = draft;
+      openEditor(null);
+    } catch (e) {
+      console.warn('Failed to parse finding draft', e);
+      localStorage.removeItem('report.findingDraft');
+    }
+  })();
 </script>
 
 </body>

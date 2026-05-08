@@ -262,11 +262,46 @@
   // query never drift. This runs BEFORE domain-bar.js's first apply pass
   // so the substitution snapshot captures the data-query value as the
   // true original.
+  // Also adds a "+ Save as finding" button per row that pre-fills the
+  // reporting layer's finding editor with the dork as evidence.
   document.querySelectorAll('.dork-row').forEach(function(row){
     var btn = row.querySelector('.dork-run-btn');
     var code = row.querySelector('pre.snippet code');
     if (btn && code) {
       code.textContent = btn.getAttribute('data-query') || code.textContent;
+    }
+    if (btn && !row.querySelector('.dork-save-btn')) {
+      var saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'dork-save-btn';
+      saveBtn.textContent = '+ Save as finding';
+      saveBtn.title = 'Open the Finding editor pre-filled with this dork';
+      saveBtn.addEventListener('click', function(){
+        var dork = btn.getAttribute('data-query') || '';
+        var target = localStorage.getItem('shared.target') || '';
+        var substituted = target ? dork.replace(/example\.com/g, target) : dork;
+        var draft = {
+          id: 'f-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+          title: 'Information disclosure via Google dork: ' + substituted.slice(0, 80),
+          severity: 'info',
+          status: 'open',
+          description: 'Surfaced via Google dorking. Verify each hit before reporting.',
+          repro: '1. Open Google.\n2. Run query: ' + substituted + '\n3. Review results for in-scope leaks.',
+          evidence: 'Dork: ' + substituted,
+          remediation: 'Review the indexed content. If sensitive, request Google removal via Search Console and remove the underlying file/page.',
+          references: 'OWASP A05:2021\nhttps://www.exploit-db.com/google-hacking-database',
+          cvssVector: '',
+          cvssScore: 0
+        };
+        try {
+          localStorage.setItem('report.findingDraft', JSON.stringify(draft));
+        } catch (e) {
+          alert('Could not save draft: ' + e.message);
+          return;
+        }
+        window.location.href = '../report/finding.html?draft=1';
+      });
+      btn.parentNode.insertBefore(saveBtn, btn.nextSibling);
     }
   });
 

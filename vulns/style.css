@@ -1188,6 +1188,20 @@ pre.snippet .snippet-label {
 }
 .dork-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* "+ Save as finding" button on the dorks page (cross-feature with reporting) */
+.dork-save-btn {
+  align-self: flex-start;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: 6px;
+  padding: 0.4rem 0.85rem; font-size: 0.78rem;
+  font-family: var(--font); cursor: pointer;
+  margin-left: 0.5rem;
+  transition: all 0.15s;
+}
+.dork-save-btn:hover {
+  border-color: var(--accent); color: var(--accent);
+}
+
 /* ── Engagement setup banner + dynamic day sections ── */
 .engagement-banner {
   margin: 1rem 1.5rem; padding: 0.85rem 1.2rem;
