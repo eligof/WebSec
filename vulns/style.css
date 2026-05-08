@@ -1182,3 +1182,34 @@ pre.snippet .snippet-label {
   border-color: var(--accent); color: var(--accent);
 }
 .dork-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Engagement setup banner + dynamic day sections ── */
+.engagement-banner {
+  margin: 1rem 1.5rem; padding: 0.85rem 1.2rem;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 8px; display: flex; align-items: center; gap: 0.85rem;
+  font-size: 0.88rem; color: var(--text);
+}
+.engagement-banner .eb-icon { font-size: 1.1rem; }
+.engagement-banner .eb-msg { flex: 1; }
+.engagement-banner a {
+  color: var(--accent); text-decoration: none; font-weight: 600;
+  white-space: nowrap;
+}
+.engagement-banner a:hover { text-decoration: underline; }
+
+/* Hide day-sections beyond engagement.dayCount */
+.day-section[data-day-num][hidden] { display: none !important; }
+
+/* Today's day — subtle accent on the section */
+.day-section[data-day-num].is-today {
+  border-color: var(--accent) !important;
+}
+.day-section[data-day-num].is-today::after {
+  content: '← today';
+  position: absolute; top: 0.6rem; right: 0.8rem;
+  background: var(--accent); color: var(--bg);
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem; border-radius: 999px; text-transform: uppercase;
+}

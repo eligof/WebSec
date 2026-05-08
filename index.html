@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="vulns/style.css">
   <title>Web App Pentesting Playbook</title>
   <script src="domain-bar.js" defer></script>
+  <script src="engagement.js" defer></script>
 </head>
 <body>
 
@@ -151,7 +152,7 @@
   </div>
 
   <!-- DAY 1 -->
-  <section id="day1" class="day-section" style="--day-color: var(--accent2)">
+  <section id="day1" class="day-section" data-day-num="1" style="position:relative;--day-color: var(--accent2)">
     <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg> Day 1</div><a class="worksheet-link" href="days/day1.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Recon Worksheet →</a></div>
     <h2>Recon + Binary Sweep</h2>
     <div class="section-content">
@@ -179,7 +180,7 @@
   </section>
 
   <!-- DAY 2 -->
-  <section id="day2" class="day-section" style="--day-color: var(--warn)">
+  <section id="day2" class="day-section" data-day-num="2" style="position:relative;--day-color: var(--warn)">
     <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg> Day 2</div><a class="worksheet-link" href="days/day2.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Auth Worksheet →</a></div>
     <h2>Auth &amp; Authorization + Input Probes</h2>
     <div class="section-content">
@@ -224,7 +225,7 @@
   </section>
 
   <!-- DAY 3 -->
-  <section id="day3" class="day-section" style="--day-color: var(--purple)">
+  <section id="day3" class="day-section" data-day-num="3" style="position:relative;--day-color: var(--purple)">
     <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg> Day 3</div><a class="worksheet-link" href="days/day3.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open File / Client Worksheet →</a></div>
     <h2>File Handling + Client-Side Checks</h2>
     <div class="section-content">
@@ -260,7 +261,7 @@
   </section>
 
   <!-- DAY 4 -->
-  <section id="day4" class="day-section" style="--day-color: var(--danger)">
+  <section id="day4" class="day-section" data-day-num="4" style="position:relative;--day-color: var(--danger)">
     <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg> Day 4</div><a class="worksheet-link" href="days/day4.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Server-Side Worksheet →</a></div>
     <h2>Server-Side Deep Dive</h2>
     <div class="section-content">
@@ -302,7 +303,7 @@
   </section>
 
   <!-- DAY 5 -->
-  <section id="day5" class="day-section" style="--day-color: var(--accent)">
+  <section id="day5" class="day-section" data-day-num="5" style="position:relative;--day-color: var(--accent)">
     <div class="day-badge-row"><div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg> Day 5</div><a class="worksheet-link" href="days/day5.html"><svg class="icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>Open Client + Close Worksheet →</a></div>
     <h2>Client-Side Deep + Close Gaps</h2>
     <div class="section-content">
@@ -706,6 +707,33 @@ searchInput.addEventListener('input', () => {
     });
   }
 })();
+</script>
+
+<script>
+  // Engagement-driven UI: setup banner if not configured;
+  // hide day-sections beyond dayCount; highlight today's day.
+  (function(){
+    if (typeof Engagement !== 'object') return; // engagement.js failed to load
+    var n = Engagement.getDayCount();
+    var today = Engagement.getDayIndexToday();
+    document.querySelectorAll('.day-section[data-day-num]').forEach(function(sec){
+      var num = parseInt(sec.getAttribute('data-day-num'), 10);
+      if (num > n) {
+        sec.hidden = true;
+      } else {
+        sec.hidden = false;
+        if (num === today) sec.classList.add('is-today');
+      }
+    });
+    // Banner: prompt setup if not yet done
+    if (!Engagement.setupComplete()) {
+      var contentWrap = document.querySelector('.content-wrap') || document.body;
+      var banner = document.createElement('div');
+      banner.className = 'engagement-banner';
+      banner.innerHTML = '<span class="eb-icon">🎯</span><span class="eb-msg">Setting up an engagement? Configure client, target, and day count once at <a href="setup.html">Set up engagement →</a></span>';
+      contentWrap.insertBefore(banner, contentWrap.firstChild);
+    }
+  })();
 </script>
 
 </body>
