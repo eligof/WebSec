@@ -712,7 +712,10 @@ searchInput.addEventListener('input', () => {
 <script>
   // Engagement-driven UI: setup banner if not configured;
   // hide day-sections beyond dayCount; highlight today's day.
-  (function(){
+  // Wrapped in DOMContentLoaded because engagement.js is `defer` in <head>;
+  // deferred scripts run after parse but BEFORE DOMContentLoaded, so this
+  // listener is the first place where `Engagement` is guaranteed defined.
+  document.addEventListener('DOMContentLoaded', function(){
     if (typeof Engagement !== 'object') return; // engagement.js failed to load
     var n = Engagement.getDayCount();
     var today = Engagement.getDayIndexToday();
@@ -733,7 +736,7 @@ searchInput.addEventListener('input', () => {
       banner.innerHTML = '<span class="eb-icon">🎯</span><span class="eb-msg">Setting up an engagement? Configure client, target, and day count once at <a href="setup.html">Set up engagement →</a></span>';
       contentWrap.insertBefore(banner, contentWrap.firstChild);
     }
-  })();
+  });
 </script>
 
 </body>
