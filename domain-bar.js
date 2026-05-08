@@ -151,6 +151,19 @@
     applyAll(v);
   }
 
+  function onKeydown(e) {
+    // `/` focuses the bar input — but only if the user isn't already in an
+    // input/textarea/contenteditable, and no modifiers are held.
+    if (e.key !== '/') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    if (!inputEl) return;
+    e.preventDefault();
+    inputEl.focus();
+    inputEl.select();
+  }
+
   function watchDynamic() {
     if (typeof MutationObserver !== 'function') return;
     const obs = new MutationObserver(mutations => {
@@ -182,6 +195,7 @@
       resetBtn.addEventListener('click', onReset);
     }
     window.addEventListener('storage', onStorage);
+    document.addEventListener('keydown', onKeydown);
     applyAll(getTarget());
     watchDynamic();
   }
