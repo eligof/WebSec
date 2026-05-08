@@ -77,8 +77,21 @@
 
   function updateStatus(target) {
     if (!statusEl) return;
-    statusEl.textContent = target ? '✓ Substituting' : '○ Inactive';
-    statusEl.className = 'domain-bar-status ' + (target ? 'active' : 'inactive');
+    if (!target) {
+      statusEl.textContent = '○ Inactive';
+      statusEl.className = 'domain-bar-status inactive';
+      statusEl.title = '';
+      return;
+    }
+    if (!isLikelyHostname(target)) {
+      statusEl.textContent = '⚠ Check input';
+      statusEl.className = 'domain-bar-status warn';
+      statusEl.title = "Doesn't look like a hostname (e.g. acme.com, target.acme.com, 10.0.0.1, acme.com:8080). Substitution still runs.";
+      return;
+    }
+    statusEl.textContent = '✓ Substituting';
+    statusEl.className = 'domain-bar-status active';
+    statusEl.title = '';
   }
 
   function updateRunButtons(target) {
@@ -92,8 +105,18 @@
   }
 
   function normalizeTarget(raw) {
-    // Strip protocol prefix and trailing slashes if user pastes a full URL.
-    return String(raw || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    return String(raw || '')
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/+$/, '')
+      .replace(/[\s"'<>\\`]/g, '');  // strip whitespace, quotes, angles, backslash, backtick
+  }
+
+  // RFC 1123 hostname shape (relaxed): labels of letters/digits/hyphens, dot-separated.
+  // Allows ports (:8080) and IPv4. Rejects spaces, quotes, slashes (already stripped above).
+  const HOSTNAME_RE = /^([a-z0-9-]+(?:\.[a-z0-9-]+)+|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?$/i;
+  function isLikelyHostname(s) {
+    return !!s && HOSTNAME_RE.test(s);
   }
 
   function onInput() {
