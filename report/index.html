@@ -41,8 +41,8 @@
   </div>
 </nav>
 <div class="domain-bar" role="region" aria-label="Target domain bar">
-  <span class="domain-bar-label">🎯 Target</span>
-  <input type="text" id="db-target" placeholder="target.example.com"
+  <span class="domain-bar-label">🎯 Target</span><button type="button" class="bar-help-btn" title="Substitutes example.com / target.com / victim.com / myapp.com / legitimate.com (and prefixed forms like FUZZ.example.com) with your target. Skips emails, attacker domains, and chained subdomains." aria-label="What does this substitute?">?</button>
+  <input type="text" id="db-target" placeholder="acme.com or target.acme.com"
          maxlength="253" autocomplete="off" inputmode="url"
          aria-label="Target domain">
   <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>

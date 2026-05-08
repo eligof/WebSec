@@ -1218,3 +1218,20 @@ pre.snippet .snippet-label {
   font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em;
   padding: 0.15rem 0.5rem; border-radius: 999px; text-transform: uppercase;
 }
+
+/* Domain bar: help button (delivers tooltip via browser title=) */
+.bar-help-btn {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  width: 1.4rem; height: 1.4rem;
+  border-radius: 999px;
+  font-size: 0.78rem; line-height: 1;
+  padding: 0 !important;
+  cursor: help;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.bar-help-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
