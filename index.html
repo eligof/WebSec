@@ -221,6 +221,7 @@
         <a class="vuln-pill" href="vulns/jwt.html"><svg class="icon" aria-hidden="true"><use href="#icon-ticket"/></svg>JWT Attacks<span class="pill-sev sev-critical">Critical</span></a>
         <a class="vuln-pill" href="vulns/csrf.html"><svg class="icon" aria-hidden="true"><use href="#icon-repeat"/></svg>CSRF<span class="pill-sev sev-high">High</span></a>
         <a class="vuln-pill" href="vulns/oauth.html"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg>OAuth<span class="pill-sev sev-critical">Critical</span></a>
+        <a class="vuln-pill" href="vulns/supply-chain.html"><svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg>Supply-Chain<span class="pill-sev sev-critical">Critical</span></a>
       </div>
     </div>
   </section>
@@ -552,6 +553,18 @@
         </div>
         <div class="card-desc">Inject template syntax into server-rendered templates to execute arbitrary code.</div>
         <div class="card-footer"><span class="sev sev-critical">Critical</span><span class="tag-bscp">BSCP</span></div>
+      </a>
+
+      <a class="vuln-card" href="vulns/supply-chain.html" data-search="supply chain typosquat dependency confusion postinstall npm pypi github actions ci sbom sigstore cosign provenance" style="--card-accent:#f85149">
+        <div class="card-header">
+          <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg></div>
+          <div>
+            <div class="card-name">Supply-Chain Attacks</div>
+            <div class="card-abbr">SBOM</div>
+          </div>
+        </div>
+        <div class="card-desc">Typosquats, dependency confusion, postinstall script abuse, compromised maintainers, CI poisoning.</div>
+        <div class="card-footer"><span class="sev sev-critical">Critical</span></div>
       </a>
 
       <a class="vuln-card" href="vulns/websocket.html" data-search="websocket cswsh cross site hijacking xss injection ws wss" style="--card-accent:#ffb86c">
