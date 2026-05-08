@@ -989,25 +989,25 @@ pre.snippet .snippet-label {
 .severity-pill.severity-info     { background: var(--surface);         color: var(--text-muted);      border-color: var(--border); }
 
 /* Finding card (in list views) */
-.finding-card {
+.report-finding-card {
   background: var(--surface); border: 1px solid var(--border);
   border-left: 3px solid var(--card-accent, var(--accent));
   border-radius: 8px; padding: 1rem 1.2rem;
   margin-bottom: 0.8rem;
   display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem;
 }
-.finding-card .finding-card-title { font-weight: 700; color: var(--text); }
-.finding-card .finding-card-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
-.finding-card .finding-card-actions { display: flex; gap: 0.4rem; align-self: flex-start; }
-.finding-card .finding-card-actions button,
-.finding-card .finding-card-actions a {
+.report-finding-card .finding-card-title { font-weight: 700; color: var(--text); }
+.report-finding-card .finding-card-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+.report-finding-card .finding-card-actions { display: flex; gap: 0.4rem; align-self: flex-start; }
+.report-finding-card .finding-card-actions button,
+.report-finding-card .finding-card-actions a {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted);
   border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem;
   cursor: pointer; text-decoration: none;
 }
-.finding-card .finding-card-actions button:hover,
-.finding-card .finding-card-actions a:hover { color: var(--text); border-color: var(--accent); }
-.finding-card .finding-card-actions button.danger { color: var(--danger); }
+.report-finding-card .finding-card-actions button:hover,
+.report-finding-card .finding-card-actions a:hover { color: var(--text); border-color: var(--accent); }
+.report-finding-card .finding-card-actions button.danger { color: var(--danger); }
 
 /* CVSS calculator widget */
 .cvss-widget {
@@ -1026,6 +1026,11 @@ pre.snippet .snippet-label {
   width: 100%; background: var(--surface); border: 1px solid var(--border);
   color: var(--text); border-radius: 4px; padding: 0.4rem 0.5rem;
   font-family: var(--font); font-size: 0.85rem;
+}
+.cvss-widget select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .cvss-widget .cvss-score {
   display: flex; align-items: center; gap: 0.6rem;
@@ -1068,7 +1073,7 @@ pre.snippet .snippet-label {
 .report-toolbar .primary {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
-.report-toolbar .primary:hover { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+.report-toolbar .primary:hover { background: var(--accent2); border-color: var(--accent2); color: var(--bg); }
 
 /* Empty state */
 .empty-state {
@@ -1080,17 +1085,18 @@ pre.snippet .snippet-label {
 
 /* Print stylesheet — for window.print() PDF export */
 @media print {
-  body { background: #fff !important; color: #000 !important; font-family: 'Inter', sans-serif; }
+  body { background: #fff !important; color: #000 !important; font-family: var(--font); }
   .topnav, .home-footer, .day-page-hero, .report-toolbar,
   nav.day-nav-buttons, .day-actions, .finding-card-actions,
-  button { display: none !important; }
+  .report-finding-card .finding-card-actions,
+  .snippet-copy-btn, .copy-btn, .theme-toggle, .hamburger { display: none !important; }
   .report-draft { border: 0 !important; padding: 0 !important; background: #fff !important; }
   .report-draft h2 { border-color: #000 !important; }
   .severity-pill { border: 1px solid #000 !important; }
-  pre, code { font-family: 'JetBrains Mono', monospace; color: #000 !important; }
+  pre, code { font-family: var(--mono); color: #000 !important; }
   pre { border: 1px solid #999; padding: 0.5rem; page-break-inside: avoid; }
   .findings-table { font-size: 11px; page-break-inside: avoid; }
-  .finding-card { page-break-inside: avoid; border: 1px solid #999 !important; background: #fff !important; }
+  .report-finding-card { page-break-inside: avoid; border: 1px solid #999 !important; background: #fff !important; }
   a { color: #000 !important; text-decoration: underline; }
   /* Show URLs after each external link */
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; }
