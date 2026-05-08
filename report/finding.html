@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style id="cj-guard">html{display:none!important}</style>
+  <script>(function(){if(self===top){var s=document.getElementById('cj-guard');if(s)s.parentNode.removeChild(s);}else{try{top.location.href=self.location.href;}catch(e){}}})();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff6633' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vulns/style.css">
+  <title>Finding · Report · Web Pentest Playbook</title>
+</head>
+<body>
+
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  </defs>
+</svg>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="nav-logo">
+    <a href="../index.html" class="logo-link">
+      <div class="logo-icon"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg></div>
+      <span class="logo-text">Web Pentest</span>
+      <span class="logo-tag">v2026</span>
+    </a>
+  </div>
+  <div class="nav-center">
+    <a href="../index.html" class="nav-link">Home</a>
+    <a href="../index.html#vulns" class="nav-link">Vulnerabilities</a>
+    <a href="../web-pentest-playbook.html" class="nav-link">Playbook</a>
+    <a href="../days/day1.html" class="nav-link">Worksheets</a>
+    <a href="index.html" class="nav-link active">Report</a>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/eligof/WebSec" target="_blank" rel="noopener noreferrer" class="nav-link" style="font-size:0.78rem;">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">☀ Light</button>
+  </div>
+</nav>
+
+<div class="content-wrap" style="padding-top:2rem">
+  <div class="day-page-hero" style="--day-color: var(--accent)">
+    <div class="day-num">Report · Finding editor</div>
+    <h1>New / edit finding</h1>
+    <p>Fill in the fields below — they auto-save. Use the CVSS widget to compute the vector and score. Click <strong>Save finding</strong> when done; it'll appear in the report draft.</p>
+  </div>
+
+  <section class="worksheet-section">
+    <h2><span class="ws-section-num">1</span>Existing findings</h2>
+    <p class="ws-intro">Click one to edit; <strong>+ New</strong> below to add another.</p>
+    <div id="finding-list"></div>
+    <div class="report-toolbar" style="margin-top:1rem">
+      <button id="btn-new" class="primary">+ New finding</button>
+      <a href="draft.html" class="btn">Open report draft →</a>
+    </div>
+  </section>
+
+  <section class="worksheet-section" id="editor" style="display:none">
+    <h2><span class="ws-section-num">2</span>Editor</h2>
+
+    <div class="form-group">
+      <label for="f-title">Title</label>
+      <input type="text" id="f-title" placeholder="SQL Injection at /search?q=">
+    </div>
+
+    <div class="form-group">
+      <label for="f-status">Status</label>
+      <select id="f-status">
+        <option value="open">open</option>
+        <option value="retest-pending">retest-pending</option>
+        <option value="fixed">fixed</option>
+        <option value="accepted">accepted (risk acknowledged)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>CVSS 3.1 — base score</label>
+      <div id="cvss-host"></div>
+    </div>
+
+    <div class="form-group">
+      <label for="f-description">Description</label>
+      <textarea id="f-description" placeholder="What's broken, in plain English. 2-4 sentences."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="f-impact">Impact</label>
+      <textarea id="f-impact" placeholder="What an attacker can actually achieve. Be concrete."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="f-repro">Reproduction steps</label>
+      <textarea id="f-repro" class="mono" placeholder="1. Send POST /search with q='...&#10;2. Observe HTTP 500 with MySQL error&#10;3. Replace with UNION SELECT..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="f-evidence">Evidence (request / response)</label>
+      <textarea id="f-evidence" class="mono" placeholder="GET /search?q=' HTTP/1.1&#10;Host: target.example.com&#10;...&#10;&#10;HTTP/1.1 500 Internal Server Error&#10;..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="f-remediation">Remediation</label>
+      <textarea id="f-remediation" placeholder="Use parameterized queries / prepared statements. Apply input validation as defense-in-depth."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="f-references">References (one per line)</label>
+      <textarea id="f-references" placeholder="OWASP A03:2021&#10;CWE-89&#10;https://portswigger.net/web-security/sql-injection"></textarea>
+    </div>
+
+    <div class="day-actions">
+      <button id="btn-save" class="report-toolbar primary" type="button" style="background:var(--accent);color:#fff;border-color:var(--accent)">💾 Save finding</button>
+      <button id="btn-cancel" type="button">Cancel</button>
+      <button id="btn-delete" class="danger" type="button" style="margin-left:auto">↺ Delete this finding</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="reportform.js"></script>
+<script>
+  (function(){
+    var t = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = document.getElementById('theme-toggle');
+    if(btn){
+      btn.textContent = t === 'dark' ? '☀ Light' : '🌙 Dark';
+      btn.addEventListener('click', function(){
+        var n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        btn.textContent = n === 'dark' ? '☀ Light' : '🌙 Dark';
+      });
+    }
+  })();
+
+  // ── Finding editor wiring ──
+  let current = null;
+  let cvssWidget = null;
+
+  function renderList() {
+    const host = document.getElementById('finding-list');
+    const findings = Report.getFindings();
+    if (!findings.length) {
+      host.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div>No findings yet — click <strong>+ New finding</strong> to add the first one.</div>';
+      return;
+    }
+    host.innerHTML = findings.map(f => `
+      <div class="report-finding-card" style="--card-accent: var(--sev-${f.severity || 'info'}-fg, var(--accent))">
+        <div>
+          <div class="finding-card-title">${escapeHtml(f.title || '(untitled)')}</div>
+          <div class="finding-card-meta">
+            <span class="severity-pill severity-${f.severity || 'info'}">${f.severity || 'unset'}</span>
+            CVSS ${f.cvssScore ?? '—'} · ${f.status || 'open'}
+          </div>
+        </div>
+        <div class="finding-card-actions">
+          <button data-edit="${f.id}">Edit</button>
+        </div>
+      </div>
+    `).join('');
+    host.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openEditor(btn.dataset.edit));
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function openEditor(id) {
+    const editor = document.getElementById('editor');
+    editor.style.display = '';
+    if (id) {
+      current = Report.getFindings().find(f => f.id === id) || null;
+    }
+    if (!current) {
+      current = { id: Report.newId(), title: '', severity: 'info', cvssVector: '', cvssScore: 0, status: 'open' };
+    }
+    document.getElementById('f-title').value       = current.title || '';
+    document.getElementById('f-status').value      = current.status || 'open';
+    document.getElementById('f-description').value = current.description || '';
+    document.getElementById('f-impact').value      = current.impact || '';
+    document.getElementById('f-repro').value       = current.repro || '';
+    document.getElementById('f-evidence').value    = current.evidence || '';
+    document.getElementById('f-remediation').value = current.remediation || '';
+    document.getElementById('f-references').value  = current.references || '';
+
+    cvssWidget = Report.createCvssWidget(
+      document.getElementById('cvss-host'),
+      current.cvssVector,
+      (r) => {
+        current.cvssVector = r.vector;
+        current.cvssScore = r.score;
+        current.severity = r.severity;
+      }
+    );
+    editor.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  document.getElementById('btn-new').addEventListener('click', () => { current = null; openEditor(null); });
+
+  document.getElementById('btn-save').addEventListener('click', () => {
+    if (!current) return;
+    current.title       = document.getElementById('f-title').value.trim();
+    current.status      = document.getElementById('f-status').value;
+    current.description = document.getElementById('f-description').value;
+    current.impact      = document.getElementById('f-impact').value;
+    current.repro       = document.getElementById('f-repro').value;
+    current.evidence    = document.getElementById('f-evidence').value;
+    current.remediation = document.getElementById('f-remediation').value;
+    current.references  = document.getElementById('f-references').value;
+    Report.upsertFinding(current);
+    renderList();
+    document.getElementById('editor').style.display = 'none';
+    current = null;
+  });
+
+  document.getElementById('btn-cancel').addEventListener('click', () => {
+    document.getElementById('editor').style.display = 'none';
+    current = null;
+  });
+
+  document.getElementById('btn-delete').addEventListener('click', () => {
+    if (!current) return;
+    if (!confirm(`Delete "${current.title || '(untitled)'}"?`)) return;
+    Report.deleteFinding(current.id);
+    renderList();
+    document.getElementById('editor').style.display = 'none';
+    current = null;
+  });
+
+  renderList();
+</script>
+
+</body>
+</html>
