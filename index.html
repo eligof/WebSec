@@ -28,6 +28,7 @@
     <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
     <symbol id="icon-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
     <symbol id="icon-flag" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
 
     <!-- Vuln icons -->
     <symbol id="icon-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
@@ -141,16 +142,26 @@
     <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg> Day 1</div>
     <h2>Recon + Binary Sweep</h2>
     <div class="section-content">
-      <p><strong>What happens:</strong> Passive recon, active recon, walk the entire app at least once, run a binary sweep for low-hanging fruit.</p>
-      <p><strong>Key tools &amp; commands:</strong></p>
-      <ul>
-        <li><code>subfinder, amass, waybackurls</code> for subdomain enumeration</li>
-        <li><code>httpx</code> for live host discovery</li>
-        <li><code>testssl.sh</code> for TLS/SSL analysis</li>
-        <li><code>feroxbuster, ffuf</code> for fuzzing (recursive, depth 3)</li>
-        <li>Check <code>/robots.txt, /sitemap.xml, /.git/config</code></li>
+      <p><strong>What happens:</strong> Passive recon, active recon, walk the entire app at least once, run a binary sweep for low-hanging fruit. Breadth before depth — document everything, exploit nothing.</p>
+
+      <p><strong>Key activities:</strong></p>
+      <ul class="day-activities">
+        <li><strong>Subdomain &amp; host enum</strong> — <code>subfinder</code>, <code>amass</code>, <code>waybackurls</code>, then <code>httpx</code> to filter for live targets</li>
+        <li><strong>Wayback / archive trawl</strong> for old endpoints, deprecated APIs, exposed JS source maps and secrets</li>
+        <li><strong>TLS analysis</strong> — <code>testssl.sh</code> for cert chain, weak ciphers, expiry, HSTS</li>
+        <li><strong>Path fuzzing</strong> recursively (depth 3): <code>feroxbuster -w common.txt -r -d 3</code></li>
+        <li><strong>Manual walkthrough</strong> — click every link, submit every form, document every parameter and response</li>
+        <li><strong>Quick wins</strong>: <code>/robots.txt</code>, <code>/sitemap.xml</code>, <code>/.git/config</code>, <code>/.well-known/</code>, JS source maps</li>
       </ul>
-      <p><strong>Goal:</strong> Map the entire attack surface. By end of Day 1, you've clicked every link, submitted every form, and documented all parameters.</p>
+
+      <div class="day-pitfall">
+        <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+        <span><strong>Pitfall:</strong> Don't go deep on anything today. If <code>'</code> triggers a SQL error, write it down and KEEP MOVING. Day 4 is for exploitation.</span>
+      </div>
+
+      <div class="day-output">
+        <strong>Output by EOD:</strong> complete attack-surface map (every host, page, form, parameter) plus a flagged shortlist of "interesting" leads to revisit.
+      </div>
     </div>
   </section>
 
@@ -159,14 +170,36 @@
     <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-key"/></svg> Day 2</div>
     <h2>Auth &amp; Authorization + Input Probes</h2>
     <div class="section-content">
-      <p><strong>What happens:</strong> Run one probe per parameter  · if it fires, note it and move on. Don't go deep yet. Focus on authentication mechanisms, authorization boundaries, and basic input validation signals.</p>
+      <p><strong>What happens:</strong> Run one canary per parameter — if it fires, note it and move on. Focus on authentication mechanisms, authorization boundaries, and the input-validation signals that tell you which Day-4 hunts are worth chasing.</p>
+
+      <p><strong>Input probes</strong> (drop one of each into every parameter):</p>
       <div class="probes-box">
         <div class="probe"><span class="probe-code">&#39;</span>  · SQLi signal?</div>
         <div class="probe"><span class="probe-code">&lt;script&gt;alert(1)&lt;/script&gt;</span>  · XSS reflection?</div>
         <div class="probe"><span class="probe-code">; whoami</span>  · CMDi signal?</div>
         <div class="probe"><span class="probe-code">../../../etc/passwd</span>  · Path traversal?</div>
         <div class="probe"><span class="probe-code">{{7*7}}</span>  · SSTI signal (result = 49)?</div>
+        <div class="probe"><span class="probe-code">{"$ne": null}</span>  · NoSQLi signal?</div>
       </div>
+
+      <p><strong>Auth &amp; access-control checks:</strong></p>
+      <ul class="day-activities">
+        <li><strong>Password reset</strong> — token entropy, host-header poisoning, race conditions</li>
+        <li><strong>JWTs</strong> — decode every token. Check <code>alg</code>, <code>kid</code>, expiry, claim-trust boundaries</li>
+        <li><strong>Role matrix</strong> — try every state-changing request as anon, low-priv user, other tenant, admin</li>
+        <li><strong>OAuth flows</strong> — <code>state</code> validation, <code>redirect_uri</code> matching, scope creep</li>
+        <li><strong>Session lifecycle</strong> — invalidation on logout, fixation, concurrent-session policy</li>
+      </ul>
+
+      <div class="day-pitfall">
+        <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+        <span><strong>Pitfall:</strong> Don't grind brute-force without first checking for rate-limit bypasses (<code>X-Forwarded-For</code>, casing, slash variants). One probe, one note, move on.</span>
+      </div>
+
+      <div class="day-output">
+        <strong>Output by EOD:</strong> role matrix, list of authenticated endpoints, and the signals worth deep-diving on Day 4 (SQLi here, SSTI there).
+      </div>
+
       <p><strong>Deep-dive into:</strong></p>
       <div class="vuln-pills">
         <a class="vuln-pill" href="vulns/idor.html"><svg class="icon" aria-hidden="true"><use href="#icon-door"/></svg>IDOR / Access Control<span class="pill-sev sev-high">High</span></a>
@@ -182,7 +215,26 @@
     <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg> Day 3</div>
     <h2>File Handling + Client-Side Checks</h2>
     <div class="section-content">
-      <p><strong>What happens:</strong> File upload endpoints, path traversal paths, CORS policy review, WebSocket connections. Also begin mapping business logic (coupon reuse, negative prices, rate limits).</p>
+      <p><strong>What happens:</strong> File-upload endpoints, path-traversal parameters, CORS policy review, WebSocket origin checks. Also begin mapping business logic — coupon reuse, race windows, negative prices, role escalation via PUT/PATCH.</p>
+
+      <p><strong>Key activities:</strong></p>
+      <ul class="day-activities">
+        <li><strong>Upload endpoints</strong> — probe extension, MIME type, magic bytes, content checks; try double-extensions (<code>.php.jpg</code>), uncommon extensions (<code>.phtml</code>, <code>.php5</code>, <code>.shtml</code>), polyglots</li>
+        <li><strong>Path-typed params</strong> (<code>?file=</code>, <code>?page=</code>, <code>?id=</code>) — try <code>../etc/passwd</code>, <code>..%2fetc%2fpasswd</code>, <code>....//</code>, null-byte truncation</li>
+        <li><strong>CORS</strong> — set <code>Origin: https://attacker.com</code> on every data-returning endpoint; check for reflection, <code>null</code> origin, prefix/suffix bypass (<code>target.com.attacker.com</code>)</li>
+        <li><strong>WebSocket</strong> — Burp WebSockets history. Check Origin validation on the upgrade handshake</li>
+        <li><strong>Business logic</strong> — coupon reuse, parallel-purchase race, negative quantities, sending money to yourself, role-field tampering</li>
+      </ul>
+
+      <div class="day-pitfall">
+        <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+        <span><strong>Pitfall:</strong> Extension blocklists are bypassable. ".php" being blocked doesn't mean ".phtml", ".php5", magic-byte spoofing, or <code>Content-Type</code> swapping won't slip through.</span>
+      </div>
+
+      <div class="day-output">
+        <strong>Output by EOD:</strong> upload endpoints with their current restrictions, list of unkeyed/abusable parameters, business-logic anomalies worth chaining on Day 5.
+      </div>
+
       <p><strong>Deep-dive into:</strong></p>
       <div class="vuln-pills">
         <a class="vuln-pill" href="vulns/file-upload.html"><svg class="icon" aria-hidden="true"><use href="#icon-upload"/></svg>File Upload<span class="pill-sev sev-critical">Critical</span></a>
@@ -199,7 +251,28 @@
     <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-server"/></svg> Day 4</div>
     <h2>Server-Side Deep Dive</h2>
     <div class="section-content">
-      <p><strong>What happens:</strong> Return to leads from Days 2–3. Now go full depth on server-side vulnerabilities. Exploit in detail, chain findings, build POCs.</p>
+      <p><strong>What happens:</strong> Return to the leads flagged on Days 2–3 and go full depth. Confirm exploitability, build clean POCs, capture impact. This is where critical findings turn into critical reports.</p>
+
+      <p><strong>Key activities:</strong></p>
+      <ul class="day-activities">
+        <li><strong>SQLi</strong> — confirm injection point → fingerprint DB → enumerate schema → exfiltrate (<code>sqlmap --batch --risk=3 --level=5</code> only after manual confirmation)</li>
+        <li><strong>CMDi</strong> — blind OOB via Burp Collaborator / oastify.com; identify shell user, perms, network reachability for pivot</li>
+        <li><strong>SSRF</strong> — hit <code>169.254.169.254/latest/meta-data/iam/security-credentials/</code> for AWS, <code>metadata.google.internal</code> for GCP</li>
+        <li><strong>SSTI</strong> — fingerprint the engine (Jinja2/Twig/Freemarker) → escape sandbox → RCE chain</li>
+        <li><strong>XXE / Deserialization / Race</strong> — pick the highest-impact lead first; bury the lower-value variants</li>
+      </ul>
+
+      <p><strong>Tools:</strong> <code>sqlmap</code>, <code>ysoserial</code>, <code>jwt_tool</code>, Burp Turbo Intruder for races, <code>interactsh</code> / <code>oastify.com</code> for OAST callbacks (no Burp Pro required).</p>
+
+      <div class="day-pitfall">
+        <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+        <span><strong>Pitfall:</strong> Stop chasing variations once you have a working exploit. Document the POC, write the impact, move to the next lead. Time-box each lead.</span>
+      </div>
+
+      <div class="day-output">
+        <strong>Output by EOD:</strong> working POCs with reproducible request/response pairs, clear impact statements, screenshots ready for the report.
+      </div>
+
       <p><strong>Deep-dive into:</strong></p>
       <div class="vuln-pills">
         <a class="vuln-pill" href="vulns/sqli.html"><svg class="icon" aria-hidden="true"><use href="#icon-database"/></svg>SQL Injection<span class="pill-sev sev-critical">Critical</span></a>
@@ -220,7 +293,29 @@
     <div class="day-badge"><svg class="icon" aria-hidden="true"><use href="#icon-target"/></svg> Day 5</div>
     <h2>Client-Side Deep + Close Gaps</h2>
     <div class="section-content">
-      <p><strong>What happens:</strong> Chain vulnerabilities. XSS → session steal → IDOR. SSRF → AWS metadata → S3 takeover. Value = combined impact. Finish any outstanding leads. Verify all bugs are reproducible.</p>
+      <p><strong>What happens:</strong> Chain. <em>XSS → cookie steal → IDOR. SSRF → AWS metadata → S3 takeover.</em> Combined impact &gt; sum of parts. Finish outstanding leads, verify reproducibility, prep for write-up.</p>
+
+      <p><strong>Key activities:</strong></p>
+      <ul class="day-activities">
+        <li><strong>Reproduce every Day-4 finding</strong> from a fresh session (clear cookies / new browser profile)</li>
+        <li><strong>Chain</strong> XSS+CSRF, SSRF+RCE, prototype-pollution+gadget, IDOR+role-escalation, host-header+password-reset</li>
+        <li><strong>Client-side deep</strong> — DOM XSS via prototype pollution, postMessage handlers, stored XSS in profile/comment fields</li>
+        <li><strong>OAuth/OIDC</strong> — algorithm-confusion JWT, redirect_uri parser confusion, code/token interception</li>
+        <li><strong>Cache &amp; routing</strong> — host-header injection, cache poisoning via unkeyed headers, CDN-level smuggling</li>
+        <li><strong>Final pass</strong> — anything from the Day-1 surface map still unexplored?</li>
+      </ul>
+
+      <p><strong>Tools:</strong> Burp DOM Invader (for client-side XSS / proto-pollution gadget detection), <code>jwt_tool</code> for algorithm confusion, <code>Param Miner</code> for cache-poisoning unkeyed-header discovery, manual chained POC HTML.</p>
+
+      <div class="day-pitfall">
+        <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+        <span><strong>Pitfall:</strong> Don't bury chained findings under their components. A 9.8-CVSS chain is one ticket, not three — write it as one finding with the full attack narrative.</span>
+      </div>
+
+      <div class="day-output">
+        <strong>Output by EOD:</strong> final shortlist with chained POCs, every finding reproducibility-verified, clean request/response pairs ready for the report.
+      </div>
+
       <p><strong>Deep-dive into:</strong></p>
       <div class="vuln-pills">
         <a class="vuln-pill" href="vulns/xss.html"><svg class="icon" aria-hidden="true"><use href="#icon-zap"/></svg>XSS<span class="pill-sev sev-high">High</span></a>

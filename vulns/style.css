@@ -556,6 +556,42 @@ html[data-theme="light"] #sidebar a.active { background: rgba(109,40,217,0.08); 
 .probes-box .probe { margin-bottom: 0.5rem; color: var(--text-muted); }
 .probes-box .probe-code { color: var(--accent2); }
 
+/* ── DAY-SECTION RICH CONTENT (activities, output, pitfall) ── */
+.day-activities {
+  list-style: none; padding: 0; margin: 0 0 1rem 0;
+}
+.day-activities li {
+  position: relative; padding-left: 1.4rem; margin-bottom: 0.55rem;
+  color: var(--text-muted); font-size: 0.92rem;
+}
+.day-activities li::before {
+  content: '›'; position: absolute; left: 0.2rem; top: -0.05rem;
+  color: var(--day-color, var(--accent)); font-weight: 700; font-size: 1.1rem; line-height: 1;
+}
+.day-activities li strong { color: var(--text); font-weight: 600; }
+.day-activities li code {
+  background: var(--surface2); padding: 0.1em 0.4em; border-radius: 3px;
+  color: var(--accent2); font-family: var(--mono); font-size: 0.82em;
+}
+
+.day-output {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.6rem 0.85rem; margin-bottom: 1rem;
+  background: var(--surface2); border-radius: 6px;
+  font-size: 0.86rem; color: var(--text-muted);
+  border-left: 3px solid var(--day-color, var(--accent2));
+}
+.day-output strong { color: var(--text); font-weight: 600; margin-right: 0.3rem; }
+
+.day-pitfall {
+  display: flex; align-items: flex-start; gap: 0.55rem;
+  padding: 0.7rem 0.9rem; margin-bottom: 1rem;
+  background: var(--warn-bg); border-left: 3px solid var(--warn-border);
+  border-radius: 6px; font-size: 0.86rem; color: var(--text-muted);
+}
+.day-pitfall strong { color: var(--warn); font-weight: 600; margin-right: 0.3rem; }
+.day-pitfall .icon { color: var(--warn); width: 16px; height: 16px; flex-shrink: 0; margin-top: 0.18rem; }
+
 /* ── MINI VULN PILLS (in day sections) ── */
 .vuln-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
 .vuln-pill {
