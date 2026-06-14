@@ -1,15 +1,15 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
-![BSCP](https://img.shields.io/badge/BSCP-exam%20coverage-purple)
-![Vulns](https://img.shields.io/badge/vulnerabilities-23%20covered-blue)
+![BSCP](https://img.shields.io/badge/BSCP-23%20classes-purple)
+![Pages](https://img.shields.io/badge/vulnerability%20pages-27-blue)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-brightgreen)
 
 # 🔐 Web App Pentesting Playbook
 
-A workflow-first reference guide for web application penetration testing, covering 23 vulnerability classes with interactive checklists, Burp Suite workflows, real payloads, and BSCP exam coverage.
+A workflow-first reference guide for web application penetration testing, covering 27 vulnerability and recon pages with interactive checklists, Burp Suite workflows, real payloads, and BSCP exam coverage.
 
 ## What This Is
 
-This is a **static HTML reference site** — no server required. You can open it directly in your browser or host it on GitHub Pages. It's built around a **5-day penetration testing methodology** that emphasizes breadth before depth: follow the structured workflow to identify vulnerability classes, then dive deep into individual pages when you find a signal during testing.
+This is a **static HTML reference site** — no server required. You can open it directly in your browser or host it on GitHub Pages. It is built around a **5-day penetration testing methodology** that emphasizes breadth before depth: follow the structured workflow to identify vulnerability classes, then dive deep into individual pages when you find a signal during testing.
 
 Each vulnerability page is **self-contained** with everything you need: Burp Suite step-by-step workflows, real payloads with one-click copy buttons, testing checklists (with browser-side progress tracking), WAF bypass techniques, and links to relevant PortSwigger Web Security Academy labs. The site is designed for technical beginners and candidates preparing for the BSCP (Burp Suite Certified Practitioner) exam.
 
@@ -21,79 +21,103 @@ Each vulnerability page is **self-contained** with everything you need: Burp Sui
 
 ## Features
 
-- **5-day workflow-first structure** — Not just a list of vulnerabilities; a tested methodology for penetration testing
-- **23 vulnerability deep-dives** — Each with Burp Suite workflows, real-world examples, and testing strategies
+- **5-day workflow-first structure** — Not just a list of vulnerabilities; a structured methodology for web application testing
+- **27 vulnerability and recon pages** — Each with Burp Suite workflows, real-world examples, and testing strategies
+- **23 classes mapped to BSCP** — Plus 4 additional modern and recon topics (AI prompt injection, cloud-native, supply-chain, OSINT)
 - **Real payloads with copy buttons** — No need to type; one-click payload copying
 - **Interactive testing checklists** — Progress saved in browser localStorage across sessions
-- **Workflow placement** — Every vulnerability mapped to its day in the 5-day timeline (Day 1–5)
 - **Attack chains** — "See Also" links connecting related vulnerabilities
 - **WAF bypass techniques** — Evasion methods for each vulnerability class
 - **PortSwigger lab references** — Direct links to relevant Web Security Academy labs
-- **Global Ctrl+K search** — Search across all 23 vulnerability pages instantly
-- **BSCP exam coverage** — Clearly marked throughout the guide
+- **Global Ctrl+K search** — Search across all vulnerability pages instantly
 - **No JavaScript frameworks, no build step** — Pure HTML/CSS/JS; runs in any browser
 
 ## Vulnerability Coverage
 
-| Vulnerability | Severity | Day | BSCP Coverage |
-|---|---|---|---|
-| SQL Injection | 🔴 Critical | Day 4 | ✅ |
-| Cross-Site Scripting (XSS) | 🟠 High | Day 5 | ✅ |
-| Cross-Site Request Forgery (CSRF) | 🟠 High | Day 3 | ✅ |
-| Authentication Bypass | 🔴 Critical | Day 2 | ✅ |
-| Authorization Flaws | 🔴 Critical | Day 3 | ✅ |
-| Insecure Deserialization | 🔴 Critical | Day 4 | ✅ |
-| XML External Entity (XXE) | 🔴 Critical | Day 5 | ✅ |
-| Server-Side Request Forgery (SSRF) | 🟠 High | Day 4 | ✅ |
-| Command Injection | 🔴 Critical | Day 4 | ✅ |
-| Path Traversal | 🟠 High | Day 4 | ✅ |
-| Business Logic Flaws | 🟠 High | Day 2 | ✅ |
-| Information Disclosure | 🟠 High | Day 1 | ✅ |
-| Broken Access Control | 🔴 Critical | Day 3 | ✅ |
-| Insecure File Upload | 🟠 High | Day 5 | ✅ |
-| Server-Side Template Injection (SSTI) | 🔴 Critical | Day 5 | ✅ |
-| API Vulnerabilities | 🟠 High | Day 2 | ✅ |
-| NoSQL Injection | 🟠 High | Day 4 | ✅ |
-| WebSocket Vulnerabilities | 🟠 High | Day 3 | ✅ |
-| HTTP Request Smuggling | 🔴 Critical | Day 4 | ✅ |
-| Race Conditions | 🟠 High | Day 5 | ✅ |
-| Cache Poisoning | 🟠 High | Day 3 | ✅ |
-| JWT Vulnerabilities | 🟠 High | Day 2 | ✅ |
-| Subdomain Enumeration | 🟡 Medium | Day 1 | ✅ |
+| Vulnerability | Category | BSCP |
+|---|---|---|
+| Google Dorking & OSINT Recon | Recon | — |
+| SQL Injection | Injection | ✅ |
+| NoSQL Injection | Injection | ✅ |
+| Command Injection | Injection | ✅ |
+| Server-Side Template Injection (SSTI) | Injection | ✅ |
+| XXE Injection | Injection | ✅ |
+| Cross-Site Scripting (XSS) | Client-side | ✅ |
+| Cross-Site Request Forgery (CSRF) | Client-side | ✅ |
+| CORS Misconfiguration | Client-side | ✅ |
+| Clickjacking | Client-side | ✅ |
+| Prototype Pollution | Client-side | ✅ |
+| IDOR | Access control | ✅ |
+| Race Conditions | Logic | ✅ |
+| JWT Attacks | Auth & session | ✅ |
+| OAuth 2.0 Vulnerabilities | Auth & session | ✅ |
+| Server-Side Request Forgery (SSRF) | Server-side request & file | ✅ |
+| Insecure File Upload | Server-side request & file | ✅ |
+| Path Traversal | Server-side request & file | ✅ |
+| Insecure Deserialization | Server-side request & file | ✅ |
+| HTTP Request Smuggling | Request-layer | ✅ |
+| Web Cache Poisoning | Request-layer | ✅ |
+| Host Header Injection | Request-layer | ✅ |
+| WebSocket Vulnerabilities | Request-layer | ✅ |
+| GraphQL | API | ✅ |
+| AI Prompt Injection | Advanced / modern | — |
+| Cloud-Native Pentesting | Advanced / modern | — |
+| Supply-Chain Attacks | Advanced / modern | — |
 
 ## Site Structure
 
 ```
-WebSec/
+Web-App-Pentesting-Playbook/
 ├── index.html                    # Workflow-first home page
 ├── web-pentest-playbook.html     # Full methodology reference
+├── setup.html                    # Environment / tooling setup
+├── thanks.html                   # Credits
+├── domain-bar.js                 # Target domain bar
+├── engagement.js                 # Engagement state / progress
 ├── README.md                     # This file
-└── vulns/
+├── days/                         # 5-day methodology
+│   ├── day1.html
+│   ├── day2.html
+│   ├── day3.html
+│   ├── day4.html
+│   ├── day5.html
+│   └── dayform.js
+├── report/                       # Reporting helpers
+│   ├── index.html
+│   ├── draft.html
+│   ├── finding.html
+│   └── reportform.js
+├── docs/                         # Supporting docs
+└── vulns/                        # 27 vulnerability pages
     ├── style.css                 # Shared stylesheet
     ├── search.js                 # Global Ctrl+K search
     ├── sqli.html                 # SQL Injection
+    ├── nosqli.html               # NoSQL Injection
+    ├── cmdi.html                 # Command Injection
+    ├── ssti.html                 # Server-Side Template Injection
+    ├── xxe.html                  # XXE Injection
     ├── xss.html                  # Cross-Site Scripting
     ├── csrf.html                 # Cross-Site Request Forgery
-    ├── auth.html                 # Authentication Bypass
-    ├── authz.html                # Authorization Flaws
-    ├── deserialization.html       # Insecure Deserialization
-    ├── xxe.html                  # XML External Entity
+    ├── cors.html                 # CORS Misconfiguration
+    ├── clickjacking.html         # Clickjacking
+    ├── prototype-pollution.html  # Prototype Pollution
+    ├── idor.html                 # IDOR
+    ├── race-conditions.html      # Race Conditions
+    ├── jwt.html                  # JWT Attacks
+    ├── oauth.html                # OAuth 2.0 Vulnerabilities
     ├── ssrf.html                 # Server-Side Request Forgery
-    ├── command-injection.html     # Command Injection
-    ├── path-traversal.html        # Path Traversal
-    ├── business-logic.html        # Business Logic Flaws
-    ├── info-disclosure.html       # Information Disclosure
-    ├── broken-access.html         # Broken Access Control
-    ├── file-upload.html           # Insecure File Upload
-    ├── ssti.html                  # Server-Side Template Injection
-    ├── api-vulns.html             # API Vulnerabilities
-    ├── nosql.html                 # NoSQL Injection
-    ├── websocket.html             # WebSocket Vulnerabilities
-    ├── http-smuggling.html        # HTTP Request Smuggling
-    ├── race-conditions.html        # Race Conditions
-    ├── cache-poison.html          # Cache Poisoning
-    ├── jwt.html                   # JWT Vulnerabilities
-    └── subdomain-enum.html        # Subdomain Enumeration
+    ├── file-upload.html          # Insecure File Upload
+    ├── path-traversal.html       # Path Traversal
+    ├── deserialization.html      # Insecure Deserialization
+    ├── request-smuggling.html    # HTTP Request Smuggling
+    ├── cache-poisoning.html      # Web Cache Poisoning
+    ├── host-header.html          # Host Header Injection
+    ├── websocket.html            # WebSocket Vulnerabilities
+    ├── graphql.html              # GraphQL
+    ├── google-dorking.html       # Google Dorking & OSINT Recon
+    ├── ai-prompt-injection.html  # AI Prompt Injection
+    ├── cloud-native.html         # Cloud-Native Pentesting
+    └── supply-chain.html         # Supply-Chain Attacks
 ```
 
 ## How to Use
@@ -103,8 +127,8 @@ WebSec/
 Clone the repository and open `index.html` directly in your browser:
 
 ```bash
-git clone https://github.com/eligof/WebSec.git
-cd WebSec
+git clone https://github.com/eligof/Web-App-Pentesting-Playbook.git
+cd Web-App-Pentesting-Playbook
 open index.html   # macOS
 # or: xdg-open index.html (Linux)
 # or: start index.html (Windows)
@@ -113,19 +137,19 @@ open index.html   # macOS
 
 ### Option 2: GitHub Pages (Live Online)
 
-Visit **[eligof.github.io/WebSec](https://eligof.github.io/WebSec/)** to use the live version.
+Visit **[eligof.github.io/Web-App-Pentesting-Playbook](https://eligof.github.io/Web-App-Pentesting-Playbook/)** to use the live version.
 
 ## 5-Day Methodology Overview
 
-The playbook is structured around a tested 5-day penetration testing workflow:
+The playbook is structured around a 5-day penetration testing workflow:
 
-| Day | Focus | Vulnerabilities | Goal |
-|---|---|---|---|
-| **Day 1** | Reconnaissance & Surface | Information Disclosure, Subdomain Enumeration | Map the application scope |
-| **Day 2** | Authentication & APIs | Auth Bypass, Business Logic, APIs, JWT | Identify weak authentication |
-| **Day 3** | Access Control & Session | Authorization Flaws, CSRF, WebSocket, Cache Poison | Find privilege escalation paths |
-| **Day 4** | Injection & Protocol | SQL Injection, Command Injection, XXE, SSRF, NoSQL, HTTP Smuggling | Exploit data-level vulnerabilities |
-| **Day 5** | Advanced & Client-Side | XSS, File Upload, SSTI, Race Conditions, Deserialization | Escalate findings into impact |
+| Day | Focus | Goal |
+|---|---|---|
+| **Day 1** | Reconnaissance & Surface | Map the application scope and attack surface |
+| **Day 2** | Authentication & APIs | Identify weak authentication and API flaws |
+| **Day 3** | Access Control & Session | Find privilege escalation and session paths |
+| **Day 4** | Injection & Protocol | Exploit data-level and protocol vulnerabilities |
+| **Day 5** | Advanced & Client-Side | Escalate findings into impact |
 
 **See the full methodology** in [`web-pentest-playbook.html`](./web-pentest-playbook.html) for detailed workflows, attack chains, and lab mappings.
 
@@ -138,7 +162,7 @@ The playbook is structured around a tested 5-day penetration testing workflow:
 
 ## Resources & Credits
 
-- **PortSwigger Web Security Academy** — Primary lab resource (all vulnerabilities cross-referenced)
+- **PortSwigger Web Security Academy** — Primary lab resource (vulnerabilities cross-referenced to labs)
 - **OWASP Testing Guide** — Industry standard for web application testing methodology
 - **BSCP Exam Preparation** — Built with Burp Suite Certified Practitioner candidates in mind
 
@@ -155,8 +179,8 @@ Contributions are welcome! To contribute:
 3. **Lab updates** — If PortSwigger Web Security Academy links change, submit a PR with updated URLs
 4. **Methodology improvements** — Suggestions for the 5-day workflow are always welcome
 
-Submit pull requests to [github.com/eligof/WebSec](https://github.com/eligof/WebSec).
+Submit pull requests to [github.com/eligof/Web-App-Pentesting-Playbook](https://github.com/eligof/Web-App-Pentesting-Playbook).
 
 ---
 
-**Questions?** Open an issue on GitHub. **Ready to test?** Open the [live site](https://eligof.github.io/WebSec/) and start with Day 1.
+**Questions?** Open an issue on GitHub. **Ready to test?** Open the [live site](https://eligof.github.io/Web-App-Pentesting-Playbook/) and start with Day 1.
