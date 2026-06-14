@@ -17,7 +17,7 @@ Each vulnerability page is **self-contained** with everything you need: Burp Sui
 
 ## Live Demo
 
-🌐 **[eligof.github.io/WebSec](https://eligof.github.io/WebSec/)** — Open in your browser right now (no installation required).
+🌐 **[eligof.github.io/Web-App-Pentesting-Playbook](https://eligof.github.io/Web-App-Pentesting-Playbook/)** — Open in your browser right now (no installation required).
 
 ## Features
 
